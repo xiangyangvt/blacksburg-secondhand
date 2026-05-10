@@ -49,7 +49,19 @@ export function ItemCard({
   const [zoomIdx, setZoomIdx] = useState<number | null>(null);
   // 手机端：···菜单开关（编辑/售出/举报这些低频操作）
   const [showAdmin, setShowAdmin] = useState(false);
+  // 询价区展开时，整张卡片在手机端横跨两列变全宽，留言/回复有更舒服的宽度
+  const [inquiryOpen, setInquiryOpen] = useState(false);
+  // 用户点卡片任意空白处 → 展开成全宽 + 显示描述/时间
+  const [expanded, setExpanded] = useState(false);
   const photos = item.photoUrls;
+  const fullWidth = expanded || inquiryOpen;
+
+  // 点卡片切换展开 — 但点按钮/链接/输入时不触发
+  const onCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, textarea, select, label')) return;
+    setExpanded(v => !v);
+  };
 
   useEffect(() => {
     if (zoomIdx === null) return;
@@ -75,8 +87,6 @@ export function ItemCard({
     setZoomIdx(i => i === null ? null : (i + 1) % photos.length);
   };
 
-  const truncated = item.title.length > 12 ? item.title.slice(0, 12) + '…' : item.title;
-
   const AdminButtons = (
     <>
       <button
@@ -101,7 +111,10 @@ export function ItemCard({
   );
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-stone-200 p-3 md:p-4 hover:shadow-md transition-shadow">
+    <div
+      onClick={onCardClick}
+      className={`bg-white rounded-lg shadow-sm border ${expanded ? 'border-brand/40' : 'border-stone-200'} p-3 md:p-4 hover:shadow-md transition-all cursor-pointer ${fullWidth ? 'col-span-2 md:col-span-1' : ''}`}
+    >
       {/* === 图片：手机端封面图（正方形）/ 桌面端缩略图横排 === */}
       {photos.length > 0 && (
         <>
@@ -161,8 +174,10 @@ export function ItemCard({
           {categoryLabel(item.category, locale)}
           {item.customTag && ` · ${item.customTag}`}
         </span>
-        {/* 时间：手机端隐藏，桌面端右对齐 */}
-        <span className="hidden md:inline text-stone-400 ml-auto">{timeAgo(item.createdAt, locale)}</span>
+        {/* 时间：默认手机端隐藏；展开后显示 */}
+        <span className={`text-stone-400 ml-auto ${expanded ? 'inline' : 'hidden md:inline'}`}>
+          {timeAgo(item.createdAt, locale)}
+        </span>
       </div>
 
       {/* === 标题 + 价格 === */}
@@ -175,9 +190,9 @@ export function ItemCard({
         </div>
       </div>
 
-      {/* === 描述：桌面才显示完整，手机隐藏 === */}
+      {/* === 描述：默认手机隐藏；点卡片展开后显示 === */}
       {item.description && (
-        <p className="hidden md:block text-sm text-stone-700 mb-3 whitespace-pre-wrap">
+        <p className={`text-sm text-stone-700 mb-3 whitespace-pre-wrap ${expanded ? 'block' : 'hidden md:block'}`}>
           {item.description}
         </p>
       )}
@@ -191,10 +206,10 @@ export function ItemCard({
         <CopyButton text={item.contactValue} label="📋" />
       </div>
 
-      {/* === 复制 标题—价格（最常用，全宽显眼） === */}
+      {/* === 复制 标题—价格（最常用） === */}
       <CopyButton
         text={itemCopyText(item.title, item.price, item.type, item.category)}
-        label={`📋 ${truncated} ${formatPrice(item.price, locale, item.type, item.category)}`}
+        label={t('card.copyTitle')}
         size="md"
         className="!w-full !block !text-center !bg-amber-50 !border-amber-300 hover:!bg-amber-100"
       />
@@ -228,6 +243,7 @@ export function ItemCard({
         onInquiryDeleted={refresh}
         onInquiryUpdated={refresh}
         onRequestSellerDelete={(inqId) => onDeleteInquiryAsSeller(item, inqId)}
+        onOpenChange={setInquiryOpen}
       />
 
       {/* === 大图 lightbox === */}

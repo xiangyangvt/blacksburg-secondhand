@@ -67,7 +67,9 @@ export const messages = {
 
   // 商品卡片
   'card.copyContact':      { zh: '📋 复制联系方式',                          en: '📋 Copy contact' },
-  'card.copyTitle':        { zh: '📋 复制「{title} {price}」',                en: '📋 Copy "{title} {price}"' },
+  'card.copyTitle':        { zh: '📋 复制商品信息',                          en: '📋 Copy item info' },
+  'card.tapHint':          { zh: '点击卡片展开详情',                          en: 'Tap card for details' },
+  'card.fabPost':          { zh: '发布',                                    en: 'Post' },
   'card.edit':             { zh: '✏️ 编辑',                                  en: '✏️ Edit' },
   'card.markSold':         { zh: '✅ 已售出 / 删除',                         en: '✅ Sold / Delete' },
   'card.report':           { zh: '🚩 举报',                                 en: '🚩 Report' },
@@ -109,6 +111,18 @@ export const messages = {
   'inq.errSend':           { zh: '发送失败',                                en: 'Send failed' },
   'inq.errEdit':           { zh: '修改失败',                                en: 'Edit failed' },
   'inq.errDelete':         { zh: '删除失败',                                en: 'Delete failed' },
+
+  // 卖家回复
+  'reply.btn':             { zh: '📝 卖家回复',                              en: '📝 Seller reply' },
+  'reply.label':           { zh: '卖家',                                    en: 'Seller' },
+  'reply.placeholder':     { zh: '回复买家（如：这个价格不行，最低 $25）',       en: 'Reply to buyer (e.g., Lowest $25)' },
+  'reply.codePlaceholder': { zh: '商品识别码',                                en: 'Item edit code' },
+  'reply.send':            { zh: '发送回复',                                 en: 'Send reply' },
+  'reply.cancel':          { zh: '取消',                                    en: 'Cancel' },
+  'reply.edit':            { zh: '✏️改',                                    en: '✏️Edit' },
+  'reply.delete':          { zh: '🗑撤回',                                  en: '🗑Withdraw' },
+  'reply.confirmDelete':   { zh: '撤回这条回复？',                            en: 'Withdraw this reply?' },
+  'reply.errSend':         { zh: '回复失败',                                en: 'Reply failed' },
 
   // 发布 / 编辑模态框
   'post.titleCreate':      { zh: '我要发布',                                en: 'Post New Item' },

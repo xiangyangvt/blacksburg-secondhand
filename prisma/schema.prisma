@@ -47,6 +47,9 @@ model Inquiry {
   contactValue        String
   customContactLabel  String?
   message             String
+  // 卖家回复（用商品 editCode 鉴权后才能写）
+  sellerReply         String?
+  sellerRepliedAt     DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   ipAddress           String?

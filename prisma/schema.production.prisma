@@ -47,6 +47,8 @@ model Inquiry {
   contactValue        String
   customContactLabel  String?
   message             String
+  sellerReply         String?
+  sellerRepliedAt     DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   ipAddress           String?

@@ -7,6 +7,7 @@ import { MobileFilterToggle } from '@/components/MobileFilterToggle';
 import { PostModal } from '@/components/PostModal';
 import { EditCodePrompt } from '@/components/EditCodePrompt';
 import { ScrollToTop } from '@/components/ScrollToTop';
+import { FabPostButton } from '@/components/FabPostButton';
 import { useT } from '@/i18n/I18nProvider';
 
 const DEFAULT_FILTERS: Filters = {
@@ -206,14 +207,8 @@ export default function HomePage() {
         </section>
       </div>
 
-      {/* 手机端浮动发布按钮 */}
-      <button
-        onClick={() => setPostModal({ mode: 'create' })}
-        className="sm:hidden fixed right-5 bottom-5 z-20 w-14 h-14 rounded-full bg-brand text-white shadow-lg flex items-center justify-center text-2xl hover:bg-brand-dark"
-        aria-label={t('header.post')}
-      >
-        ➕
-      </button>
+      {/* 手机端浮动发布按钮 — 首屏宽胶囊带"发布"二字，滚动后收成圆形 */}
+      <FabPostButton onClick={() => setPostModal({ mode: 'create' })} label={t('card.fabPost')} ariaLabel={t('header.post')} />
 
       {/* 浮动回顶部按钮（滚动 >400px 才出现） */}
       <ScrollToTop />
