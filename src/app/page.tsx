@@ -128,8 +128,8 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen">
-      {/* 顶栏 — 桌面端 sticky 方便随时搜，手机端跟着内容滚走腾出屏幕 */}
-      <header className="md:sticky md:top-0 z-30 bg-white border-b border-stone-200 shadow-sm">
+      {/* 顶栏 — 全程 sticky（含手机端折叠筛选），始终黏在屏顶 */}
+      <header className="sticky top-0 z-30 bg-white border-b border-stone-200 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
           <h1 className="text-xl font-bold text-brand whitespace-nowrap">
             🏠 {t('site.brand')}
@@ -150,6 +150,11 @@ export default function HomePage() {
             {t('header.post')}
           </button>
         </div>
+
+        {/* 手机端折叠筛选——和顶栏同一 sticky 单元，一起黏顶 */}
+        <div className="md:hidden max-w-6xl mx-auto px-3 pb-2">
+          <MobileFilterToggle filters={filters} onChange={updateFilter} />
+        </div>
       </header>
 
       {/* 主内容 */}
@@ -160,11 +165,6 @@ export default function HomePage() {
         </div>
 
         <section className="flex-1 min-w-0">
-          {/* 手机端折叠筛选 */}
-          <div className="mb-3">
-            <MobileFilterToggle filters={filters} onChange={updateFilter} />
-          </div>
-
           {/* 计数 */}
           {!loading && items.length > 0 && (
             <div className="text-xs text-stone-500 mb-2 px-1">

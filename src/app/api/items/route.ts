@@ -92,12 +92,12 @@ export async function POST(req: NextRequest) {
   if (!Array.isArray(photoUrls) || photoUrls.length > 6) return err('图片最多 6 张');
   if (typeof editCode !== 'string' || editCode.length < 6) return err('识别码至少 6 位');
 
-  // 隐式限速：同 IP 1 小时内最多 3 条
+  // 隐式限速：同 IP 1 小时内最多 10 条
   const ip = getClientIp(req);
   const recentCount = await prisma.item.count({
     where: { ipAddress: ip, createdAt: { gte: new Date(Date.now() - 3600e3) } },
   });
-  if (recentCount >= 3) return err('发布太频繁了，请 1 小时后再试', 429);
+  if (recentCount >= 10) return err('发布太频繁了，请 1 小时后再试', 429);
 
   const editCodeHash = await bcrypt.hash(editCode, 10);
 

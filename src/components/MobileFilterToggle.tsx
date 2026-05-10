@@ -45,7 +45,7 @@ export function MobileFilterToggle({
       </button>
 
       {open && (
-        <div className="mt-2 p-4 bg-white border border-stone-200 rounded-lg">
+        <div className="mt-2 p-4 bg-white border border-stone-200 rounded-lg max-h-[55vh] overflow-y-auto shadow-lg">
           <FilterSidebar filters={filters} onChange={onChange} />
         </div>
       )}
