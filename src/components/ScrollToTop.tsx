@@ -19,10 +19,10 @@ export function ScrollToTop() {
     <button
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
       aria-label="回到顶部"
-      className="fixed left-4 bottom-5 z-20 w-11 h-11 rounded-full bg-white border border-stone-300 shadow-lg flex items-center justify-center hover:bg-stone-50 active:bg-stone-100"
+      className="fixed left-5 bottom-5 z-20 w-14 h-14 rounded-full bg-white border border-stone-300 shadow-lg flex items-center justify-center hover:bg-stone-50 active:bg-stone-100"
     >
       {/* 上箭头 + 顶部横线 = 跳到最顶（媒体播放器风格） */}
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
         <line x1="5"  y1="4"  x2="19" y2="4"  />
         <polyline points="6 12 12 6 18 12" />
         <line x1="12" y1="6"  x2="12" y2="20" />
