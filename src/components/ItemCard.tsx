@@ -198,22 +198,20 @@ export function ItemCard({
         </p>
       )}
 
-      {/* === 联系方式 === */}
-      <div className="flex items-center gap-1.5 mb-2 text-xs md:text-sm flex-wrap">
+      {/* === 联系方式 + 两个复制按钮挤一排（窄屏会自动换行） === */}
+      <div className="flex items-center gap-1.5 mb-2 flex-wrap text-xs md:text-sm">
         <span className="text-stone-600 truncate min-w-0">
           {contactTypeLabel(item.contactType, item.customContactLabel, locale)}：
           <span className="font-mono text-stone-900 select-all ml-1">{item.contactValue}</span>
         </span>
         <CopyButton text={item.contactValue} />
+        <CopyButton
+          text={itemCopyText(item.title, item.price, item.type, item.category)}
+          label={t('card.copyTitle')}
+          size="md"
+          className="!bg-amber-50 !border-amber-300 hover:!bg-amber-100"
+        />
       </div>
-
-      {/* === 复制 标题—价格（最常用） === */}
-      <CopyButton
-        text={itemCopyText(item.title, item.price, item.type, item.category)}
-        label={t('card.copyTitle')}
-        size="md"
-        className="!w-full !block !text-center !bg-amber-50 !border-amber-300 hover:!bg-amber-100"
-      />
 
       {/* === 桌面端：编辑/售出/举报常驻 === */}
       <div className="hidden md:flex gap-2 flex-wrap text-xs mt-3">
