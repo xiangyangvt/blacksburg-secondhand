@@ -11,7 +11,7 @@ export const messages = {
   'site.tagline':          { zh: '本地华人/学生二手交易',                    en: 'Local marketplace · Blacksburg, VA' },
 
   // 顶栏
-  'header.search':         { zh: '🔍 搜索标题、描述、标签…',                  en: '🔍 Search title, description, tag…' },
+  'header.search':         { zh: '🔍 搜索标题、描述、联系方式…',                en: '🔍 Search title, description, contact…' },
   'header.post':           { zh: '➕ 我要发布',                              en: '➕ Post Item' },
   'header.langZh':         { zh: '中',                                      en: '中' },
   'header.langEn':         { zh: 'EN',                                      en: 'EN' },
@@ -71,7 +71,7 @@ export const messages = {
   'card.tapHint':          { zh: '点击卡片展开详情',                          en: 'Tap card for details' },
   'card.fabPost':          { zh: '发布',                                    en: 'Post' },
   'card.edit':             { zh: '✏️ 编辑',                                  en: '✏️ Edit' },
-  'card.markSold':         { zh: '✅ 已售出 / 删除',                         en: '✅ Sold / Delete' },
+  'card.markSold':         { zh: '🗑 删除',                                 en: '🗑 Delete' },
   'card.report':           { zh: '🚩 举报',                                 en: '🚩 Report' },
   'card.copied':           { zh: '✓ 已复制',                                en: '✓ Copied' },
   'card.viewPhoto':        { zh: '查看图片 {i} / {n}',                      en: 'View photo {i} / {n}' },
@@ -164,7 +164,7 @@ export const messages = {
   // 识别码弹框（编辑/删除前）
   'code.promptTitle':      { zh: '输入识别码以{action}',                     en: 'Enter edit code to {action}' },
   'code.actionEdit':       { zh: '编辑',                                    en: 'edit' },
-  'code.actionDelete':     { zh: '标记已售出 / 删除',                         en: 'mark sold / delete' },
+  'code.actionDelete':     { zh: '删除',                                    en: 'delete' },
   'code.actionDelInq':     { zh: '删除该条留言',                             en: 'delete this inquiry' },
   'code.itemLabel':        { zh: '商品：',                                   en: 'Item: ' },
   'code.placeholder':      { zh: '发布时设置的识别码',                         en: 'Edit code you set when posting' },
@@ -173,7 +173,7 @@ export const messages = {
   'code.verifying':        { zh: '验证中…',                                 en: 'Verifying…' },
   'code.confirm':          { zh: '确定',                                    en: 'Confirm' },
   'code.errWrong':         { zh: '识别码错误',                              en: 'Wrong edit code' },
-  'code.confirmDelete':    { zh: '确定标记已售出并删除？此操作不可恢复。',         en: 'Mark as sold and delete? This cannot be undone.' },
+  'code.confirmDelete':    { zh: '确定删除这条信息？此操作不可恢复。',                en: 'Delete this post? This cannot be undone.' },
 
   // 图片上传
   'upload.add':            { zh: '+ 加图',                                  en: '+ Add' },

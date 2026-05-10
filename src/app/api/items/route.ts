@@ -27,10 +27,13 @@ export async function GET(req: NextRequest) {
   if (type === 'sell' || type === 'buy') where.type = type;
   if (category && VALID_CATEGORIES.includes(category as any)) where.category = category;
   if (q) {
+    // 搜索匹配标题、描述、自定义标签、联系方式
+    // ⚠️ 故意不匹配识别码 hash —— 那是密码，不能成为搜索目标
     where.OR = [
-      { title:       { contains: q } },
-      { description: { contains: q } },
-      { customTag:   { contains: q } },
+      { title:        { contains: q } },
+      { description:  { contains: q } },
+      { customTag:    { contains: q } },
+      { contactValue: { contains: q } },
     ];
   }
   if (minPrice !== undefined || maxPrice !== undefined) {

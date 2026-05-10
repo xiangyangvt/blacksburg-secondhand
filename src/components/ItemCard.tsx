@@ -56,11 +56,12 @@ export function ItemCard({
   const photos = item.photoUrls;
   const fullWidth = expanded || inquiryOpen;
 
-  // 点卡片切换展开 — 但点按钮/链接/输入时不触发
+  // 点卡片单向展开（不再切换收回）— 点按钮/链接/输入时不触发
   const onCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (expanded) return;
     const target = e.target as HTMLElement;
     if (target.closest('button, a, input, textarea, select, label')) return;
-    setExpanded(v => !v);
+    setExpanded(true);
   };
 
   useEffect(() => {
