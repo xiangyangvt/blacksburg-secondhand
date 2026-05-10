@@ -210,7 +210,7 @@ export function InquirySection({
                   <span className="font-medium text-stone-800">
                     {contactTypeLabel(inq.contactType, inq.customContactLabel, locale)}: {inq.contactValue}
                   </span>
-                  <CopyButton text={inq.contactValue} label="📋" />
+                  <CopyButton text={inq.contactValue} />
                   <span className="text-stone-400">·</span>
                   <span>{timeAgo(inq.createdAt, locale)}</span>
                   <span className="ml-auto flex gap-1">

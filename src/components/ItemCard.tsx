@@ -203,7 +203,7 @@ export function ItemCard({
           {contactTypeLabel(item.contactType, item.customContactLabel, locale)}：
           <span className="font-mono text-stone-900 select-all ml-1">{item.contactValue}</span>
         </span>
-        <CopyButton text={item.contactValue} label="📋" />
+        <CopyButton text={item.contactValue} />
       </div>
 
       {/* === 复制 标题—价格（最常用） === */}
