@@ -51,7 +51,13 @@ export const messages = {
   'cat.electronics':       { zh: '电子产品',                                en: 'Electronics' },
   'cat.transport':         { zh: '交通工具',                                en: 'Transport' },
   'cat.books':             { zh: '书本教材',                                en: 'Books' },
+  'cat.housing':           { zh: '房屋租赁',                                en: 'Housing' },
   'cat.other':             { zh: '其他',                                    en: 'Other' },
+
+  // 房屋分类专用类型标签（替换"出售/求购"）
+  'type.sublet':           { zh: '转租',                                    en: 'Sublease' },
+  'type.rentwanted':       { zh: '求租',                                    en: 'Looking to rent' },
+  'price.perMonth':        { zh: '/月',                                     en: '/mo' },
 
   // 联系方式类型
   'contact.wechat':        { zh: '微信',                                    en: 'WeChat' },
@@ -113,6 +119,9 @@ export const messages = {
   'post.fieldTitle':       { zh: '标题 *',                                  en: 'Title *' },
   'post.titlePhSell':      { zh: '例：IKEA MALM 书桌',                       en: 'e.g., IKEA MALM desk' },
   'post.titlePhBuy':       { zh: '例：求一辆能骑的二手自行车',                  en: 'e.g., Wanted: a working used bike' },
+  'post.titlePhSublet':    { zh: '例：1B1B 校园附近 May–Aug 转租',              en: 'e.g., 1B1B near campus, May–Aug sublease' },
+  'post.titlePhRentwanted':{ zh: '例：求一间 studio 6 月起租，预算 $1000',       en: 'e.g., Looking for a studio from June, budget $1000' },
+  'post.descPhHousing':    { zh: '面积、户型、家具、停车位、可入住时间、是否带宠物、是否包水电网等', en: 'Sq ft, layout, furniture, parking, move-in date, pet, utilities…' },
   'post.fieldPrice':       { zh: '价格 (USD) *',                            en: 'Price (USD) *' },
   'post.negotiable':       { zh: '面议',                                    en: 'Negotiable' },
   'post.fieldCategory':    { zh: '分类 *',                                  en: 'Category *' },

@@ -3,7 +3,9 @@
 // 本地开发请用 prisma/schema.prisma（SQLite，零摩擦）
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Railway / 大多数 Linux 容器需要 musl 引擎，否则运行时报 "Could not load engine"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {

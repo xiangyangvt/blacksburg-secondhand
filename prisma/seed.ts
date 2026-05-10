@@ -101,6 +101,36 @@ async function main() {
     },
   });
 
+  // 房屋转租示例
+  await prisma.item.create({
+    data: {
+      type: 'sell',
+      title: '1B1B Foxridge 公寓 May–Aug 转租',
+      description: '步行 15 分钟到 VT 校园，带家具，包水电网。\n月租含管理费，无押金转手。\n公寓楼有健身房、洗衣房、停车位。',
+      price: 950,
+      category: 'housing',
+      contactType: 'wechat',
+      contactValue: 'sublet_foxridge',
+      photoUrls: JSON.stringify([pic('apt1'), pic('apt2'), pic('apt3'), pic('apt4')]),
+      editCodeHash: code,
+    },
+  });
+
+  // 房屋求租示例
+  await prisma.item.create({
+    data: {
+      type: 'buy',
+      title: '求租 studio / 1B1B，6 月起',
+      description: '新生 8 月入学，提前来熟悉环境。\n预算 $1000 以内，校园附近优先，能短租 2-3 个月最好。\n安静、爱干净、不带宠物。',
+      price: 1000,
+      category: 'housing',
+      contactType: 'wechat',
+      contactValue: 'newgrad_2026fall',
+      photoUrls: JSON.stringify([]),
+      editCodeHash: code,
+    },
+  });
+
   // 给 item1 加几条询价做演示
   await prisma.inquiry.create({
     data: {
@@ -128,7 +158,7 @@ async function main() {
   });
 
   console.log('✅ Seed 完成。所有示例商品的识别码都是 demo123');
-  console.log(`   创建了 6 件商品 + 3 条询价`);
+  console.log(`   创建了 8 件商品（含 2 个房屋）+ 3 条询价`);
 }
 
 main()

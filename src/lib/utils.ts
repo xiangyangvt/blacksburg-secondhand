@@ -8,6 +8,7 @@ export const CATEGORIES = [
   { id: 'electronics', i18nKey: 'cat.electronics' as const },
   { id: 'transport',   i18nKey: 'cat.transport'   as const },
   { id: 'books',       i18nKey: 'cat.books'       as const },
+  { id: 'housing',     i18nKey: 'cat.housing'     as const },
   { id: 'other',       i18nKey: 'cat.other'       as const },
 ] as const;
 
@@ -42,23 +43,41 @@ export function contactTypeLabel(type: string, customLabel?: string | null, loca
   return lookup(c.i18nKey, locale);
 }
 
-// 价格显示 — 出售贴 null = 面议；求购贴 null = 留言
+// 价格显示 —— 出售贴 null = 面议；求购贴 null = 留言；房屋类自动加 /月
 export function formatPrice(
   price: number | null,
   locale: Locale = 'zh',
   itemType: ItemType = 'sell',
+  category?: string,
 ): string {
   if (price === null) {
     return lookup(itemType === 'buy' ? 'price.byMessage' : 'price.negotiable', locale);
   }
-  return `$${price}`;
+  const suffix = category === 'housing' ? lookup('price.perMonth', locale) : '';
+  return `$${price}${suffix}`;
 }
 
-// 商品标题 + 价格（用于复制按钮）— 与界面语言无关，复制内容统一中文
-export function itemCopyText(title: string, price: number | null, itemType: ItemType = 'sell'): string {
-  const p = price === null
-    ? (itemType === 'buy' ? messages['price.byMessage'].zh : messages['price.negotiable'].zh)
-    : `$${price}`;
+// 房屋分类下，"出售/求购"显示为"转租/求租"——更准确
+export function typeLabel(itemType: ItemType, category: string, locale: Locale = 'zh'): string {
+  if (category === 'housing') {
+    return lookup(itemType === 'buy' ? 'type.rentwanted' : 'type.sublet', locale);
+  }
+  return lookup(itemType === 'buy' ? 'type.buy' : 'type.sell', locale);
+}
+
+// 商品标题 + 价格（用于复制按钮）—— 与界面语言无关，复制内容统一中文
+export function itemCopyText(
+  title: string,
+  price: number | null,
+  itemType: ItemType = 'sell',
+  category?: string,
+): string {
+  let p: string;
+  if (price === null) {
+    p = itemType === 'buy' ? messages['price.byMessage'].zh : messages['price.negotiable'].zh;
+  } else {
+    p = `$${price}${category === 'housing' ? messages['price.perMonth'].zh : ''}`;
+  }
   return `${title} — ${p}`;
 }
 

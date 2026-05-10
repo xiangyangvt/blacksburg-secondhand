@@ -136,8 +136,17 @@ export function PostModal({
           <div>
             <Label>{t('post.fieldType')}</Label>
             <div className="flex gap-2">
-              <Pill active={type === 'sell'} onClick={() => setType('sell')}>{t('post.typeSell')}</Pill>
-              <Pill active={type === 'buy'}  onClick={() => setType('buy')}>{t('post.typeBuy')}</Pill>
+              {category === 'housing' ? (
+                <>
+                  <Pill active={type === 'sell'} onClick={() => setType('sell')}>🏠 {t('type.sublet')}</Pill>
+                  <Pill active={type === 'buy'}  onClick={() => setType('buy')}>🔍 {t('type.rentwanted')}</Pill>
+                </>
+              ) : (
+                <>
+                  <Pill active={type === 'sell'} onClick={() => setType('sell')}>{t('post.typeSell')}</Pill>
+                  <Pill active={type === 'buy'}  onClick={() => setType('buy')}>{t('post.typeBuy')}</Pill>
+                </>
+              )}
             </div>
           </div>
 
@@ -147,7 +156,11 @@ export function PostModal({
               value={title}
               onChange={e => setTitle(e.target.value)}
               maxLength={100}
-              placeholder={type === 'sell' ? t('post.titlePhSell') : t('post.titlePhBuy')}
+              placeholder={
+                category === 'housing'
+                  ? (type === 'sell' ? t('post.titlePhSublet') : t('post.titlePhRentwanted'))
+                  : (type === 'sell' ? t('post.titlePhSell')   : t('post.titlePhBuy'))
+              }
               className="w-full border border-stone-300 rounded px-3 py-2"
             />
           </div>
@@ -201,7 +214,7 @@ export function PostModal({
               onChange={e => setDescription(e.target.value)}
               rows={4}
               maxLength={2000}
-              placeholder={t('post.descPh')}
+              placeholder={category === 'housing' ? t('post.descPhHousing') : t('post.descPh')}
               className="w-full border border-stone-300 rounded px-3 py-2"
             />
           </div>

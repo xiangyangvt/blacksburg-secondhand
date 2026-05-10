@@ -9,6 +9,7 @@ import {
   formatPrice,
   itemCopyText,
   timeAgo,
+  typeLabel,
 } from '@/lib/utils';
 import { useT, useLocale } from '@/i18n/I18nProvider';
 
@@ -84,7 +85,7 @@ export function ItemCard({
             ? 'bg-brand text-white'
             : 'bg-accent text-white'
         }`}>
-          {item.type === 'sell' ? t('type.sell') : t('type.buy')}
+          {typeLabel(item.type, item.category, locale)}
         </span>
         <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
           {categoryLabel(item.category, locale)}
@@ -99,7 +100,7 @@ export function ItemCard({
           {item.title}
         </h3>
         <span className="text-xl font-bold text-brand whitespace-nowrap">
-          {formatPrice(item.price, locale, item.type)}
+          {formatPrice(item.price, locale, item.type, item.category)}
         </span>
       </div>
 
@@ -150,8 +151,8 @@ export function ItemCard({
       {/* 操作按钮组 */}
       <div className="flex gap-2 flex-wrap text-xs">
         <CopyButton
-          text={itemCopyText(item.title, item.price, item.type)}
-          label={t('card.copyTitle', { title: truncated, price: formatPrice(item.price, locale, item.type) })}
+          text={itemCopyText(item.title, item.price, item.type, item.category)}
+          label={t('card.copyTitle', { title: truncated, price: formatPrice(item.price, locale, item.type, item.category) })}
           size="md"
           className="!bg-amber-50 !border-amber-300 hover:!bg-amber-100"
         />

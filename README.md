@@ -3,7 +3,7 @@
 > 给黑堡（Blacksburg, VA）本地华人/学生社区做的开源二手交易网站。
 > An open-source local secondhand marketplace for the Blacksburg, VA community.
 
-**线上地址**：（部署后填写）
+**线上地址**：https://blacksburg-secondhand-production.up.railway.app
 **开源协议**：MIT
 **反馈**：欢迎在 [Issues](../../issues) 提 bug 或建议，欢迎 [Pull Request](../../pulls)
 
