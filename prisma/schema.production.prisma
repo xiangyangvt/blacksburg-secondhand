@@ -1,0 +1,73 @@
+// 生产环境用 schema（PostgreSQL）
+// Phase 4 部署到 Railway 时，build 命令会把这个文件 copy 成 schema.prisma
+// 本地开发请用 prisma/schema.prisma（SQLite，零摩擦）
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Item {
+  id                  String   @id @default(cuid())
+  type                String
+  title               String
+  description         String
+  price               Int?
+  category            String
+  customTag           String?
+  contactType         String
+  contactValue        String
+  customContactLabel  String?
+  photoUrls           String   // JSON 序列化（保留兼容 SQLite 时期写入的格式）
+  editCodeHash        String
+  status              String   @default("active")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  bumpedAt            DateTime @default(now())
+  ipAddress           String?
+
+  inquiries Inquiry[]
+  reports   Report[]  @relation("ItemReports")
+
+  @@index([status, createdAt])
+  @@index([category])
+  @@index([type])
+}
+
+model Inquiry {
+  id                  String   @id @default(cuid())
+  itemId              String
+  contactType         String
+  contactValue        String
+  customContactLabel  String?
+  message             String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  ipAddress           String?
+
+  item    Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  reports Report[] @relation("InquiryReports")
+
+  @@index([itemId, createdAt])
+  @@index([contactValue])
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  targetType  String
+  itemId      String?
+  inquiryId   String?
+  reason      String
+  reporterIp  String?
+  createdAt   DateTime @default(now())
+
+  item    Item?    @relation("ItemReports",    fields: [itemId],    references: [id], onDelete: Cascade)
+  inquiry Inquiry? @relation("InquiryReports", fields: [inquiryId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([inquiryId])
+}

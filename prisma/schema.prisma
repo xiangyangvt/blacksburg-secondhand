@@ -1,0 +1,76 @@
+// 黑堡二手买卖数据模型
+// Phase 1: SQLite（本地开发）
+// Phase 4: 部署 Railway 时切换到 PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 商品 / 求购贴
+model Item {
+  id                  String   @id @default(cuid())
+  type                String   // "sell" | "buy"
+  title               String
+  description         String
+  price               Int?     // null = 面议；单位 USD（无小数）
+  category            String   // "home" | "electronics" | "transport" | "books" | "other"
+  customTag           String?  // 用户自填的标签（"乐器"、"宠物用品" 等）
+  contactType         String   // "wechat" | "phone" | "email" | "other"
+  contactValue        String
+  customContactLabel  String?  // contactType=other 时（如 "Discord"）
+  photoUrls           String   // JSON 序列化的 URL 数组（SQLite 不原生支持数组）
+  editCodeHash        String   // bcrypt 哈希
+  status              String   @default("active") // "active" | "deleted" | "hidden"
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  bumpedAt            DateTime @default(now())
+  ipAddress           String?  // 用于隐式限速
+
+  inquiries Inquiry[]
+  reports   Report[]  @relation("ItemReports")
+
+  @@index([status, createdAt])
+  @@index([category])
+  @@index([type])
+}
+
+// 询价 / 留言
+model Inquiry {
+  id                  String   @id @default(cuid())
+  itemId              String
+  contactType         String
+  contactValue        String
+  customContactLabel  String?
+  message             String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  ipAddress           String?
+
+  item    Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  reports Report[] @relation("InquiryReports")
+
+  @@index([itemId, createdAt])
+  @@index([contactValue])
+}
+
+// 举报
+model Report {
+  id          String   @id @default(cuid())
+  targetType  String   // "item" | "inquiry"
+  itemId      String?
+  inquiryId   String?
+  reason      String
+  reporterIp  String?
+  createdAt   DateTime @default(now())
+
+  item    Item?    @relation("ItemReports",    fields: [itemId],    references: [id], onDelete: Cascade)
+  inquiry Inquiry? @relation("InquiryReports", fields: [inquiryId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([inquiryId])
+}

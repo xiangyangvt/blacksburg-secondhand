@@ -1,0 +1,13 @@
+# 黑堡二手买卖 robots policy
+# 默认允许所有页面被搜索引擎收录（让圈外人也能 Google 到）
+# 但禁止收录上传图片，避免商品图被搜图反查
+# 联系方式在 HTML 里有 data-noindex 属性 + meta robots noindex 处理（Phase 4 优化）
+
+User-agent: *
+Allow: /
+Disallow: /uploads/
+Disallow: /api/
+Disallow: /admin
+
+# 慢一点，本站是小社区，没必要被快速爬
+Crawl-delay: 5

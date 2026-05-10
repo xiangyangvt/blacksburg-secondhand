@@ -1,0 +1,19 @@
+{
+  "name": "黑堡二手买卖 · Blacksburg Secondhand",
+  "short_name": "黑堡二手",
+  "description": "黑堡（Blacksburg, VA）本地华人/学生二手物品交易平台",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#7B1113",
+  "orientation": "portrait-primary",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
