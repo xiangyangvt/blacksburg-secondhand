@@ -24,10 +24,10 @@ export function FilterSidebar({
 
   return (
     <aside className="md:w-56 md:flex-shrink-0 space-y-4">
-      {/* 分类 */}
+      {/* 分类 — 手机平铺换行，桌面纵列 */}
       <div>
         <h3 className="text-xs uppercase font-semibold text-stone-500 mb-2">{t('filter.category')}</h3>
-        <div className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible no-scrollbar">
+        <div className="flex flex-wrap md:flex-col gap-2 md:gap-1">
           <CatBtn active={filters.category === 'all'} onClick={() => onChange({ category: 'all' })}>
             {t('filter.all')}
           </CatBtn>
@@ -46,15 +46,15 @@ export function FilterSidebar({
       {/* 类型 */}
       <div>
         <h3 className="text-xs uppercase font-semibold text-stone-500 mb-2">{t('filter.type')}</h3>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-2">
           {(['all', 'sell', 'buy'] as const).map(typ => (
             <button
               key={typ}
               onClick={() => onChange({ type: typ })}
-              className={`px-3 py-1 text-sm rounded border ${
+              className={`px-4 py-2 text-sm rounded-full border min-w-[64px] ${
                 filters.type === typ
                   ? 'bg-brand text-white border-brand'
-                  : 'bg-white text-stone-700 border-stone-300 hover:border-brand'
+                  : 'bg-white text-stone-700 border-stone-300 hover:border-brand active:bg-stone-100'
               }`}
             >
               {typ === 'all' ? t('filter.all') : typ === 'sell' ? t('type.sell') : t('type.buy')}
@@ -124,10 +124,10 @@ function CatBtn({
   return (
     <button
       onClick={onClick}
-      className={`text-sm whitespace-nowrap px-3 py-1.5 rounded text-left ${
+      className={`text-sm whitespace-nowrap px-4 py-2 rounded-full border md:rounded md:border-0 md:text-left md:py-1.5 md:px-3 ${
         active
-          ? 'bg-brand text-white'
-          : 'bg-white text-stone-700 hover:bg-stone-100'
+          ? 'bg-brand text-white border-brand'
+          : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-100 active:bg-stone-200'
       }`}
     >
       {children}
