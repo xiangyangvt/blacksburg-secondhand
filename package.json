@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "build:prod": "cp prisma/schema.production.prisma prisma/schema.prisma && prisma generate && prisma db push --accept-data-loss && next build",
+    "build:prod": "prisma generate --schema=prisma/schema.production.prisma && prisma db push --schema=prisma/schema.production.prisma --accept-data-loss && next build",
     "start": "next start",
     "lint": "next lint",
     "db:migrate": "prisma migrate dev",
