@@ -73,7 +73,7 @@ export const messages = {
   'card.edit':             { zh: '✏️ 编辑',                                  en: '✏️ Edit' },
   'card.markSold':         { zh: '🗑 删除',                                 en: '🗑 Delete' },
   'card.report':           { zh: '🚩 举报',                                 en: '🚩 Report' },
-  'card.copied':           { zh: '✓ 已复制',                                en: '✓ Copied' },
+  'card.copied':           { zh: '已复制',                                  en: 'Copied' },
   'card.viewPhoto':        { zh: '查看图片 {i} / {n}',                      en: 'View photo {i} / {n}' },
   'card.photoCount':       { zh: '共 {n} 张',                                en: '{n} photos' },
 
