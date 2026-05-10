@@ -3,8 +3,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { ItemCard, type Item } from '@/components/ItemCard';
 import { FilterSidebar, type Filters } from '@/components/FilterSidebar';
+import { MobileFilterToggle } from '@/components/MobileFilterToggle';
 import { PostModal } from '@/components/PostModal';
 import { EditCodePrompt } from '@/components/EditCodePrompt';
+import { ScrollToTop } from '@/components/ScrollToTop';
 import { useT } from '@/i18n/I18nProvider';
 
 const DEFAULT_FILTERS: Filters = {
@@ -26,9 +28,33 @@ export default function HomePage() {
   const t = useT();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [filters, setFiltersRaw] = useState<Filters>(DEFAULT_FILTERS);
   const [postModal, setPostModal] = useState<{ mode: 'create' | 'edit'; item?: Item } | null>(null);
   const [codePrompt, setCodePrompt] = useState<CodeAction | null>(null);
+
+  // 改任何 filter 都自动滚回顶部（除了 q 输入，那个用户在打字时不打断）
+  const setFilters = useCallback((updater: (f: Filters) => Filters) => {
+    setFiltersRaw(prev => {
+      const next = updater(prev);
+      const onlyQChanged = Object.keys(next).every(
+        k => k === 'q' || (next as any)[k] === (prev as any)[k]
+      );
+      if (!onlyQChanged) {
+        // 双 raf 保证 DOM 更新完再滚
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() =>
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          )
+        );
+      }
+      return next;
+    });
+  }, []);
+
+  const updateFilter = useCallback(
+    (p: Partial<Filters>) => setFilters(f => ({ ...f, ...p })),
+    [setFilters]
+  );
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -102,8 +128,8 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen">
-      {/* 顶栏 */}
-      <header className="sticky top-0 z-30 bg-white border-b border-stone-200 shadow-sm">
+      {/* 顶栏 — 桌面端 sticky 方便随时搜，手机端跟着内容滚走腾出屏幕 */}
+      <header className="md:sticky md:top-0 z-30 bg-white border-b border-stone-200 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
           <h1 className="text-xl font-bold text-brand whitespace-nowrap">
             🏠 {t('site.brand')}
@@ -111,19 +137,11 @@ export default function HomePage() {
           <div className="flex-1 min-w-[200px]">
             <input
               value={filters.q}
-              onChange={e => setFilters(f => ({ ...f, q: e.target.value }))}
+              onChange={e => setFiltersRaw(f => ({ ...f, q: e.target.value }))}
               placeholder={t('header.search')}
               className="w-full border border-stone-300 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-brand"
             />
           </div>
-
-          {/* 语言切换暂时隐藏 — 想恢复时把这里加回来即可。i18n 基础设施保留。
-          <div className="flex items-center gap-0 border border-stone-300 rounded-full overflow-hidden text-sm">
-            <button onClick={() => setLocale('zh')} className={`px-3 py-1 ${locale === 'zh' ? 'bg-brand text-white' : 'bg-white text-stone-700 hover:bg-stone-100'}`}>中</button>
-            <button onClick={() => setLocale('en')} className={`px-3 py-1 ${locale === 'en' ? 'bg-brand text-white' : 'bg-white text-stone-700 hover:bg-stone-100'}`}>EN</button>
-          </div>
-          （记得把上面的 useI18n import 和 const { locale, setLocale } = useI18n() 也加回来）
-          */}
 
           <button
             onClick={() => setPostModal({ mode: 'create' })}
@@ -135,19 +153,27 @@ export default function HomePage() {
       </header>
 
       {/* 主内容 */}
-      <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row gap-6">
-        <FilterSidebar filters={filters} onChange={p => setFilters(f => ({ ...f, ...p }))} />
+      <div className="max-w-6xl mx-auto px-3 md:px-4 py-3 md:py-4 flex flex-col md:flex-row gap-4 md:gap-6">
+        {/* 桌面端常驻侧栏 */}
+        <div className="hidden md:block">
+          <FilterSidebar filters={filters} onChange={updateFilter} />
+        </div>
 
         <section className="flex-1 min-w-0">
+          {/* 手机端折叠筛选 */}
+          <div className="mb-3">
+            <MobileFilterToggle filters={filters} onChange={updateFilter} />
+          </div>
+
           {/* 计数 */}
           {!loading && items.length > 0 && (
-            <div className="text-xs text-stone-500 mb-3">
+            <div className="text-xs text-stone-500 mb-2 px-1">
               {t('list.count', { n: items.length })}
             </div>
           )}
 
           {loading ? (
-            <SkeletonList />
+            <SkeletonGrid />
           ) : items.length === 0 ? (
             <div className="text-center text-stone-500 py-20">
               <div className="text-5xl mb-3">📭</div>
@@ -160,7 +186,8 @@ export default function HomePage() {
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
+            // 手机 2 列网格 / 桌面单列宽卡
+            <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
               {items.map(item => (
                 <ItemCard
                   key={item.id}
@@ -179,7 +206,7 @@ export default function HomePage() {
         </section>
       </div>
 
-      {/* 浮动按钮（手机最易点） */}
+      {/* 手机端浮动发布按钮 */}
       <button
         onClick={() => setPostModal({ mode: 'create' })}
         className="sm:hidden fixed right-5 bottom-5 z-20 w-14 h-14 rounded-full bg-brand text-white shadow-lg flex items-center justify-center text-2xl hover:bg-brand-dark"
@@ -187,6 +214,9 @@ export default function HomePage() {
       >
         ➕
       </button>
+
+      {/* 浮动回顶部按钮（滚动 >400px 才出现） */}
+      <ScrollToTop />
 
       {/* 模态框们 */}
       {postModal && (
@@ -243,24 +273,16 @@ export default function HomePage() {
   );
 }
 
-// 加载骨架屏
-function SkeletonList() {
+// 加载骨架 — 跟着 grid 自适应
+function SkeletonGrid() {
   return (
-    <div className="space-y-4">
-      {[1, 2, 3].map(i => (
-        <div key={i} className="bg-white rounded-lg border border-stone-200 p-4 animate-pulse">
-          <div className="flex gap-2 mb-3">
-            <div className="h-5 w-12 bg-stone-200 rounded-full" />
-            <div className="h-5 w-16 bg-stone-200 rounded-full" />
-          </div>
-          <div className="h-6 bg-stone-200 rounded w-2/3 mb-2" />
-          <div className="h-4 bg-stone-100 rounded w-full mb-1" />
-          <div className="h-4 bg-stone-100 rounded w-3/4 mb-3" />
-          <div className="flex gap-2 mb-3">
-            <div className="h-24 w-24 bg-stone-200 rounded" />
-            <div className="h-24 w-24 bg-stone-200 rounded" />
-          </div>
-          <div className="h-8 w-32 bg-stone-200 rounded" />
+    <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} className="bg-white rounded-lg border border-stone-200 p-3 md:p-4 animate-pulse">
+          <div className="h-5 w-12 bg-stone-200 rounded-full mb-2" />
+          <div className="h-5 bg-stone-200 rounded w-2/3 mb-2" />
+          <div className="aspect-square bg-stone-100 rounded mb-2" />
+          <div className="h-4 bg-stone-100 rounded w-3/4" />
         </div>
       ))}
     </div>

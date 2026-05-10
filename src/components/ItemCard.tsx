@@ -47,9 +47,10 @@ export function ItemCard({
   const t = useT();
   const locale = useLocale();
   const [zoomIdx, setZoomIdx] = useState<number | null>(null);
+  // 手机端：···菜单开关（编辑/售出/举报这些低频操作）
+  const [showAdmin, setShowAdmin] = useState(false);
   const photos = item.photoUrls;
 
-  // 键盘左右切换 + Esc 关闭
   useEffect(() => {
     if (zoomIdx === null) return;
     const onKey = (e: KeyboardEvent) => {
@@ -76,107 +77,150 @@ export function ItemCard({
 
   const truncated = item.title.length > 12 ? item.title.slice(0, 12) + '…' : item.title;
 
+  const AdminButtons = (
+    <>
+      <button
+        onClick={() => onEdit(item)}
+        className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs"
+      >
+        {t('card.edit')}
+      </button>
+      <button
+        onClick={() => onMarkSold(item)}
+        className="px-3 py-1.5 rounded border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 text-xs"
+      >
+        {t('card.markSold')}
+      </button>
+      <button
+        onClick={() => onReport(item)}
+        className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-500"
+      >
+        {t('card.report')}
+      </button>
+    </>
+  );
+
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-stone-200 p-4 hover:shadow-md transition-shadow">
-      {/* 标签行 */}
-      <div className="flex items-center gap-2 text-xs mb-2 flex-wrap">
+    <div className="bg-white rounded-lg shadow-sm border border-stone-200 p-3 md:p-4 hover:shadow-md transition-shadow">
+      {/* === 图片：手机端封面图（正方形）/ 桌面端缩略图横排 === */}
+      {photos.length > 0 && (
+        <>
+          {/* Mobile：只显示第一张作为封面，点击进 lightbox */}
+          <button
+            onClick={() => setZoomIdx(0)}
+            className="md:hidden block w-full aspect-square mb-2 relative overflow-hidden rounded"
+            aria-label={t('card.viewPhoto', { i: 1, n: photos.length })}
+          >
+            <img
+              src={photos[0]}
+              alt={item.title}
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+            {photos.length > 1 && (
+              <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                {t('card.photoCount', { n: photos.length })}
+              </span>
+            )}
+          </button>
+
+          {/* Desktop：完整缩略图横排 */}
+          <div className="hidden md:flex gap-2 overflow-x-auto no-scrollbar mb-3 pb-1">
+            {photos.map((url, i) => (
+              <button
+                key={i}
+                onClick={() => setZoomIdx(i)}
+                className="flex-shrink-0 relative group"
+                aria-label={t('card.viewPhoto', { i: i + 1, n: photos.length })}
+              >
+                <img
+                  src={url}
+                  alt={`${item.title} ${i + 1}`}
+                  className="h-24 w-24 object-cover rounded border border-stone-200 group-hover:border-brand transition-colors"
+                  loading="lazy"
+                />
+                {i === 0 && photos.length > 1 && (
+                  <span className="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
+                    {t('card.photoCount', { n: photos.length })}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* === 标签行 === */}
+      <div className="flex items-center gap-1.5 text-[10px] md:text-xs mb-1.5 flex-wrap">
         <span className={`px-2 py-0.5 rounded-full font-medium ${
-          item.type === 'sell'
-            ? 'bg-brand text-white'
-            : 'bg-accent text-white'
+          item.type === 'sell' ? 'bg-brand text-white' : 'bg-accent text-white'
         }`}>
           {typeLabel(item.type, item.category, locale)}
         </span>
-        <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
+        <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 truncate max-w-[100px] md:max-w-none">
           {categoryLabel(item.category, locale)}
           {item.customTag && ` · ${item.customTag}`}
         </span>
-        <span className="text-stone-400 ml-auto">{timeAgo(item.createdAt, locale)}</span>
+        {/* 时间：手机端隐藏，桌面端右对齐 */}
+        <span className="hidden md:inline text-stone-400 ml-auto">{timeAgo(item.createdAt, locale)}</span>
       </div>
 
-      {/* 标题 + 价格 */}
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <h3 className="text-lg font-semibold text-stone-900 leading-tight">
+      {/* === 标题 + 价格 === */}
+      <div className="mb-2">
+        <h3 className="text-base md:text-lg font-semibold text-stone-900 leading-tight line-clamp-2">
           {item.title}
         </h3>
-        <span className="text-xl font-bold text-brand whitespace-nowrap">
+        <div className="text-lg md:text-xl font-bold text-brand mt-0.5">
           {formatPrice(item.price, locale, item.type, item.category)}
-        </span>
+        </div>
       </div>
 
-      {/* 描述 */}
+      {/* === 描述：桌面才显示完整，手机隐藏 === */}
       {item.description && (
-        <p className="text-sm text-stone-700 mb-3 whitespace-pre-wrap">
+        <p className="hidden md:block text-sm text-stone-700 mb-3 whitespace-pre-wrap">
           {item.description}
         </p>
       )}
 
-      {/* 图片缩略图 — 点击在当前页弹大图 */}
-      {photos.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto no-scrollbar mb-3 pb-1">
-          {photos.map((url, i) => (
-            <button
-              key={i}
-              onClick={() => setZoomIdx(i)}
-              className="flex-shrink-0 relative group"
-              aria-label={t('card.viewPhoto', { i: i + 1, n: photos.length })}
-            >
-              <img
-                src={url}
-                alt={`${item.title} ${i + 1}`}
-                className="h-24 w-24 object-cover rounded border border-stone-200 group-hover:border-brand transition-colors"
-                loading="lazy"
-              />
-              {i === 0 && photos.length > 1 && (
-                <span className="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
-                  {t('card.photoCount', { n: photos.length })}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* 联系方式 */}
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-sm text-stone-600">
+      {/* === 联系方式 === */}
+      <div className="flex items-center gap-1.5 mb-2 text-xs md:text-sm flex-wrap">
+        <span className="text-stone-600 truncate min-w-0">
           {contactTypeLabel(item.contactType, item.customContactLabel, locale)}：
+          <span className="font-mono text-stone-900 select-all ml-1">{item.contactValue}</span>
         </span>
-        <span className="text-sm font-mono text-stone-900 select-all">
-          {item.contactValue}
-        </span>
-        <CopyButton text={item.contactValue} label={t('card.copyContact')} />
+        <CopyButton text={item.contactValue} label="📋" />
       </div>
 
-      {/* 操作按钮组 */}
-      <div className="flex gap-2 flex-wrap text-xs">
-        <CopyButton
-          text={itemCopyText(item.title, item.price, item.type, item.category)}
-          label={t('card.copyTitle', { title: truncated, price: formatPrice(item.price, locale, item.type, item.category) })}
-          size="md"
-          className="!bg-amber-50 !border-amber-300 hover:!bg-amber-100"
-        />
-        <button
-          onClick={() => onEdit(item)}
-          className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-sm"
-        >
-          {t('card.edit')}
-        </button>
-        <button
-          onClick={() => onMarkSold(item)}
-          className="px-3 py-1.5 rounded border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 text-sm"
-        >
-          {t('card.markSold')}
-        </button>
-        <button
-          onClick={() => onReport(item)}
-          className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-sm text-stone-500"
-        >
-          {t('card.report')}
-        </button>
+      {/* === 复制 标题—价格（最常用，全宽显眼） === */}
+      <CopyButton
+        text={itemCopyText(item.title, item.price, item.type, item.category)}
+        label={`📋 ${truncated} ${formatPrice(item.price, locale, item.type, item.category)}`}
+        size="md"
+        className="!w-full !block !text-center !bg-amber-50 !border-amber-300 hover:!bg-amber-100"
+      />
+
+      {/* === 桌面端：编辑/售出/举报常驻 === */}
+      <div className="hidden md:flex gap-2 flex-wrap text-xs mt-3">
+        {AdminButtons}
       </div>
 
-      {/* 询价区 */}
+      {/* === 手机端：低频操作收进 ··· === */}
+      <div className="md:hidden mt-2">
+        <button
+          onClick={() => setShowAdmin(s => !s)}
+          className="w-full text-stone-400 hover:text-stone-600 text-sm py-1 flex items-center justify-center gap-1"
+          aria-label="更多操作"
+        >
+          {showAdmin ? '▴ 收起' : '··· 更多'}
+        </button>
+        {showAdmin && (
+          <div className="flex gap-1.5 flex-wrap mt-1 justify-center">
+            {AdminButtons}
+          </div>
+        )}
+      </div>
+
+      {/* === 询价区（已折叠） === */}
       <InquirySection
         itemId={item.id}
         inquiries={item.inquiries}
@@ -186,7 +230,7 @@ export function ItemCard({
         onRequestSellerDelete={(inqId) => onDeleteInquiryAsSeller(item, inqId)}
       />
 
-      {/* 大图 lightbox */}
+      {/* === 大图 lightbox === */}
       {zoomIdx !== null && (
         <div
           className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 cursor-pointer select-none"
