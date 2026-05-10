@@ -33,3 +33,6 @@ public/uploads/
 
 # next types
 next-env.d.ts
+
+# TypeScript 增量编译缓存（绝不能 commit，会让 Docker 构建炸）
+*.tsbuildinfo
