@@ -96,7 +96,7 @@ export const messages = {
   'time.yearsAgo':         { zh: '{n} 年前',                                en: '{n} y ago' },
 
   // 询价区
-  'inq.toggle':            { zh: '{n} 条询价 / 留言',                       en: '{n} inquiries' },
+  'inq.toggle':            { zh: '{n} 条留言',                              en: '{n} messages' },
   'inq.add':               { zh: '+ 我也想问问 / 议价',                       en: '+ Ask / Make an offer' },
   'inq.editMy':            { zh: '✏️改',                                    en: '✏️Edit' },
   'inq.deleteMy':          { zh: '🗑自删',                                  en: '🗑Delete' },

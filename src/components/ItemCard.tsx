@@ -53,12 +53,11 @@ export function ItemCard({
   const cardRef = useRef<HTMLDivElement>(null);
 
   /**
-   * 三种展开来源都 toggle 同一个 expanded 状态，区别仅在 scroll 目标：
-   *   'card'    → 卡顶端到屏顶
-   *   'admin'   → 编辑/删除/举报按钮到屏中央
-   *   'inquiry' → 第一条留言到屏中央（无留言时滚到询价区）
+   * 两种展开来源都 toggle 同一个 expanded 状态：
+   *   'card'    → 卡顶端到屏顶（点空白处）
+   *   'inquiry' → 第一条留言到屏中央（点 X 条留言）
    */
-  const toggleExpand = (target: 'card' | 'admin' | 'inquiry') => {
+  const toggleExpand = (target: 'card' | 'inquiry') => {
     setExpanded(prev => {
       const next = !prev;
       if (next) {
@@ -70,9 +69,6 @@ export function ItemCard({
             const opts = { behavior: 'smooth' as const };
             if (target === 'card') {
               card.scrollIntoView({ ...opts, block: 'start' });
-            } else if (target === 'admin') {
-              card.querySelector('[data-card-section="admin"]')
-                ?.scrollIntoView({ ...opts, block: 'center' });
             } else {
               const t = card.querySelector('[data-card-section="first-inquiry"]')
                 ?? card.querySelector('[data-card-section="inquiry-list"]');
@@ -116,23 +112,24 @@ export function ItemCard({
     setZoomIdx(i => i === null ? null : (i + 1) % photos.length);
   };
 
+  // 三个 admin 按钮统一中性配色（删除不再用绿）
   const AdminButtons = (
     <>
       <button
         onClick={() => onEdit(item)}
-        className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs"
+        className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700"
       >
         {t('card.edit')}
       </button>
       <button
         onClick={() => onMarkSold(item)}
-        className="px-3 py-1.5 rounded border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 text-xs"
+        className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700"
       >
         {t('card.markSold')}
       </button>
       <button
         onClick={() => onReport(item)}
-        className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-500"
+        className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700"
       >
         {t('card.report')}
       </button>
@@ -227,8 +224,8 @@ export function ItemCard({
         </p>
       )}
 
-      {/* === 联系方式 + 两个复制按钮挤一排（窄屏会自动换行） === */}
-      <div className="flex items-center gap-1.5 mb-2 flex-wrap text-xs md:text-sm">
+      {/* === 联系方式 + 复制按钮 — 手机端仅展开后显示，桌面常驻 === */}
+      <div className={`${expanded ? 'flex' : 'hidden md:flex'} items-center gap-1.5 mb-2 flex-wrap text-xs md:text-sm`}>
         <span className="text-stone-600 truncate min-w-0">
           {contactTypeLabel(item.contactType, item.customContactLabel, locale)}：
           <span className="font-mono text-stone-900 select-all ml-1">{item.contactValue}</span>
@@ -242,26 +239,15 @@ export function ItemCard({
         />
       </div>
 
-      {/* === 桌面端：编辑/售出/举报常驻 === */}
-      <div data-card-section="admin" className="hidden md:flex gap-2 flex-wrap text-xs mt-3 scroll-mt-24">
+      {/* === 编辑/删除/举报：桌面常驻；手机仅展开后显示，无"更多/收起"按钮 === */}
+      <div data-card-section="admin" className="hidden md:flex gap-2 flex-wrap text-xs mt-3">
         {AdminButtons}
       </div>
-
-      {/* === 手机端 ···更多：toggle 整张卡的 expanded === */}
-      <div className="md:hidden mt-2">
-        <button
-          onClick={() => toggleExpand('admin')}
-          className="w-full text-stone-400 hover:text-stone-600 text-sm py-1 flex items-center justify-center gap-1"
-          aria-label="更多操作"
-        >
-          {expanded ? '▴ 收起' : '··· 更多'}
-        </button>
-        {expanded && (
-          <div data-card-section="admin" className="flex gap-1.5 flex-wrap mt-1 justify-center scroll-mt-24">
-            {AdminButtons}
-          </div>
-        )}
-      </div>
+      {expanded && (
+        <div className="md:hidden flex gap-1.5 flex-wrap mt-3 justify-center">
+          {AdminButtons}
+        </div>
+      )}
 
       {/* === 询价区：受控组件，open 跟 expanded 同步 === */}
       <InquirySection
