@@ -200,13 +200,11 @@ export function ItemDetailView({ item }: { item: Item }) {
               </div>
             </div>
 
-            {/* 操作按钮：分享 + 复制信息 + 举报 */}
+            {/* 操作按钮：复制/分享（含链接）+ 举报 + 卖家删除 */}
             <div className="flex gap-2 flex-wrap mb-3">
-              <ShareButton shareText={shareText} />
-              <CopyButton
-                text={itemCopyText(item.title, item.price, item.type, item.category)}
-                label={t('card.copyTitle')}
-                size="md"
+              <ShareButton
+                shareText={shareText}
+                label={t('card.shareItem')}
                 className="!bg-amber-50 !border-amber-300 hover:!bg-amber-100"
               />
               <button

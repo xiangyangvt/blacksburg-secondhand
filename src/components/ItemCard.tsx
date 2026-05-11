@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
 import { CopyButton } from './CopyButton';
 import { ShareButton } from './ShareButton';
 import { InquirySection } from './InquirySection';
@@ -11,7 +10,6 @@ import {
   categoryLabel,
   contactTypeLabel,
   formatPrice,
-  itemCopyText,
   timeAgo,
   typeLabel,
 } from '@/lib/utils';
@@ -118,16 +116,9 @@ export function ItemCard({
     setZoomIdx(i => i === null ? null : (i + 1) % photos.length);
   };
 
-  // 三个 admin 按钮统一中性配色（删除不再用绿）
+  // 三个 admin 按钮统一中性配色（删除不再用绿）。扁平化哲学：卡片本身就是 detail，不引导用户跳出去
   const AdminButtons = (
     <>
-      <Link
-        href={`/item/${item.id}`}
-        onClick={(e) => e.stopPropagation()}
-        className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700"
-      >
-        🔗 {t('card.viewDetail')}
-      </Link>
       <button
         onClick={() => onEdit(item)}
         className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700"
@@ -247,12 +238,7 @@ export function ItemCard({
           <span className="font-mono text-stone-900 select-all ml-1">{item.contactValue}</span>
         </span>
         <CopyButton text={item.contactValue} />
-        <CopyButton
-          text={itemCopyText(item.title, item.price, item.type, item.category)}
-          label={t('card.copyTitle')}
-          size="md"
-          className="!bg-amber-50 !border-amber-300 hover:!bg-amber-100"
-        />
+        {/* 复制 = 分享：内容是「标题 — $价格 + 链接」，方便丢到微信里 */}
         {origin && (
           <ShareButton
             shareText={buildItemShareText({
@@ -263,6 +249,8 @@ export function ItemCard({
               origin,
               itemId: item.id,
             })}
+            label={t('card.shareItem')}
+            className="!bg-amber-50 !border-amber-300 hover:!bg-amber-100"
           />
         )}
       </div>
