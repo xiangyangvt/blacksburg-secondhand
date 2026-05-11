@@ -14,7 +14,7 @@ import { MyPostsPanel } from '@/components/MyPostsPanel';
 import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
-import { Search, Plus, FolderOpen, Share2, PackageOpen } from 'lucide-react';
+import { Search, Plus, Share2, PackageOpen } from 'lucide-react';
 
 // 把 URL ?type=...&cat=... 解析回 Filters。未知/非法值都退到默认，保证健壮。
 function parseFiltersFromSearchParams(sp: ReadonlyURLSearchParams | URLSearchParams): Filters {
@@ -223,19 +223,17 @@ function HomePageInner() {
             />
           </div>
 
-          {/* 我的发布按钮：点击 = toggle（open 时填充亮起，再点收起；支持左手单手关闭） */}
+          {/* 我的发布按钮：纯文字胶囊（图标不直观，文字更明确）。点击 = toggle，open 时填充亮起 */}
           <button
             onClick={() => setMyPanelOpen(o => !o)}
-            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-chip text-sm font-medium whitespace-nowrap transition-colors ${
+            className={`px-3 sm:px-4 py-2 rounded-chip text-sm font-medium whitespace-nowrap transition-colors ${
               myPanelOpen
                 ? 'bg-brand text-white border border-brand shadow-card'
                 : 'bg-white border border-stone-300 hover:border-stone-400 text-stone-700'
             }`}
-            aria-label={t('my.headerLink')}
             aria-expanded={myPanelOpen}
           >
-            <FolderOpen size={16} />
-            <span className="hidden sm:inline">{t('my.headerLink')}</span>
+            {t('my.headerLink')}
           </button>
 
           {origin && (

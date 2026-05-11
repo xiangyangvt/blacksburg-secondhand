@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import NextImage from 'next/image';
-import { X, FolderOpen, Pencil, Trash2, CheckCircle2, ChevronDown } from 'lucide-react';
+import { X, FolderOpen, Pencil, Trash2, CheckCircle2, ChevronUp } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/I18nProvider';
 import {
   categoryLabel,
@@ -250,7 +250,7 @@ export function MyPostsPanel({ onClose }: { onClose: () => void }) {
             className="inline-flex items-center gap-1.5 px-6 py-2 bg-white border border-stone-300 text-stone-700 rounded-chip hover:bg-stone-100 active:scale-95 text-sm font-medium transition-all shadow-card"
             aria-label="收起我的发布"
           >
-            <ChevronDown size={16} />
+            <ChevronUp size={16} />
             收起
           </button>
         </div>
