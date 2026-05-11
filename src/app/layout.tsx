@@ -13,10 +13,13 @@ const inter = Inter({
 });
 
 const notoSC = Noto_Sans_SC({
-  // 中文不支持 'subsets' 但仍可用，next/font 会按需加载
+  // Noto Sans SC 在 Google Fonts 没有"chinese"这种命名 subset（只有 latin/latin-ext/cyrillic/vietnamese），
+  // 所以 next/font 不让 preload。改成 preload: false：字体仍然自托管 + 通过 CSS 加载，
+  // 第一次中文渲染会有极轻微的 FOUT（用 PingFang/Microsoft YaHei 兜底，~100ms 后换 Noto），之后浏览器缓存
   weight: ['400', '500', '700'],
   variable: '--font-noto-sc',
   display: 'swap',
+  preload: false,
 });
 
 const SITE_NAME = '黑堡二手买卖 · Blacksburg Secondhand';
