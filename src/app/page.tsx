@@ -206,18 +206,11 @@ function HomePageInner() {
           设计 V2：去 emoji、wordmark 取代 emoji 站名、品牌红只在主 CTA 出现 */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          {/* 左：我的发布（左手拇指可达；toggle，open 时填充亮起） */}
-          <button
-            onClick={() => setMyPanelOpen(o => !o)}
-            className={`px-3 sm:px-4 py-2 rounded-chip text-sm font-medium whitespace-nowrap transition-colors ${
-              myPanelOpen
-                ? 'bg-brand text-white border border-brand shadow-card'
-                : 'bg-white border border-stone-300 hover:border-stone-400 text-stone-700'
-            }`}
-            aria-expanded={myPanelOpen}
-          >
-            {t('my.headerLink')}
-          </button>
+          {/* 最左：Wordmark 站名 */}
+          <h1 className="text-base sm:text-lg font-bold text-stone-900 whitespace-nowrap tracking-tight flex-shrink-0">
+            黑堡<span className="text-brand">二手</span>
+            <span className="hidden sm:inline text-stone-400 font-normal ml-1">买卖</span>
+          </h1>
 
           {/* 中：搜索 */}
           <div className="flex-1 min-w-0 relative">
@@ -230,6 +223,19 @@ function HomePageInner() {
             />
           </div>
 
+          {/* 右：我的发布（toggle，open 时填充亮起） */}
+          <button
+            onClick={() => setMyPanelOpen(o => !o)}
+            className={`px-3 sm:px-4 py-2 rounded-chip text-sm font-medium whitespace-nowrap transition-colors ${
+              myPanelOpen
+                ? 'bg-brand text-white border border-brand shadow-card'
+                : 'bg-white border border-stone-300 hover:border-stone-400 text-stone-700'
+            }`}
+            aria-expanded={myPanelOpen}
+          >
+            {t('my.headerLink')}
+          </button>
+
           {/* 右：分享本站（仅桌面） */}
           {origin && (
             <ShareButton
@@ -240,7 +246,7 @@ function HomePageInner() {
             />
           )}
 
-          {/* 右：发布（主 CTA；手机端走 FAB） */}
+          {/* 最右：发布（主 CTA；手机端走 FAB） */}
           <button
             onClick={() => setPostModal({ mode: 'create' })}
             className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-brand text-white rounded-chip hover:bg-brand-dark active:scale-95 transition-all text-sm font-medium whitespace-nowrap shadow-card"
@@ -248,12 +254,6 @@ function HomePageInner() {
             <Plus size={16} strokeWidth={2.5} />
             <span>{t('header.post')}</span>
           </button>
-
-          {/* 最右：Wordmark 站名 */}
-          <h1 className="text-base sm:text-lg font-bold text-stone-900 whitespace-nowrap tracking-tight flex-shrink-0">
-            黑堡<span className="text-brand">二手</span>
-            <span className="hidden sm:inline text-stone-400 font-normal ml-1">买卖</span>
-          </h1>
         </div>
 
         {stats && stats.totalActive > 0 && (
