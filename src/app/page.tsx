@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
+import { useSearchParams, type ReadonlyURLSearchParams } from 'next/navigation';
 import { ItemCard, type Item } from '@/components/ItemCard';
 import { FilterSidebar, type Filters } from '@/components/FilterSidebar';
 import { MobileFilterToggle } from '@/components/MobileFilterToggle';
@@ -10,26 +11,59 @@ import { ScrollToTop } from '@/components/ScrollToTop';
 import { FabPostButton } from '@/components/FabPostButton';
 import { useT } from '@/i18n/I18nProvider';
 
-const DEFAULT_FILTERS: Filters = {
-  type: 'all',
-  category: 'all',
-  q: '',
-  minPrice: '',
-  maxPrice: '',
-  since: 'all',
-  sort: 'newest',
-};
+// 把 URL ?type=...&cat=... 解析回 Filters。未知/非法值都退到默认，保证健壮。
+function parseFiltersFromSearchParams(sp: ReadonlyURLSearchParams | URLSearchParams): Filters {
+  const get = (k: string) => sp.get(k) ?? undefined;
+  const type = get('type');
+  const since = get('since');
+  const sort = get('sort');
+  return {
+    type:     type === 'sell' || type === 'buy' ? type : 'all',
+    category: get('category') ?? 'all',
+    q:        get('q') ?? '',
+    minPrice: get('minPrice') ?? '',
+    maxPrice: get('maxPrice') ?? '',
+    since:    since === '1d' || since === '1w' || since === '1m' ? since : 'all',
+    sort:     sort === 'oldest' || sort === 'priceAsc' || sort === 'priceDesc' ? sort : 'newest',
+  };
+}
+
+// 用 debouncedQ（而不是 filters.q）写回 URL —— URL 只反映"提交过"的搜索词
+function buildFiltersSearch(f: Filters, debouncedQ: string): string {
+  const sp = new URLSearchParams();
+  if (f.type     !== 'all') sp.set('type', f.type);
+  if (f.category !== 'all') sp.set('category', f.category);
+  const q = debouncedQ.trim();
+  if (q)                    sp.set('q', q);
+  if (f.minPrice)           sp.set('minPrice', f.minPrice);
+  if (f.maxPrice)           sp.set('maxPrice', f.maxPrice);
+  if (f.since !== 'all')    sp.set('since', f.since);
+  if (f.sort  !== 'newest') sp.set('sort', f.sort);
+  const s = sp.toString();
+  return s ? `?${s}` : '';
+}
 
 type CodeAction =
   | { kind: 'edit'; item: Item }
   | { kind: 'delete'; item: Item }
   | { kind: 'sellerDeleteInquiry'; item: Item; inquiryId: string };
 
+// 默认导出包一层 Suspense —— Next.js 14 要求用 useSearchParams 的客户端页面外层 Suspense
 export default function HomePage() {
+  return (
+    <Suspense fallback={null}>
+      <HomePageInner />
+    </Suspense>
+  );
+}
+
+function HomePageInner() {
   const t = useT();
+  const searchParams = useSearchParams();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFiltersRaw] = useState<Filters>(DEFAULT_FILTERS);
+  // 初次渲染从 URL 解析；之后状态独立，由 state → URL 单向同步
+  const [filters, setFiltersRaw] = useState<Filters>(() => parseFiltersFromSearchParams(searchParams));
   const [postModal, setPostModal] = useState<{ mode: 'create' | 'edit'; item?: Item } | null>(null);
   const [codePrompt, setCodePrompt] = useState<CodeAction | null>(null);
 
@@ -57,12 +91,32 @@ export default function HomePage() {
     [setFilters]
   );
 
+  // 防抖搜索词：用户停止输入 300ms 后才触发后端查询，避免每个字符都打一次接口
+  const [debouncedQ, setDebouncedQ] = useState(filters.q);
+  useEffect(() => {
+    if (filters.q === debouncedQ) return;
+    const id = setTimeout(() => setDebouncedQ(filters.q), 300);
+    return () => clearTimeout(id);
+  }, [filters.q, debouncedQ]);
+
+  // 把 filters 同步回 URL（用 replaceState，不进历史栈、不触发 Next.js 导航）
+  // 这样用户可以复制当前 URL 分享筛选状态
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const search = buildFiltersSearch(filters, debouncedQ);
+    const target = `${window.location.pathname}${search}${window.location.hash}`;
+    if (target !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+      window.history.replaceState(null, '', target);
+    }
+  }, [filters, debouncedQ]);
+
   const fetchItems = useCallback(async () => {
     setLoading(true);
     const sp = new URLSearchParams();
     if (filters.type     !== 'all') sp.set('type', filters.type);
     if (filters.category !== 'all') sp.set('category', filters.category);
-    if (filters.q.trim())           sp.set('q', filters.q.trim());
+    const q = debouncedQ.trim();
+    if (q)                          sp.set('q', q);
     if (filters.minPrice)           sp.set('minPrice', filters.minPrice);
     if (filters.maxPrice)           sp.set('maxPrice', filters.maxPrice);
     if (filters.since !== 'all')    sp.set('since', filters.since);
@@ -75,7 +129,9 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+    // 故意不把 filters.q 放进依赖：q 通过 debouncedQ 才触发 fetch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.type, filters.category, debouncedQ, filters.minPrice, filters.maxPrice, filters.since, filters.sort]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 

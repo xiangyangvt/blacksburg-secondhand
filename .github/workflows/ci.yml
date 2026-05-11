@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 同一分支只跑最新一次（旧的自动取消）
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: typecheck · lint · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # 让 prisma generate 不联网抓 schema 文档
+      CHECKPOINT_DISABLE: '1'
+      # CI 用 SQLite 跑 build，避免对生产 PG 的依赖
+      DATABASE_URL: 'file:./dev-ci.db'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      # 缓存 Next.js 增量构建产物 —— 加速第二次跑
+      - name: Cache .next/cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**/*.{ts,tsx}') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      - name: Prisma generate (dev schema)
+        run: npx prisma generate
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+  # 额外验证：production schema（PG）也能 generate 出来
+  # 这一步只检查 schema 自身合法 + Prisma client 类型生成，不连真 DB
+  build-prod-schema:
+    name: prisma generate (prod schema)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/dummy'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npx prisma generate --schema=prisma/schema.production.prisma

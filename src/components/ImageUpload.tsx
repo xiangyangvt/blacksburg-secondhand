@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import NextImage from 'next/image';
 import { useT } from '@/i18n/I18nProvider';
 
 const MAX_PHOTOS = 6;
@@ -56,10 +57,13 @@ export function ImageUpload({
       <div className="flex gap-2 flex-wrap">
         {urls.map((url, i) => (
           <div key={i} className="relative group">
-            <img
+            <NextImage
               src={url}
-              className="h-20 w-20 object-cover rounded border border-stone-300"
               alt=""
+              width={80}
+              height={80}
+              sizes="80px"
+              className="h-20 w-20 object-cover rounded border border-stone-300"
             />
             <button
               type="button"

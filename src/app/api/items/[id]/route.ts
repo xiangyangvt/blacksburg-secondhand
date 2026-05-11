@@ -5,7 +5,9 @@ import {
   CATEGORIES,
   CONTACT_TYPES,
   serializePhotoUrls,
+  parsePhotoUrls,
 } from '@/lib/utils';
+import { deleteCloudinaryImagesByUrls } from '@/lib/uploader';
 
 const VALID_CATEGORIES = CATEGORIES.map(c => c.id);
 const VALID_CONTACT_TYPES = CONTACT_TYPES.map(c => c.id);
@@ -67,6 +69,17 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
   }
 
   await prisma.item.update({ where: { id }, data });
+
+  // 编辑时如果替换了图，把被丢弃的 Cloudinary 图清掉（节省额度）
+  if (updates.photoUrls !== undefined) {
+    const oldUrls = parsePhotoUrls(item.photoUrls);
+    const newUrls: string[] = Array.isArray(updates.photoUrls) ? updates.photoUrls : [];
+    const removed = oldUrls.filter(u => !newUrls.includes(u));
+    if (removed.length > 0) {
+      deleteCloudinaryImagesByUrls(removed).catch(() => {});
+    }
+  }
+
   return NextResponse.json({ success: true });
 }
 
@@ -85,6 +98,12 @@ export async function DELETE(req: NextRequest, ctx: { params: { id: string } }) 
 
   // 软删
   await prisma.item.update({ where: { id }, data: { status: 'deleted' } });
+
+  // 顺手清掉 Cloudinary 图床上的图（节省免费额度）；本地 /uploads/ 的图保留
+  // 失败不阻塞主流程
+  const urls = parsePhotoUrls(item.photoUrls);
+  deleteCloudinaryImagesByUrls(urls).catch(() => {});
+
   return NextResponse.json({ success: true });
 }
 

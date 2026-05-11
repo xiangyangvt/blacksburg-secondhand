@@ -1,6 +1,6 @@
 // 生产环境用 schema（PostgreSQL）
-// Phase 4 部署到 Railway 时，build 命令会把这个文件 copy 成 schema.prisma
-// 本地开发请用 prisma/schema.prisma（SQLite，零摩擦）
+// Railway 部署时，build:prod / start:prod 通过 `--schema=prisma/schema.production.prisma` 直接引用。
+// 本地开发请用 prisma/schema.prisma（SQLite，零摩擦）。两个 schema 互不污染。
 
 generator client {
   provider      = "prisma-client-js"
@@ -49,6 +49,7 @@ model Inquiry {
   message             String
   sellerReply         String?
   sellerRepliedAt     DateTime?
+  status              String   @default("active") // "active" | "hidden"
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   ipAddress           String?

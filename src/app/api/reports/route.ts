@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // 自动隐藏机制
+  // 自动隐藏机制（item 和 inquiry 都走相同的 3-IP 阈值）
   if (targetType === 'item') {
     const reports = await prisma.report.findMany({
       where: { itemId: targetId },
@@ -39,8 +39,16 @@ export async function POST(req: NextRequest) {
     if (uniqueIps.size >= HIDE_THRESHOLD) {
       await prisma.item.update({ where: { id: targetId }, data: { status: 'hidden' } });
     }
+  } else if (targetType === 'inquiry') {
+    const reports = await prisma.report.findMany({
+      where: { inquiryId: targetId },
+      select: { reporterIp: true },
+    });
+    const uniqueIps = new Set(reports.map(r => r.reporterIp).filter(Boolean));
+    if (uniqueIps.size >= HIDE_THRESHOLD) {
+      await prisma.inquiry.update({ where: { id: targetId }, data: { status: 'hidden' } });
+    }
   }
-  // inquiry 同理（这里先不做，简化 MVP）
 
   return NextResponse.json({ success: true });
 }

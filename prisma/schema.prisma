@@ -50,6 +50,7 @@ model Inquiry {
   // 卖家回复（用商品 editCode 鉴权后才能写）
   sellerReply         String?
   sellerRepliedAt     DateTime?
+  status              String   @default("active") // "active" | "hidden"（3 个不同 IP 举报后自动 hidden，仅 admin 可见）
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   ipAddress           String?

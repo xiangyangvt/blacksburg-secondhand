@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { CopyButton } from './CopyButton';
 import { InquirySection } from './InquirySection';
 import {
@@ -151,11 +152,12 @@ export function ItemCard({
             className="md:hidden block w-full aspect-square mb-2 relative overflow-hidden rounded"
             aria-label={t('card.viewPhoto', { i: 1, n: photos.length })}
           >
-            <img
+            <Image
               src={photos[0]}
               alt={item.title}
-              className="w-full h-full object-cover"
-              loading="lazy"
+              fill
+              sizes="(max-width: 768px) 50vw, 0"
+              className="object-cover"
             />
             {photos.length > 1 && (
               <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
@@ -173,11 +175,13 @@ export function ItemCard({
                 className="flex-shrink-0 relative group"
                 aria-label={t('card.viewPhoto', { i: i + 1, n: photos.length })}
               >
-                <img
+                <Image
                   src={url}
                   alt={`${item.title} ${i + 1}`}
+                  width={96}
+                  height={96}
+                  sizes="96px"
                   className="h-24 w-24 object-cover rounded border border-stone-200 group-hover:border-brand transition-colors"
-                  loading="lazy"
                 />
                 {i === 0 && photos.length > 1 && (
                   <span className="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
@@ -287,12 +291,19 @@ export function ItemCard({
             >‹</button>
           )}
 
-          <img
-            src={photos[zoomIdx]}
-            className="max-h-full max-w-full object-contain"
-            alt={`${item.title} ${zoomIdx + 1}`}
+          <div
+            className="relative w-full h-full"
             onClick={(e) => e.stopPropagation()}
-          />
+          >
+            <Image
+              src={photos[zoomIdx]}
+              alt={`${item.title} ${zoomIdx + 1}`}
+              fill
+              sizes="100vw"
+              priority
+              className="object-contain"
+            />
+          </div>
 
           {photos.length > 1 && (
             <button
@@ -313,7 +324,14 @@ export function ItemCard({
                   onClick={() => setZoomIdx(i)}
                   className={`flex-shrink-0 ${i === zoomIdx ? 'ring-2 ring-white' : 'opacity-60 hover:opacity-100'}`}
                 >
-                  <img src={url} alt="" className="h-12 w-12 object-cover rounded" />
+                  <Image
+                    src={url}
+                    alt=""
+                    width={48}
+                    height={48}
+                    sizes="48px"
+                    className="h-12 w-12 object-cover rounded"
+                  />
                 </button>
               ))}
             </div>

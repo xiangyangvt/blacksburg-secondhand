@@ -58,7 +58,11 @@ export async function GET(req: NextRequest) {
     orderBy,
     take: 200,
     include: {
-      inquiries: { orderBy: { createdAt: 'asc' } },
+      // 只暴露 active 状态的留言；hidden 的（3 个 IP 举报后自动隐藏）仅 admin 可见
+      inquiries: {
+        where: { status: 'active' },
+        orderBy: { createdAt: 'asc' },
+      },
     },
   });
 

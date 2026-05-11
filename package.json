@@ -15,9 +15,7 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "prisma migrate reset --force",
-    "db:use-postgres": "cp prisma/schema.production.prisma prisma/schema.prisma && prisma generate",
-    "db:use-sqlite":   "git checkout prisma/schema.prisma && prisma generate"
+    "db:reset": "prisma migrate reset --force"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

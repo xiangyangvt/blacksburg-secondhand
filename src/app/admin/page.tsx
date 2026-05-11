@@ -7,7 +7,8 @@ import { isAdmin, setAdminCookie, clearAdminCookie, getAdminPassword } from '@/l
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { formatPrice, timeAgo, categoryLabel } from '@/lib/utils';
+import { formatPrice, timeAgo, categoryLabel, parsePhotoUrls } from '@/lib/utils';
+import { deleteCloudinaryImagesByUrls } from '@/lib/uploader';
 
 export const dynamic = 'force-dynamic'; // 永远拿最新
 
@@ -33,7 +34,12 @@ async function deleteItemAction(formData: FormData) {
   'use server';
   if (!isAdmin()) return;
   const id = String(formData.get('id'));
+  // 删除前先拿到 photoUrls，硬删后异步清掉 Cloudinary 图床上的图（节省额度）
+  const item = await prisma.item.findUnique({ where: { id }, select: { photoUrls: true } });
   await prisma.item.delete({ where: { id } });
+  if (item) {
+    deleteCloudinaryImagesByUrls(parsePhotoUrls(item.photoUrls)).catch(() => {});
+  }
   revalidatePath('/admin');
 }
 
@@ -63,6 +69,16 @@ async function unhideItemAction(formData: FormData) {
   revalidatePath('/admin');
 }
 
+async function unhideInquiryAction(formData: FormData) {
+  'use server';
+  if (!isAdmin()) return;
+  const id = String(formData.get('id'));
+  // 同样重置举报触发器
+  await prisma.report.deleteMany({ where: { inquiryId: id } });
+  await prisma.inquiry.update({ where: { id }, data: { status: 'active' } });
+  revalidatePath('/admin');
+}
+
 // ===== 主页面 =====
 export default async function AdminPage({ searchParams }: { searchParams: { error?: string } }) {
   // 没设密码或还是默认密码：拒绝
@@ -87,7 +103,7 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     return <LoginScreen error={searchParams.error} />;
   }
 
-  const [reports, hiddenItems, activeCount, inquiryCount, reportCount] = await Promise.all([
+  const [reports, hiddenItems, hiddenInquiries, activeCount, inquiryCount, reportCount] = await Promise.all([
     prisma.report.findMany({
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -99,6 +115,11 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     prisma.item.findMany({
       where: { status: 'hidden' },
       orderBy: { updatedAt: 'desc' },
+    }),
+    prisma.inquiry.findMany({
+      where: { status: 'hidden' },
+      orderBy: { updatedAt: 'desc' },
+      include: { item: true },
     }),
     prisma.item.count({ where: { status: 'active' } }),
     prisma.inquiry.count(),
@@ -145,7 +166,7 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
       </section>
 
       {/* 自动隐藏的商品 */}
-      <section>
+      <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">🙈 自动隐藏的商品 ({hiddenItems.length})</h2>
         {hiddenItems.length === 0 ? (
           <EmptyBox text="无" />
@@ -157,6 +178,25 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
                 item={item}
                 onUnhide={unhideItemAction}
                 onDelete={deleteItemAction}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* 自动隐藏的留言 */}
+      <section>
+        <h2 className="text-lg font-semibold mb-3">🙊 自动隐藏的留言 ({hiddenInquiries.length})</h2>
+        {hiddenInquiries.length === 0 ? (
+          <EmptyBox text="无" />
+        ) : (
+          <div className="space-y-3">
+            {hiddenInquiries.map(inq => (
+              <HiddenInquiryCard
+                key={inq.id}
+                inquiry={inq}
+                onUnhide={unhideInquiryAction}
+                onDelete={deleteInquiryAction}
               />
             ))}
           </div>
@@ -328,6 +368,47 @@ function HiddenItemCard({
         </form>
         <form action={onDelete}>
           <input type="hidden" name="id" value={item.id} />
+          <button className="px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+            永久删除
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function HiddenInquiryCard({
+  inquiry,
+  onUnhide,
+  onDelete,
+}: {
+  inquiry: any;
+  onUnhide: (fd: FormData) => Promise<void>;
+  onDelete: (fd: FormData) => Promise<void>;
+}) {
+  return (
+    <div className="bg-white rounded-lg border border-amber-200 p-4">
+      <div className="text-xs text-amber-700 mb-1">
+        ⚠️ 被 3+ IP 举报后自动隐藏 · 隐藏于 {timeAgo(inquiry.updatedAt)}
+      </div>
+      <div className="text-xs text-stone-500 mb-1">
+        {inquiry.contactType}: <code>{inquiry.contactValue}</code>
+        {inquiry.item && (
+          <> · 在 <strong>{inquiry.item.title}</strong> 留言</>
+        )}
+      </div>
+      <div className="text-sm text-stone-700 whitespace-pre-wrap mb-3 bg-stone-50 rounded p-2 border border-stone-100">
+        {inquiry.message}
+      </div>
+      <div className="flex gap-2">
+        <form action={onUnhide}>
+          <input type="hidden" name="id" value={inquiry.id} />
+          <button className="px-3 py-1.5 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+            恢复显示
+          </button>
+        </form>
+        <form action={onDelete}>
+          <input type="hidden" name="id" value={inquiry.id} />
           <button className="px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700">
             永久删除
           </button>

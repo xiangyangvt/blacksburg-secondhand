@@ -82,3 +82,51 @@ export async function deleteCloudinaryImage(publicId: string): Promise<void> {
     // 删除失败不阻塞主流程
   }
 }
+
+/**
+ * 从 Cloudinary URL 反解 publicId。
+ * 现存数据只存 URL 不存 publicId，所以软删时通过此函数提取。
+ *
+ * 例：
+ *   https://res.cloudinary.com/demo/image/upload/q_auto:good,f_auto/c_limit,h_1600,w_1600/v1234567890/blacksburg-secondhand/abc123.jpg
+ *   → "blacksburg-secondhand/abc123"
+ *
+ * 非 Cloudinary URL（本地 /uploads/... 或外站）返回 null。
+ */
+export function extractCloudinaryPublicId(url: string): string | null {
+  if (typeof url !== 'string' || !url.includes('res.cloudinary.com')) return null;
+  let pathname: string;
+  try {
+    pathname = new URL(url).pathname;
+  } catch {
+    return null;
+  }
+  const parts = pathname.split('/').filter(Boolean);
+  // 路径：/<cloud_name>/image/upload/[transformations.../][v<digits>/]<publicId>.<ext>
+  const uploadIdx = parts.indexOf('upload');
+  if (uploadIdx === -1 || uploadIdx === parts.length - 1) return null;
+  let after = parts.slice(uploadIdx + 1);
+
+  // 剥 transformation 段：以 "<letter>_" 开头（如 q_auto, c_limit, w_1600, ar_16:9 等）
+  while (after.length > 1 && /^[a-z]_/.test(after[0])) {
+    after = after.slice(1);
+  }
+  // 剥 version 段：v<digits>
+  if (after.length > 1 && /^v\d+$/.test(after[0])) {
+    after = after.slice(1);
+  }
+  if (after.length === 0) return null;
+
+  // 剩下的是 publicId（含 folder），去掉扩展名
+  const full = after.join('/');
+  return full.replace(/\.[a-zA-Z0-9]+$/, '');
+}
+
+/** 批量删除一组图（接受 URL 数组，自动跳过本地 / 非 Cloudinary 的）。失败不抛错。 */
+export async function deleteCloudinaryImagesByUrls(urls: string[]): Promise<void> {
+  if (!isCloudinaryAvailable()) return;
+  const publicIds = urls
+    .map(extractCloudinaryPublicId)
+    .filter((id): id is string => !!id);
+  await Promise.allSettled(publicIds.map(id => deleteCloudinaryImage(id)));
+}
