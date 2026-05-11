@@ -137,18 +137,28 @@ export function PostModal({
           <button onClick={onClose} className="text-stone-500 hover:text-stone-900 text-2xl leading-none">×</button>
         </div>
 
-        {/* create 模式才显示 tab；edit 模式只走单条表单 */}
+        {/* create 模式 + 桌面端才显示 tab；手机端整条 tab 隐藏（批量导入只在电脑上） */}
         {mode === 'create' && (
-          <div className="border-b border-stone-200 px-5 flex gap-0">
+          <div className="hidden md:flex border-b border-stone-200 px-5 gap-0">
             <TabBtn active={tab === 'single'} onClick={() => setTab('single')}>{t('batch.tabSingle')}</TabBtn>
             <TabBtn active={tab === 'batch'}  onClick={() => setTab('batch')}>{t('batch.tabBatch')}</TabBtn>
           </div>
         )}
 
         {mode === 'create' && tab === 'batch' ? (
-          <div className="p-5">
-            <BatchImportPanel onSuccess={onSaved} onClose={onClose} />
-          </div>
+          <>
+            {/* 桌面：批量面板 */}
+            <div className="hidden md:block p-5">
+              <BatchImportPanel onSuccess={onSaved} onClose={onClose} />
+            </div>
+            {/* 手机 fallback：用户用 dev tools 强切窗口大小时才会到这里；提示用电脑 */}
+            <div className="md:hidden p-5 text-center text-sm text-stone-600">
+              <p className="mb-2">📥 批量导入只支持电脑端访问</p>
+              <button onClick={() => setTab('single')} className="text-brand underline">
+                切回单条发布
+              </button>
+            </div>
+          </>
         ) : (
         <div className="p-5 space-y-4">
           <div>
