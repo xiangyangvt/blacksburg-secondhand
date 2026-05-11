@@ -222,14 +222,15 @@ export function MyPostsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-0 sm:p-4"
+      className="fixed inset-0 z-40 bg-black/50 flex items-start justify-center overflow-y-auto p-3 sm:p-4"
       onClick={onClose}
     >
+      {/* 真浮窗：高度 fit-content，下方剩余空间显示遮罩透出主页内容 */}
       <div
-        className="bg-stone-50 w-full max-w-3xl sm:rounded-lg sm:my-4 min-h-screen sm:min-h-0"
+        className="bg-stone-50 w-full max-w-3xl rounded-card shadow-overlay my-2 sm:my-4 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between sm:rounded-t-lg">
+        <div className="bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between rounded-t-card">
           <h2 className="text-lg font-semibold text-stone-900 flex items-center gap-2">
             <FolderOpen size={20} className="text-brand" />
             {t('my.title')}
@@ -238,13 +239,12 @@ export function MyPostsPanel({ onClose }: { onClose: () => void }) {
             <X size={22} />
           </button>
         </div>
-        <div className="p-4 sm:p-5 pb-20">
-          {/* pb-20 留给底部 sticky 收起按钮的空间，避免内容被遮挡 */}
+        <div className="p-4 sm:p-5">
           <MyPostsBody onClose={onClose} />
         </div>
 
-        {/* 底部 sticky"收起"按钮：左手拇指可达；半透明背景保证内容能透出来 */}
-        <div className="sticky bottom-0 left-0 right-0 bg-stone-50/95 backdrop-blur-sm border-t border-stone-200 sm:rounded-b-lg px-4 py-3 flex justify-center">
+        {/* 底部"收起"按钮：跟内容流末尾，紧贴上一块的分界线；高度自适应内容 */}
+        <div className="border-t border-stone-200 px-4 py-3 flex justify-center bg-stone-50 rounded-b-card">
           <button
             onClick={onClose}
             className="inline-flex items-center gap-1.5 px-6 py-2 bg-white border border-stone-300 text-stone-700 rounded-chip hover:bg-stone-100 active:scale-95 text-sm font-medium transition-all shadow-card"
