@@ -67,7 +67,7 @@ export const messages = {
 
   // 商品卡片
   'card.copyContact':      { zh: '复制联系方式',                              en: 'Copy contact' },
-  'card.copyTitle':        { zh: '复制商品信息',                              en: 'Copy item info' },
+  'card.copyTitle':        { zh: '复制物品信息',                              en: 'Copy item info' },
   'card.tapHint':          { zh: '点击卡片展开详情',                          en: 'Tap card for details' },
   'card.fabPost':          { zh: '发布',                                    en: 'Post' },
   'card.edit':             { zh: '✏️ 编辑',                                  en: '✏️ Edit' },
