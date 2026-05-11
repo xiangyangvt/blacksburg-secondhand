@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { CopyButton } from './CopyButton';
 import { contactTypeLabel, timeAgo, CONTACT_TYPES } from '@/lib/utils';
 import { useT, useLocale } from '@/i18n/I18nProvider';
@@ -51,6 +51,8 @@ export function InquirySection({
   const [replyCode, setReplyCode] = useState('');
   const [replySubmitting, setReplySubmitting] = useState(false);
 
+  const sectionRef = useRef<HTMLDivElement>(null);
+
   const setOpen = (v: boolean | ((prev: boolean) => boolean)) => {
     setOpenRaw(prev => {
       const next = typeof v === 'function' ? v(prev) : v;
@@ -58,6 +60,17 @@ export function InquirySection({
       return next;
     });
   };
+
+  // 展开时自动滚动到询价区，让用户立即看到留言列表
+  // 等 2 帧给布局完成（卡片可能从单列变全宽 col-span-2）
+  useEffect(() => {
+    if (!open || !sectionRef.current) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      })
+    );
+  }, [open]);
 
   const submit = async () => {
     if (!contactValue.trim() || !message.trim()) {
@@ -191,7 +204,7 @@ export function InquirySection({
   };
 
   return (
-    <div className="border-t border-stone-200 mt-3 pt-2">
+    <div ref={sectionRef} className="border-t border-stone-200 mt-3 pt-2 scroll-mt-24">
       <button
         onClick={() => setOpen(o => !o)}
         className="text-sm text-stone-600 hover:text-brand flex items-center gap-1"

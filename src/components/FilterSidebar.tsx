@@ -2,6 +2,7 @@
 
 import { CATEGORIES } from '@/lib/utils';
 import { useT } from '@/i18n/I18nProvider';
+import { Dropdown } from './Dropdown';
 
 export type Filters = {
   type:     'all' | 'sell' | 'buy';
@@ -63,56 +64,56 @@ export function FilterSidebar({
         </div>
       </div>
 
-      {/* 价格 */}
+      {/* 价格 — text-base (16px) 防 iOS 自动 zoom */}
       <div>
         <h3 className="text-xs uppercase font-semibold text-stone-500 mb-2">{t('filter.price')}</h3>
-        <div className="flex items-center gap-1 text-sm">
+        <div className="flex items-center gap-2">
           <input
-            type="number" min={0}
+            type="number" inputMode="numeric" min={0}
             value={filters.minPrice}
             onChange={e => onChange({ minPrice: e.target.value })}
             placeholder="0"
-            className="w-16 border border-stone-300 rounded px-2 py-1"
+            className="w-20 border border-stone-300 rounded px-2 py-1.5 text-base"
           />
-          <span>—</span>
+          <span className="text-stone-400">—</span>
           <input
-            type="number" min={0}
+            type="number" inputMode="numeric" min={0}
             value={filters.maxPrice}
             onChange={e => onChange({ maxPrice: e.target.value })}
             placeholder="∞"
-            className="w-16 border border-stone-300 rounded px-2 py-1"
+            className="w-20 border border-stone-300 rounded px-2 py-1.5 text-base"
           />
         </div>
       </div>
 
-      {/* 日期 */}
-      <div>
-        <h3 className="text-xs uppercase font-semibold text-stone-500 mb-2">{t('filter.date')}</h3>
-        <select
-          value={filters.since}
-          onChange={e => onChange({ since: e.target.value as any })}
-          className="w-full border border-stone-300 rounded px-2 py-1 text-sm"
-        >
-          <option value="all">{t('date.all')}</option>
-          <option value="1d">{t('date.1d')}</option>
-          <option value="1w">{t('date.1w')}</option>
-          <option value="1m">{t('date.1m')}</option>
-        </select>
-      </div>
-
-      {/* 排序 */}
-      <div>
-        <h3 className="text-xs uppercase font-semibold text-stone-500 mb-2">{t('filter.sort')}</h3>
-        <select
-          value={filters.sort}
-          onChange={e => onChange({ sort: e.target.value as any })}
-          className="w-full border border-stone-300 rounded px-2 py-1 text-sm"
-        >
-          <option value="newest">{t('sort.newest')}</option>
-          <option value="oldest">{t('sort.oldest')}</option>
-          <option value="priceAsc">{t('sort.priceAsc')}</option>
-          <option value="priceDesc">{t('sort.priceDesc')}</option>
-        </select>
+      {/* 日期 + 排序 同一行 — 节省纵向空间 */}
+      <div className="flex gap-3">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-xs uppercase font-semibold text-stone-500 mb-2">{t('filter.date')}</h3>
+          <Dropdown
+            value={filters.since}
+            onChange={v => onChange({ since: v as Filters['since'] })}
+            options={[
+              { value: 'all', label: t('date.all') },
+              { value: '1d',  label: t('date.1d')  },
+              { value: '1w',  label: t('date.1w')  },
+              { value: '1m',  label: t('date.1m')  },
+            ]}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-xs uppercase font-semibold text-stone-500 mb-2">{t('filter.sort')}</h3>
+          <Dropdown
+            value={filters.sort}
+            onChange={v => onChange({ sort: v as Filters['sort'] })}
+            options={[
+              { value: 'newest',    label: t('sort.newest')    },
+              { value: 'oldest',    label: t('sort.oldest')    },
+              { value: 'priceAsc',  label: t('sort.priceAsc')  },
+              { value: 'priceDesc', label: t('sort.priceDesc') },
+            ]}
+          />
+        </div>
       </div>
     </aside>
   );

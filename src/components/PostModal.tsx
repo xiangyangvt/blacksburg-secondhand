@@ -171,13 +171,13 @@ export function PostModal({
               <div className="flex items-center">
                 <span className="px-3 py-2 bg-stone-100 border border-r-0 border-stone-300 rounded-l">$</span>
                 <input
-                  type="number"
+                  type="number" inputMode="numeric"
                   min={0}
                   value={priceText}
                   onChange={e => setPriceText(e.target.value)}
                   disabled={negotiable}
                   placeholder="30"
-                  className="w-32 border border-stone-300 rounded-r px-3 py-2 disabled:bg-stone-50"
+                  className="w-32 border border-stone-300 rounded-r px-3 py-2 disabled:bg-stone-50 text-base"
                 />
               </div>
               <label className="flex items-center gap-2 text-sm">
