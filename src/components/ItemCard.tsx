@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { CopyButton } from './CopyButton';
 import { InquirySection } from './InquirySection';
 import {
@@ -47,20 +47,49 @@ export function ItemCard({
   const t = useT();
   const locale = useLocale();
   const [zoomIdx, setZoomIdx] = useState<number | null>(null);
-  // 手机端：···菜单开关（编辑/售出/举报这些低频操作）
-  const [showAdmin, setShowAdmin] = useState(false);
-  // 询价区展开时，整张卡片在手机端横跨两列变全宽，留言/回复有更舒服的宽度
-  const [inquiryOpen, setInquiryOpen] = useState(false);
-  // 用户点卡片任意空白处 → 展开成全宽 + 显示描述/时间
+  // 统一的展开状态 —— 三种 click 来源都 toggle 它
   const [expanded, setExpanded] = useState(false);
   const photos = item.photoUrls;
-  const fullWidth = expanded || inquiryOpen;
+  const cardRef = useRef<HTMLDivElement>(null);
 
-  // 点卡片切换展开/收起 — 点按钮/链接/输入时不触发
+  /**
+   * 三种展开来源都 toggle 同一个 expanded 状态，区别仅在 scroll 目标：
+   *   'card'    → 卡顶端到屏顶
+   *   'admin'   → 编辑/删除/举报按钮到屏中央
+   *   'inquiry' → 第一条留言到屏中央（无留言时滚到询价区）
+   */
+  const toggleExpand = (target: 'card' | 'admin' | 'inquiry') => {
+    setExpanded(prev => {
+      const next = !prev;
+      if (next) {
+        // 双 rAF 等 col-span-2 + 内容渲染都完成
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            const card = cardRef.current;
+            if (!card) return;
+            const opts = { behavior: 'smooth' as const };
+            if (target === 'card') {
+              card.scrollIntoView({ ...opts, block: 'start' });
+            } else if (target === 'admin') {
+              card.querySelector('[data-card-section="admin"]')
+                ?.scrollIntoView({ ...opts, block: 'center' });
+            } else {
+              const t = card.querySelector('[data-card-section="first-inquiry"]')
+                ?? card.querySelector('[data-card-section="inquiry-list"]');
+              t?.scrollIntoView({ ...opts, block: 'center' });
+            }
+          })
+        );
+      }
+      return next;
+    });
+  };
+
+  // 点卡片空白处 → toggle 展开（点按钮/链接/输入不触发）
   const onCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     if (target.closest('button, a, input, textarea, select, label')) return;
-    setExpanded(v => !v);
+    toggleExpand('card');
   };
 
   useEffect(() => {
@@ -112,8 +141,9 @@ export function ItemCard({
 
   return (
     <div
+      ref={cardRef}
       onClick={onCardClick}
-      className={`bg-white rounded-lg shadow-sm border ${expanded ? 'border-brand/40' : 'border-stone-200'} p-3 md:p-4 hover:shadow-md transition-all cursor-pointer ${fullWidth ? 'col-span-2 md:col-span-1' : ''}`}
+      className={`bg-white rounded-lg shadow-sm border ${expanded ? 'border-brand/40' : 'border-stone-200'} p-3 md:p-4 hover:shadow-md transition-all cursor-pointer scroll-mt-24 ${expanded ? 'col-span-2 md:col-span-1' : ''}`}
     >
       {/* === 图片：手机端封面图（正方形）/ 桌面端缩略图横排 === */}
       {photos.length > 0 && (
@@ -213,35 +243,36 @@ export function ItemCard({
       </div>
 
       {/* === 桌面端：编辑/售出/举报常驻 === */}
-      <div className="hidden md:flex gap-2 flex-wrap text-xs mt-3">
+      <div data-card-section="admin" className="hidden md:flex gap-2 flex-wrap text-xs mt-3 scroll-mt-24">
         {AdminButtons}
       </div>
 
-      {/* === 手机端：低频操作收进 ··· === */}
+      {/* === 手机端 ···更多：toggle 整张卡的 expanded === */}
       <div className="md:hidden mt-2">
         <button
-          onClick={() => setShowAdmin(s => !s)}
+          onClick={() => toggleExpand('admin')}
           className="w-full text-stone-400 hover:text-stone-600 text-sm py-1 flex items-center justify-center gap-1"
           aria-label="更多操作"
         >
-          {showAdmin ? '▴ 收起' : '··· 更多'}
+          {expanded ? '▴ 收起' : '··· 更多'}
         </button>
-        {showAdmin && (
-          <div className="flex gap-1.5 flex-wrap mt-1 justify-center">
+        {expanded && (
+          <div data-card-section="admin" className="flex gap-1.5 flex-wrap mt-1 justify-center scroll-mt-24">
             {AdminButtons}
           </div>
         )}
       </div>
 
-      {/* === 询价区（已折叠） === */}
+      {/* === 询价区：受控组件，open 跟 expanded 同步 === */}
       <InquirySection
         itemId={item.id}
         inquiries={item.inquiries}
+        open={expanded}
+        onToggle={() => toggleExpand('inquiry')}
         onInquiryAdded={refresh}
         onInquiryDeleted={refresh}
         onInquiryUpdated={refresh}
         onRequestSellerDelete={(inqId) => onDeleteInquiryAsSeller(item, inqId)}
-        onOpenChange={setInquiryOpen}
       />
 
       {/* === 大图 lightbox === */}

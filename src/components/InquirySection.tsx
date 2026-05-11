@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { CopyButton } from './CopyButton';
 import { contactTypeLabel, timeAgo, CONTACT_TYPES } from '@/lib/utils';
 import { useT, useLocale } from '@/i18n/I18nProvider';
@@ -18,26 +18,31 @@ type Inquiry = {
   createdAt: string | Date;
 };
 
+/**
+ * 受控组件：open 状态由外部 ItemCard 管理（统一的 expanded）
+ * 这里只关心：渲染 toggle 按钮 + 点击时呼出 onToggle
+ */
 export function InquirySection({
   itemId,
   inquiries,
+  open,
+  onToggle,
   onInquiryAdded,
   onInquiryDeleted,
   onInquiryUpdated,
   onRequestSellerDelete,
-  onOpenChange,
 }: {
   itemId: string;
   inquiries: Inquiry[];
+  open: boolean;
+  onToggle: () => void;
   onInquiryAdded: () => void;
   onInquiryDeleted: () => void;
   onInquiryUpdated: () => void;
   onRequestSellerDelete: (inquiryId: string) => void;
-  onOpenChange?: (open: boolean) => void;
 }) {
   const t = useT();
   const locale = useLocale();
-  const [open, setOpenRaw] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [contactType, setContactType] = useState<'wechat' | 'phone' | 'email' | 'other'>('wechat');
   const [contactValue, setContactValue] = useState('');
@@ -45,32 +50,11 @@ export function InquirySection({
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // 卖家回复状态：当前正在回复哪条 inquiry
+  // 卖家回复状态
   const [replyingId, setReplyingId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [replyCode, setReplyCode] = useState('');
   const [replySubmitting, setReplySubmitting] = useState(false);
-
-  const sectionRef = useRef<HTMLDivElement>(null);
-
-  const setOpen = (v: boolean | ((prev: boolean) => boolean)) => {
-    setOpenRaw(prev => {
-      const next = typeof v === 'function' ? v(prev) : v;
-      onOpenChange?.(next);
-      return next;
-    });
-  };
-
-  // 展开时自动滚动到询价区，让用户立即看到留言列表
-  // 等 2 帧给布局完成（卡片可能从单列变全宽 col-span-2）
-  useEffect(() => {
-    if (!open || !sectionRef.current) return;
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      })
-    );
-  }, [open]);
 
   const submit = async () => {
     if (!contactValue.trim() || !message.trim()) {
@@ -204,9 +188,9 @@ export function InquirySection({
   };
 
   return (
-    <div ref={sectionRef} className="border-t border-stone-200 mt-3 pt-2 scroll-mt-24">
+    <div className="border-t border-stone-200 mt-3 pt-2">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={onToggle}
         className="text-sm text-stone-600 hover:text-brand flex items-center gap-1"
       >
         <span className={`transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
@@ -214,9 +198,13 @@ export function InquirySection({
       </button>
 
       {open && (
-        <div className="mt-2 space-y-3 pl-2 md:pl-4">
-          {inquiries.map(inq => (
-            <div key={inq.id} className="bg-stone-50 rounded p-2 text-sm space-y-1.5">
+        <div data-card-section="inquiry-list" className="mt-2 space-y-3 pl-2 md:pl-4 scroll-mt-24">
+          {inquiries.map((inq, idx) => (
+            <div
+              key={inq.id}
+              data-card-section={idx === 0 ? 'first-inquiry' : undefined}
+              className="bg-stone-50 rounded p-2 text-sm space-y-1.5 scroll-mt-24"
+            >
               {/* 买家留言 */}
               <div>
                 <div className="flex flex-wrap items-center gap-2 text-stone-600 text-xs mb-1">
