@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import NextImage from 'next/image';
-import { X, FolderOpen, Pencil, Trash2, CheckCircle2 } from 'lucide-react';
+import { X, FolderOpen, Pencil, Trash2, CheckCircle2, ChevronDown } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/I18nProvider';
 import {
   categoryLabel,
@@ -28,8 +28,9 @@ type ItemWithStatus = Item & { status: 'active' | 'draft' };
 
 /**
  * 渲染内容主体（不含 modal 外壳，方便嵌进 modal 或 standalone 页面）
+ * @param onClose 传入时会在查找区显示一个"关闭"按钮；standalone 页面不传
  */
-function MyPostsBody() {
+function MyPostsBody({ onClose }: { onClose?: () => void }) {
   const t = useT();
   const locale = useLocale();
   const [contactValue, setContactValue] = useState('');
@@ -119,13 +120,23 @@ function MyPostsBody() {
           className="w-full border border-stone-300 rounded px-3 py-2 mb-3"
         />
 
-        <button
-          onClick={lookup}
-          disabled={!contactValue.trim() || loading}
-          className="px-5 py-2 bg-brand text-white rounded hover:bg-brand-dark disabled:opacity-50 text-sm font-medium"
-        >
-          {loading ? '查找中…' : t('my.lookup')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={lookup}
+            disabled={!contactValue.trim() || loading}
+            className="px-5 py-2 bg-brand text-white rounded hover:bg-brand-dark disabled:opacity-50 text-sm font-medium"
+          >
+            {loading ? '查找中…' : t('my.lookup')}
+          </button>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-stone-300 bg-white text-stone-700 rounded hover:bg-stone-100 text-sm font-medium transition-colors"
+            >
+              关闭
+            </button>
+          )}
+        </div>
       </section>
 
       {/* 结果 */}
@@ -227,8 +238,21 @@ export function MyPostsPanel({ onClose }: { onClose: () => void }) {
             <X size={22} />
           </button>
         </div>
-        <div className="p-4 sm:p-5">
-          <MyPostsBody />
+        <div className="p-4 sm:p-5 pb-20">
+          {/* pb-20 留给底部 sticky 收起按钮的空间，避免内容被遮挡 */}
+          <MyPostsBody onClose={onClose} />
+        </div>
+
+        {/* 底部 sticky"收起"按钮：左手拇指可达；半透明背景保证内容能透出来 */}
+        <div className="sticky bottom-0 left-0 right-0 bg-stone-50/95 backdrop-blur-sm border-t border-stone-200 sm:rounded-b-lg px-4 py-3 flex justify-center">
+          <button
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 px-6 py-2 bg-white border border-stone-300 text-stone-700 rounded-chip hover:bg-stone-100 active:scale-95 text-sm font-medium transition-all shadow-card"
+            aria-label="收起我的发布"
+          >
+            <ChevronDown size={16} />
+            收起
+          </button>
         </div>
       </div>
     </div>

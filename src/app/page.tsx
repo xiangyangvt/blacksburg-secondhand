@@ -223,11 +223,16 @@ function HomePageInner() {
             />
           </div>
 
-          {/* 次操作：我的发布（描边胶囊）—— 桌面/手机都常驻 */}
+          {/* 我的发布按钮：点击 = toggle（open 时填充亮起，再点收起；支持左手单手关闭） */}
           <button
-            onClick={() => setMyPanelOpen(true)}
-            className="hidden xs:flex sm:flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-white border border-stone-300 hover:border-stone-400 text-stone-700 rounded-chip text-sm font-medium whitespace-nowrap transition-colors"
+            onClick={() => setMyPanelOpen(o => !o)}
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-chip text-sm font-medium whitespace-nowrap transition-colors ${
+              myPanelOpen
+                ? 'bg-brand text-white border border-brand shadow-card'
+                : 'bg-white border border-stone-300 hover:border-stone-400 text-stone-700'
+            }`}
             aria-label={t('my.headerLink')}
+            aria-expanded={myPanelOpen}
           >
             <FolderOpen size={16} />
             <span className="hidden sm:inline">{t('my.headerLink')}</span>
