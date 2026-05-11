@@ -262,16 +262,15 @@ export function ItemDetailView({ item }: { item: Item }) {
               aria-label={t('lightbox.prev')}
             >‹</button>
           )}
-          <div className="relative w-full h-full" onClick={(e) => e.stopPropagation()}>
-            <NextImage
-              src={photos[zoomIdx]}
-              alt={`${item.title} ${zoomIdx + 1}`}
-              fill
-              sizes="100vw"
-              priority
-              className="object-contain"
-            />
-          </div>
+          {/* Lightbox 大图用 <img> 而不是 next/image fill —— 避免铺满整屏挡住按钮，
+              用户点图后变成"看着卡住、关不掉"的体验 */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photos[zoomIdx]}
+            alt={`${item.title} ${zoomIdx + 1}`}
+            className="max-h-full max-w-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
           {photos.length > 1 && (
             <button
               onClick={(e) => { e.stopPropagation(); setZoomIdx(i => i === null ? null : (i + 1) % photos.length); }}

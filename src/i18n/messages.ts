@@ -182,7 +182,10 @@ export const messages = {
   // 图片上传
   'upload.add':            { zh: '+ 加图',                                  en: '+ Add' },
   'upload.uploading':      { zh: '上传中…',                                  en: 'Uploading…' },
-  'upload.hint':           { zh: '最多 {max} 张，自动压缩到 1MB 以下。',         en: 'Up to {max} photos, auto-compressed to ≤1MB.' },
+  'upload.hint':           { zh: '最多 {max} 张，自动压缩到 1MB 以下。👈 第一张是封面图，可拖拽改顺序。', en: 'Up to {max} photos, auto-compressed to ≤1MB. 👈 First photo is the cover; drag to reorder.' },
+  'upload.cover':          { zh: '封面',                                    en: 'Cover' },
+  'upload.moveLeft':       { zh: '前移',                                    en: 'Move left' },
+  'upload.moveRight':      { zh: '后移',                                    en: 'Move right' },
   'upload.errSize':        { zh: '图片不能超过 5MB',                          en: 'Image must be ≤5MB' },
   'upload.errType':        { zh: '只支持 JPG/PNG/WebP/GIF',                  en: 'Only JPG/PNG/WebP/GIF supported' },
   'upload.errFailed':      { zh: '上传失败',                                en: 'Upload failed' },

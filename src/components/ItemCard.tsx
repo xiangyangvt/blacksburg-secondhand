@@ -303,19 +303,17 @@ export function ItemCard({
             >‹</button>
           )}
 
-          <div
-            className="relative w-full h-full"
+          {/* Lightbox 大图：用原生 <img> 而不是 next/image。
+              原因：fill 模式需要父容器有明确尺寸，在 flex 居中容器里会铺满整屏挡住四角的按钮，
+              导致用户"点图片卡住关不掉"。大图本身就是给用户看完整原图，不需要 srcset；
+              Cloudinary URL 已自带 q_auto/f_auto 优化。*/}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photos[zoomIdx]}
+            alt={`${item.title} ${zoomIdx + 1}`}
+            className="max-h-full max-w-full object-contain"
             onClick={(e) => e.stopPropagation()}
-          >
-            <Image
-              src={photos[zoomIdx]}
-              alt={`${item.title} ${zoomIdx + 1}`}
-              fill
-              sizes="100vw"
-              priority
-              className="object-contain"
-            />
-          </div>
+          />
 
           {photos.length > 1 && (
             <button

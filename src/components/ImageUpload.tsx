@@ -16,6 +16,10 @@ export function ImageUpload({
   const t = useT();
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // 拖拽中的源索引
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  // 拖拽悬停的目标索引（视觉反馈）
+  const [dragOver, setDragOver] = useState<number | null>(null);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -52,27 +56,89 @@ export function ImageUpload({
     onChange(urls.filter((_, idx) => idx !== i));
   };
 
+  // 把 from 位置的元素挪到 to 位置（splice 风格）
+  const reorder = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0) return;
+    const next = [...urls];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onChange(next);
+  };
+
   return (
     <div>
       <div className="flex gap-2 flex-wrap">
-        {urls.map((url, i) => (
-          <div key={i} className="relative group">
-            <NextImage
-              src={url}
-              alt=""
-              width={80}
-              height={80}
-              sizes="80px"
-              className="h-20 w-20 object-cover rounded border border-stone-300"
-            />
-            <button
-              type="button"
-              onClick={() => remove(i)}
-              className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs leading-none opacity-0 group-hover:opacity-100"
-              title={t('upload.delete')}
-            >×</button>
-          </div>
-        ))}
+        {urls.map((url, i) => {
+          const isDragging = dragFrom === i;
+          const isOver = dragOver === i && dragFrom !== i;
+          return (
+            <div
+              key={url}
+              draggable
+              onDragStart={() => setDragFrom(i)}
+              onDragEnd={() => { setDragFrom(null); setDragOver(null); }}
+              onDragOver={(e) => {
+                e.preventDefault();          // 必须，否则 onDrop 不触发
+                e.dataTransfer.dropEffect = 'move';
+                if (dragOver !== i) setDragOver(i);
+              }}
+              onDragLeave={() => { if (dragOver === i) setDragOver(null); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragFrom !== null && dragFrom !== i) reorder(dragFrom, i);
+                setDragFrom(null);
+                setDragOver(null);
+              }}
+              className={`relative group cursor-move select-none transition-all
+                ${isDragging ? 'opacity-40 scale-95' : ''}
+                ${isOver    ? 'ring-2 ring-brand ring-offset-1' : ''}`}
+              title="拖拽改顺序 / Drag to reorder"
+            >
+              <NextImage
+                src={url}
+                alt=""
+                width={80}
+                height={80}
+                sizes="80px"
+                className="h-20 w-20 object-cover rounded border border-stone-300 pointer-events-none"
+              />
+              {/* 第一张：封面标签 */}
+              {i === 0 && (
+                <span className="absolute top-0 left-0 bg-brand text-white text-[10px] px-1.5 py-0.5 rounded-tl rounded-br font-medium">
+                  {t('upload.cover')}
+                </span>
+              )}
+              {/* 右上：删除 */}
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs leading-none opacity-0 group-hover:opacity-100 z-10"
+                title={t('upload.delete')}
+              >×</button>
+              {/* 触屏兜底：上一张 / 下一张箭头 —— 手机端原生 DnD 支持很弱 */}
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+                {i > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => reorder(i, i - 1)}
+                    className="bg-stone-700 text-white rounded w-5 h-5 text-[10px] leading-none flex items-center justify-center hover:bg-stone-900"
+                    title={t('upload.moveLeft')}
+                    aria-label={t('upload.moveLeft')}
+                  >‹</button>
+                )}
+                {i < urls.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={() => reorder(i, i + 1)}
+                    className="bg-stone-700 text-white rounded w-5 h-5 text-[10px] leading-none flex items-center justify-center hover:bg-stone-900"
+                    title={t('upload.moveRight')}
+                    aria-label={t('upload.moveRight')}
+                  >›</button>
+                )}
+              </div>
+            </div>
+          );
+        })}
         {urls.length < MAX_PHOTOS && (
           <label className="h-20 w-20 border-2 border-dashed border-stone-300 rounded flex flex-col items-center justify-center cursor-pointer hover:border-brand text-stone-500 text-xs text-center leading-tight">
             <input
