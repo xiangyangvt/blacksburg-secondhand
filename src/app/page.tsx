@@ -9,6 +9,8 @@ import { PostModal } from '@/components/PostModal';
 import { EditCodePrompt } from '@/components/EditCodePrompt';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { FabPostButton } from '@/components/FabPostButton';
+import { ShareButton } from '@/components/ShareButton';
+import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { useT } from '@/i18n/I18nProvider';
 
 // 把 URL ?type=...&cat=... 解析回 Filters。未知/非法值都退到默认，保证健壮。
@@ -62,6 +64,8 @@ function HomePageInner() {
   const searchParams = useSearchParams();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  const [origin, setOrigin] = useState('');
+  useEffect(() => { setOrigin(clientOrigin()); }, []);
   // 初次渲染从 URL 解析；之后状态独立，由 state → URL 单向同步
   const [filters, setFiltersRaw] = useState<Filters>(() => parseFiltersFromSearchParams(searchParams));
   const [postModal, setPostModal] = useState<{ mode: 'create' | 'edit'; item?: Item } | null>(null);
@@ -200,6 +204,13 @@ function HomePageInner() {
             />
           </div>
 
+          {origin && (
+            <ShareButton
+              shareText={buildSiteShareText({ origin })}
+              label={t('site.shareSite')}
+              className="hidden md:inline-flex"
+            />
+          )}
           <button
             onClick={() => setPostModal({ mode: 'create' })}
             className="hidden sm:block px-4 py-2 bg-brand text-white rounded-full hover:bg-brand-dark text-sm font-medium"

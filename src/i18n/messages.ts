@@ -68,6 +68,9 @@ export const messages = {
   // 商品卡片
   'card.copyContact':      { zh: '复制联系方式',                              en: 'Copy contact' },
   'card.copyTitle':        { zh: '复制物品信息',                              en: 'Copy item info' },
+  'card.share':            { zh: '🔗 分享',                                 en: '🔗 Share' },
+  'card.shareCopied':      { zh: '✓ 链接已复制',                              en: '✓ Link copied' },
+  'card.viewDetail':       { zh: '查看详情',                                 en: 'View details' },
   'card.tapHint':          { zh: '点击卡片展开详情',                          en: 'Tap card for details' },
   'card.fabPost':          { zh: '发布',                                    en: 'Post' },
   'card.edit':             { zh: '✏️ 编辑',                                  en: '✏️ Edit' },
@@ -193,6 +196,13 @@ export const messages = {
   // 页脚
   'footer.opensource':     { zh: '本站开源 · MIT 协议 · 欢迎在 GitHub 提 issue / PR', en: 'Open source · MIT · Issues & PRs welcome on GitHub' },
   'footer.prohibited':     { zh: '⚠️ 禁止发布枪支、毒品、活物、违法物品。',         en: '⚠️ No firearms, drugs, live animals, or illegal items.' },
+
+  // 单商品 detail 页
+  'detail.back':           { zh: '← 回到首页',                                en: '← Back to home' },
+  'detail.notFound':       { zh: '商品不存在或已下架',                          en: 'Item not found or unavailable' },
+  'detail.notFoundHint':   { zh: '可能已被卖家删除，或者链接错误',                  en: 'It may have been removed by the seller or the link is wrong' },
+  'detail.metaPrefix':     { zh: '黑堡二手买卖',                                en: 'Blacksburg Secondhand' },
+  'site.shareSite':        { zh: '🔗 分享本站',                                en: '🔗 Share site' },
 } as const;
 
 export type MessageKey = keyof typeof messages;

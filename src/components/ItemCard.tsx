@@ -2,8 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { CopyButton } from './CopyButton';
+import { ShareButton } from './ShareButton';
 import { InquirySection } from './InquirySection';
+import { buildItemShareText, clientOrigin } from '@/lib/shareText';
 import {
   categoryLabel,
   contactTypeLabel,
@@ -52,6 +55,8 @@ export function ItemCard({
   const [expanded, setExpanded] = useState(false);
   const photos = item.photoUrls;
   const cardRef = useRef<HTMLDivElement>(null);
+  const [origin, setOrigin] = useState('');
+  useEffect(() => { setOrigin(clientOrigin()); }, []);
 
   /**
    * 两种展开来源都 toggle 同一个 expanded 状态：
@@ -116,6 +121,13 @@ export function ItemCard({
   // 三个 admin 按钮统一中性配色（删除不再用绿）
   const AdminButtons = (
     <>
+      <Link
+        href={`/item/${item.id}`}
+        onClick={(e) => e.stopPropagation()}
+        className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700"
+      >
+        🔗 {t('card.viewDetail')}
+      </Link>
       <button
         onClick={() => onEdit(item)}
         className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700"
@@ -241,6 +253,18 @@ export function ItemCard({
           size="md"
           className="!bg-amber-50 !border-amber-300 hover:!bg-amber-100"
         />
+        {origin && (
+          <ShareButton
+            shareText={buildItemShareText({
+              title: item.title,
+              price: item.price,
+              itemType: item.type,
+              category: item.category,
+              origin,
+              itemId: item.id,
+            })}
+          />
+        )}
       </div>
 
       {/* === 编辑/删除/举报：桌面常驻；手机仅展开后显示，无"更多/收起"按钮 === */}
