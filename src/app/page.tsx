@@ -14,6 +14,7 @@ import { MyPostsPanel } from '@/components/MyPostsPanel';
 import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
+import { Search, Plus, FolderOpen, Share2, PackageOpen } from 'lucide-react';
 
 // 把 URL ?type=...&cat=... 解析回 Filters。未知/非法值都退到默认，保证健壮。
 function parseFiltersFromSearchParams(sp: ReadonlyURLSearchParams | URLSearchParams): Filters {
@@ -201,39 +202,53 @@ function HomePageInner() {
 
   return (
     <main className="min-h-screen">
-      {/* 顶栏 — 全程 sticky（含手机端折叠筛选），始终黏在屏顶 */}
-      <header className="sticky top-0 z-30 bg-white border-b border-stone-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
-          <h1 className="text-xl font-bold text-brand whitespace-nowrap">
-            🏠 {t('site.brand')}
+      {/* 顶栏 — 全程 sticky（含手机端折叠筛选），始终黏在屏顶
+          设计 V2：去 emoji、wordmark 取代 emoji 站名、品牌红只在主 CTA 出现 */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+          {/* Wordmark：紧凑、带微弱品牌红下划线（"二手"二字下方）的字体处理 */}
+          <h1 className="text-base sm:text-lg font-bold text-stone-900 whitespace-nowrap tracking-tight flex-shrink-0">
+            黑堡<span className="text-brand">二手</span>
+            <span className="hidden sm:inline text-stone-400 font-normal ml-1">买卖</span>
           </h1>
-          <div className="flex-1 min-w-[200px]">
+
+          {/* 搜索 —— 左侧 Search 图标贴在 input 内 */}
+          <div className="flex-1 min-w-0 relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
             <input
               value={filters.q}
               onChange={e => setFiltersRaw(f => ({ ...f, q: e.target.value }))}
               placeholder={t('header.search')}
-              className="w-full border border-stone-300 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-brand"
+              className="w-full bg-stone-100 border border-transparent rounded-chip pl-9 pr-3 py-2 focus:outline-none focus:bg-white focus:border-stone-300 transition-colors"
             />
           </div>
 
+          {/* 次操作：我的发布（描边胶囊）—— 桌面/手机都常驻 */}
           <button
             onClick={() => setMyPanelOpen(true)}
-            className="px-3 sm:px-4 py-2 bg-white border border-brand text-brand rounded-full hover:bg-brand/5 active:bg-brand/10 text-sm font-medium whitespace-nowrap"
+            className="hidden xs:flex sm:flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-white border border-stone-300 hover:border-stone-400 text-stone-700 rounded-chip text-sm font-medium whitespace-nowrap transition-colors"
+            aria-label={t('my.headerLink')}
           >
-            🗂 {t('my.headerLink')}
+            <FolderOpen size={16} />
+            <span className="hidden sm:inline">{t('my.headerLink')}</span>
           </button>
+
           {origin && (
             <ShareButton
               shareText={buildSiteShareText({ origin })}
               label={t('site.shareSite')}
+              icon={<Share2 size={16} />}
               className="hidden md:inline-flex"
             />
           )}
+
+          {/* 主 CTA：发布（唯一品牌红填充按钮）— 手机端走 FAB，所以 sm 以上才显示 */}
           <button
             onClick={() => setPostModal({ mode: 'create' })}
-            className="hidden sm:block px-4 py-2 bg-brand text-white rounded-full hover:bg-brand-dark text-sm font-medium"
+            className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-brand text-white rounded-chip hover:bg-brand-dark active:scale-95 transition-all text-sm font-medium whitespace-nowrap shadow-card"
           >
-            {t('header.post')}
+            <Plus size={16} strokeWidth={2.5} />
+            <span>{t('header.post')}</span>
           </button>
         </div>
 
@@ -268,7 +283,7 @@ function HomePageInner() {
             <SkeletonGrid />
           ) : items.length === 0 ? (
             <div className="text-center text-stone-500 py-20">
-              <div className="text-5xl mb-3">📭</div>
+              <PackageOpen size={56} strokeWidth={1.2} className="mx-auto mb-4 text-stone-300" />
               <div className="mb-3">{t('list.empty')}</div>
               <button
                 onClick={() => setPostModal({ mode: 'create' })}

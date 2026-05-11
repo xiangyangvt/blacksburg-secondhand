@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import NextImage from 'next/image';
+import { X, FolderOpen, Pencil, Trash2, CheckCircle2 } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/I18nProvider';
 import {
   categoryLabel,
@@ -218,8 +219,13 @@ export function MyPostsPanel({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between sm:rounded-t-lg">
-          <h2 className="text-lg font-semibold text-brand">🗂 {t('my.title').replace(/^🗂\s*/, '')}</h2>
-          <button onClick={onClose} className="text-stone-500 hover:text-stone-900 text-2xl leading-none" aria-label="关闭">×</button>
+          <h2 className="text-lg font-semibold text-stone-900 flex items-center gap-2">
+            <FolderOpen size={20} className="text-brand" />
+            {t('my.title')}
+          </h2>
+          <button onClick={onClose} className="text-stone-500 hover:text-stone-900 p-1 rounded-full hover:bg-stone-100" aria-label="关闭">
+            <X size={22} />
+          </button>
         </div>
         <div className="p-4 sm:p-5">
           <MyPostsBody />
@@ -318,21 +324,24 @@ function MyItemRow({
           {isDraft && (
             <button
               onClick={onPublish}
-              className="px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 font-medium"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 font-medium transition-colors"
             >
+              <CheckCircle2 size={13} />
               {t('my.publishBtn')}
             </button>
           )}
           <button
             onClick={onEdit}
-            className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 transition-colors"
           >
+            <Pencil size={13} />
             {t('my.editBtn')}
           </button>
           <button
             onClick={onDelete}
-            className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 transition-colors"
           >
+            <Trash2 size={13} />
             {t('my.deleteBtn')}
           </button>
           {!isDraft && origin && (

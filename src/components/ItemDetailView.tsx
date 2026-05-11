@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import NextImage from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ArrowLeft, X, Flag, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CopyButton } from './CopyButton';
 import { ShareButton } from './ShareButton';
 import { InquirySection } from './InquirySection';
@@ -102,12 +103,13 @@ export function ItemDetailView({ item }: { item: Item }) {
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link
             href="/"
-            className="text-sm text-stone-600 hover:text-brand whitespace-nowrap"
+            className="inline-flex items-center gap-1 text-sm text-stone-600 hover:text-brand whitespace-nowrap"
           >
-            {t('detail.back')}
+            <ArrowLeft size={16} />
+            <span>回到首页</span>
           </Link>
-          <h1 className="text-base font-bold text-brand truncate ml-auto">
-            🏠 {t('site.brand')}
+          <h1 className="text-base font-bold text-stone-900 tracking-tight truncate ml-auto">
+            黑堡<span className="text-brand">二手</span>
           </h1>
         </div>
       </header>
@@ -209,15 +211,17 @@ export function ItemDetailView({ item }: { item: Item }) {
               />
               <button
                 onClick={handleReport}
-                className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700 transition-colors"
               >
+                <Flag size={13} />
                 {t('card.report')}
               </button>
               {/* 卖家入口：识别码删除（编辑请回首页 / 我的发布） */}
               <button
                 onClick={() => setCodePrompt('delete')}
-                className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700 ml-auto"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700 ml-auto transition-colors"
               >
+                <Trash2 size={13} />
                 {t('card.markSold')}
               </button>
             </div>
@@ -251,16 +255,16 @@ export function ItemDetailView({ item }: { item: Item }) {
             </div>
           )}
           <button
-            className="absolute top-3 right-4 text-white text-4xl leading-none w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10"
+            className="absolute top-3 right-4 text-white w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
             onClick={(e) => { e.stopPropagation(); setZoomIdx(null); }}
             aria-label={t('lightbox.close')}
-          >×</button>
+          ><X size={24} /></button>
           {photos.length > 1 && (
             <button
               onClick={(e) => { e.stopPropagation(); setZoomIdx(i => i === null ? null : (i - 1 + photos.length) % photos.length); }}
-              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 text-white text-3xl w-12 h-12 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/70"
+              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 text-white w-12 h-12 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/70 transition-colors"
               aria-label={t('lightbox.prev')}
-            >‹</button>
+            ><ChevronLeft size={28} /></button>
           )}
           {/* Lightbox 大图用 <img> 而不是 next/image fill —— 避免铺满整屏挡住按钮，
               用户点图后变成"看着卡住、关不掉"的体验 */}
@@ -274,9 +278,9 @@ export function ItemDetailView({ item }: { item: Item }) {
           {photos.length > 1 && (
             <button
               onClick={(e) => { e.stopPropagation(); setZoomIdx(i => i === null ? null : (i + 1) % photos.length); }}
-              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 text-white text-3xl w-12 h-12 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/70"
+              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 text-white w-12 h-12 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/70 transition-colors"
               aria-label={t('lightbox.next')}
-            >›</button>
+            ><ChevronRight size={28} /></button>
           )}
         </div>
       )}

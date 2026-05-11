@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { X, Home, Search } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { BatchImportPanel } from './BatchImportPanel';
 import { CATEGORIES, CONTACT_TYPES } from '@/lib/utils';
@@ -134,7 +135,11 @@ export function PostModal({
           <h2 className="text-lg font-semibold">
             {mode === 'create' ? t('post.titleCreate') : t('post.titleEdit')}
           </h2>
-          <button onClick={onClose} className="text-stone-500 hover:text-stone-900 text-2xl leading-none">×</button>
+          <button
+            onClick={onClose}
+            className="text-stone-500 hover:text-stone-900 p-1 rounded-full hover:bg-stone-100"
+            aria-label="关闭"
+          ><X size={22} /></button>
         </div>
 
         {/* create 模式 + 桌面端才显示 tab；手机端整条 tab 隐藏（批量导入只在电脑上） */}
@@ -166,8 +171,8 @@ export function PostModal({
             <div className="flex gap-2">
               {category === 'housing' ? (
                 <>
-                  <Pill active={type === 'sell'} onClick={() => setType('sell')}>🏠 {t('type.sublet')}</Pill>
-                  <Pill active={type === 'buy'}  onClick={() => setType('buy')}>🔍 {t('type.rentwanted')}</Pill>
+                  <Pill active={type === 'sell'} onClick={() => setType('sell')}><Home size={14} className="mr-1" /> {t('type.sublet')}</Pill>
+                  <Pill active={type === 'buy'}  onClick={() => setType('buy')}><Search size={14} className="mr-1" /> {t('type.rentwanted')}</Pill>
                 </>
               ) : (
                 <>

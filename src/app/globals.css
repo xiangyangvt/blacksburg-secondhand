@@ -2,14 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 字体组合：Inter（西文）+ Noto Sans SC（中文）通过 next/font 注入 CSS 变量
+   --font-inter 和 --font-noto-sc 在 layout.tsx 的 <html> 上挂载
+   --font-sans 是 tailwind config 里 font-sans 类引用的 token */
+:root {
+  --font-sans: var(--font-inter), var(--font-noto-sc),
+               -apple-system, BlinkMacSystemFont, "PingFang SC",
+               "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
 html, body {
   @apply bg-stone-50 text-stone-900;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-               "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue",
-               Arial, sans-serif;
   /* 防 iOS 在切横/竖屏时自动调整字号大小（与用户主动 pinch zoom 无关） */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* 改进中文渲染 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01'; /* Inter 的 single-storey a + alternate g */
 }
 
 /* ===== 全局：表单输入字号兜底 16px（防聚焦时自动 zoom） ===== */

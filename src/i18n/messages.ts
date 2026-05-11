@@ -10,9 +10,9 @@ export const messages = {
   'site.brand':            { zh: '黑堡二手买卖',                            en: 'Blacksburg Secondhand' },
   'site.tagline':          { zh: '本地华人/学生二手交易',                    en: 'Local marketplace · Blacksburg, VA' },
 
-  // 顶栏
-  'header.search':         { zh: '🔍 搜索标题、描述、联系方式…',                en: '🔍 Search title, description, contact…' },
-  'header.post':           { zh: '➕ 我要发布',                              en: '➕ Post Item' },
+  // 顶栏（emoji 都已剥离，前端用 lucide 图标）
+  'header.search':         { zh: '搜索标题、描述、联系方式…',                 en: 'Search title, description, contact…' },
+  'header.post':           { zh: '我要发布',                                 en: 'Post Item' },
   'header.langZh':         { zh: '中',                                      en: '中' },
   'header.langEn':         { zh: 'EN',                                      en: 'EN' },
   'header.statsLine':      { zh: '本月已新发布 {m} 件 · 累计在售 {t} 件',        en: '{m} new this month · {t} active total' },
@@ -69,14 +69,14 @@ export const messages = {
   // 商品卡片
   'card.copyContact':      { zh: '复制联系方式',                              en: 'Copy contact' },
   'card.copyTitle':        { zh: '复制物品信息',                              en: 'Copy item info' },
-  'card.share':            { zh: '🔗 分享',                                 en: '🔗 Share' },
-  'card.shareItem':        { zh: '📋 分享物品信息',                           en: '📋 Share item info' },
-  'card.shareCopied':      { zh: '✓ 已复制',                                 en: '✓ Copied' },
+  'card.share':            { zh: '分享',                                    en: 'Share' },
+  'card.shareItem':        { zh: '分享物品信息',                              en: 'Share item info' },
+  'card.shareCopied':      { zh: '已复制',                                  en: 'Copied' },
   'card.tapHint':          { zh: '点击卡片展开详情',                          en: 'Tap card for details' },
   'card.fabPost':          { zh: '发布',                                    en: 'Post' },
-  'card.edit':             { zh: '✏️ 编辑',                                  en: '✏️ Edit' },
-  'card.markSold':         { zh: '🗑 删除',                                 en: '🗑 Delete' },
-  'card.report':           { zh: '🚩 举报',                                 en: '🚩 Report' },
+  'card.edit':             { zh: '编辑',                                    en: 'Edit' },
+  'card.markSold':         { zh: '删除',                                    en: 'Delete' },
+  'card.report':           { zh: '举报',                                    en: 'Report' },
   'card.copied':           { zh: '已复制',                                  en: 'Copied' },
   'card.viewPhoto':        { zh: '查看图片 {i} / {n}',                      en: 'View photo {i} / {n}' },
   'card.photoCount':       { zh: '共 {n} 张',                                en: '{n} photos' },
@@ -202,17 +202,17 @@ export const messages = {
   'footer.prohibited':     { zh: '⚠️ 禁止发布枪支、毒品、活物、违法物品。',         en: '⚠️ No firearms, drugs, live animals, or illegal items.' },
 
   // 我的发布（G4）
-  'my.title':              { zh: '🗂 我的发布',                              en: '🗂 My Posts' },
+  'my.title':              { zh: '我的发布',                                en: 'My Posts' },
   'my.intro':              { zh: '输入你发布时用的联系方式查看所有商品。要看草稿请加输识别码。', en: 'Enter your contact to see your posts. Add your edit code to see drafts too.' },
   'my.contactLabel':       { zh: '联系方式（如微信号 zhang3）',                en: 'Contact (e.g. wechat zhang3)' },
   'my.editCodeLabel':      { zh: '识别码（看草稿才需要）',                     en: 'Edit code (only needed for drafts)' },
   'my.lookup':              { zh: '查找',                                    en: 'Look up' },
   'my.tabActive':          { zh: '上架中 ({n})',                              en: 'Active ({n})' },
   'my.tabDraft':           { zh: '草稿 ({n})',                                en: 'Drafts ({n})' },
-  'my.publishBtn':         { zh: '✅ 发布',                                  en: '✅ Publish' },
+  'my.publishBtn':         { zh: '发布',                                    en: 'Publish' },
   'my.publishing':         { zh: '发布中…',                                  en: 'Publishing…' },
-  'my.deleteBtn':          { zh: '🗑 删除',                                  en: '🗑 Delete' },
-  'my.editBtn':            { zh: '✏️ 编辑',                                  en: '✏️ Edit' },
+  'my.deleteBtn':          { zh: '删除',                                    en: 'Delete' },
+  'my.editBtn':            { zh: '编辑',                                    en: 'Edit' },
   'my.empty':              { zh: '这里还没有任何商品',                         en: 'Nothing here yet' },
   'my.draftEmpty':         { zh: '没有草稿。批量导入后的商品默认是草稿。',         en: 'No drafts. Items from batch import start as drafts.' },
   'my.errLookup':          { zh: '查找失败',                                  en: 'Lookup failed' },
@@ -250,7 +250,7 @@ export const messages = {
   'detail.notFound':       { zh: '商品不存在或已下架',                          en: 'Item not found or unavailable' },
   'detail.notFoundHint':   { zh: '可能已被卖家删除，或者链接错误',                  en: 'It may have been removed by the seller or the link is wrong' },
   'detail.metaPrefix':     { zh: '黑堡二手买卖',                                en: 'Blacksburg Secondhand' },
-  'site.shareSite':        { zh: '🔗 分享本站',                                en: '🔗 Share site' },
+  'site.shareSite':        { zh: '分享本站',                                  en: 'Share site' },
 } as const;
 
 export type MessageKey = keyof typeof messages;

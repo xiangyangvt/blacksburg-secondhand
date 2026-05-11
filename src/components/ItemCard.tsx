@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { Pencil, Trash2, Flag, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CopyButton } from './CopyButton';
 import { ShareButton } from './ShareButton';
 import { InquirySection } from './InquirySection';
@@ -116,25 +117,28 @@ export function ItemCard({
     setZoomIdx(i => i === null ? null : (i + 1) % photos.length);
   };
 
-  // 三个 admin 按钮统一中性配色（删除不再用绿）。扁平化哲学：卡片本身就是 detail，不引导用户跳出去
+  // 三个 admin 按钮：图标 + 文字，中性配色。扁平化哲学：卡片本身就是 detail，不引导用户跳出去
   const AdminButtons = (
     <>
       <button
         onClick={() => onEdit(item)}
-        className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700 transition-colors"
       >
+        <Pencil size={13} />
         {t('card.edit')}
       </button>
       <button
         onClick={() => onMarkSold(item)}
-        className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700 transition-colors"
       >
+        <Trash2 size={13} />
         {t('card.markSold')}
       </button>
       <button
         onClick={() => onReport(item)}
-        className="px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700 transition-colors"
       >
+        <Flag size={13} />
         {t('card.report')}
       </button>
     </>
@@ -290,17 +294,17 @@ export function ItemCard({
           )}
 
           <button
-            className="absolute top-3 right-4 text-white text-4xl leading-none w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10"
+            className="absolute top-3 right-4 text-white w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
             onClick={(e) => { e.stopPropagation(); setZoomIdx(null); }}
             aria-label={t('lightbox.close')}
-          >×</button>
+          ><X size={24} /></button>
 
           {photos.length > 1 && (
             <button
               onClick={goPrev}
-              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 text-white text-3xl w-12 h-12 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/70"
+              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 text-white w-12 h-12 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/70 transition-colors"
               aria-label={t('lightbox.prev')}
-            >‹</button>
+            ><ChevronLeft size={28} /></button>
           )}
 
           {/* Lightbox 大图：用原生 <img> 而不是 next/image。
@@ -318,9 +322,9 @@ export function ItemCard({
           {photos.length > 1 && (
             <button
               onClick={goNext}
-              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 text-white text-3xl w-12 h-12 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/70"
+              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 text-white w-12 h-12 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/70 transition-colors"
               aria-label={t('lightbox.next')}
-            >›</button>
+            ><ChevronRight size={28} /></button>
           )}
 
           {photos.length > 1 && (
