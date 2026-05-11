@@ -11,7 +11,8 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
-  const { contactType, contactValue, customContactLabel, message } = body;
+  const { contactType, contactValue, customContactLabel, message, utmSource } = body;
+  const cleanedUtm = typeof utmSource === 'string' && utmSource ? utmSource.slice(0, 64) : null;
 
   if (!VALID_CONTACT_TYPES.includes(contactType)) return err('联系方式类型不合法');
   if (typeof contactValue !== 'string' || !contactValue.trim()) return err('联系方式不能为空');
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
       customContactLabel: customContactLabel?.trim() || null,
       message: message.trim(),
       ipAddress: ip,
+      utmSource: cleanedUtm,
     },
   });
 

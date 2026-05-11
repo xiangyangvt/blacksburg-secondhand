@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formatPrice, timeAgo, categoryLabel, parsePhotoUrls } from '@/lib/utils';
-import { deleteCloudinaryImagesByUrls } from '@/lib/uploader';
+import { schedulePendingCloudinaryDeletion } from '@/lib/uploader';
 
 export const dynamic = 'force-dynamic'; // 永远拿最新
 
@@ -38,7 +38,8 @@ async function deleteItemAction(formData: FormData) {
   const item = await prisma.item.findUnique({ where: { id }, select: { photoUrls: true } });
   await prisma.item.delete({ where: { id } });
   if (item) {
-    deleteCloudinaryImagesByUrls(parsePhotoUrls(item.photoUrls)).catch(() => {});
+    // 走 24h 延迟队列（admin 强删也保留挽回机会）
+    schedulePendingCloudinaryDeletion(parsePhotoUrls(item.photoUrls)).catch(() => {});
   }
   revalidatePath('/admin');
 }
@@ -76,6 +77,15 @@ async function unhideInquiryAction(formData: FormData) {
   // 同样重置举报触发器
   await prisma.report.deleteMany({ where: { inquiryId: id } });
   await prisma.inquiry.update({ where: { id }, data: { status: 'active' } });
+  revalidatePath('/admin');
+}
+
+/** 取消待删 — 删队列记录但不 destroy（图保留） */
+async function cancelPendingDeletionAction(formData: FormData) {
+  'use server';
+  if (!isAdmin()) return;
+  const id = String(formData.get('id'));
+  await prisma.pendingCloudinaryDeletion.delete({ where: { id } });
   revalidatePath('/admin');
 }
 
@@ -126,6 +136,22 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     prisma.report.count(),
   ]);
 
+  // 来源渠道分布：近 30 天 item 按 utmSource 聚合（单独一次查询，方便类型 cast）
+  const channelBreakdown = (await (prisma.item as any).groupBy({
+    by: ['utmSource'],
+    where: {
+      createdAt: { gte: new Date(Date.now() - 30 * 86400e3) },
+    },
+    _count: { id: true },
+    orderBy: { _count: { id: 'desc' } },
+  })) as Array<{ utmSource: string | null; _count: { id: number } }>;
+
+  // 待删 Cloudinary 图队列：方便 admin 取消误删
+  const pendingDeletions = await prisma.pendingCloudinaryDeletion.findMany({
+    orderBy: { scheduledFor: 'asc' },
+    take: 100,
+  });
+
   return (
     <main className="max-w-4xl mx-auto p-4 md:p-6 bg-stone-50 min-h-screen">
       <header className="flex items-center justify-between mb-6 pb-4 border-b border-stone-200">
@@ -165,6 +191,42 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
         )}
       </section>
 
+      {/* 渠道分布（近 30 天发布的商品按 utm_source 聚合） */}
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-3">📊 渠道分布 · 近 30 天发布</h2>
+        {channelBreakdown.length === 0 ? (
+          <EmptyBox text="近 30 天没有发布" />
+        ) : (
+          <div className="bg-white rounded-lg border border-stone-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-stone-50 text-xs text-stone-500 uppercase">
+                <tr>
+                  <th className="px-4 py-2 text-left">来源 (utm_source)</th>
+                  <th className="px-4 py-2 text-right">发布数</th>
+                  <th className="px-4 py-2 text-right">占比</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const total = channelBreakdown.reduce((s, r) => s + r._count.id, 0);
+                  return channelBreakdown.map((r, i) => (
+                    <tr key={i} className="border-t border-stone-100">
+                      <td className="px-4 py-2">
+                        {r.utmSource ?? <span className="text-stone-400 italic">（直接访问 / 无来源）</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono">{r._count.id}</td>
+                      <td className="px-4 py-2 text-right text-stone-500">
+                        {total > 0 ? `${Math.round((r._count.id / total) * 100)}%` : '—'}
+                      </td>
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       {/* 自动隐藏的商品 */}
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">🙈 自动隐藏的商品 ({hiddenItems.length})</h2>
@@ -183,6 +245,46 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
           </div>
         )}
       </section>
+
+      {/* 待删 Cloudinary 图队列（24h 延迟，可挽回） */}
+      {pendingDeletions.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold mb-3">⏳ 待删图床队列 ({pendingDeletions.length})</h2>
+          <p className="text-xs text-stone-500 mb-2">
+            软删后图床上的图会延迟 24h 才真正删掉。这期间想救回的话点"取消删除"（只删队列记录，图保留；但商品已经软删了，需要单独恢复）。
+          </p>
+          <div className="bg-white rounded-lg border border-stone-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-stone-50 text-xs text-stone-500 uppercase">
+                <tr>
+                  <th className="px-4 py-2 text-left">publicId</th>
+                  <th className="px-4 py-2 text-left">将于</th>
+                  <th className="px-4 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingDeletions.map((p: { id: string; publicId: string; scheduledFor: Date }) => {
+                  const overdue = p.scheduledFor.getTime() < Date.now();
+                  return (
+                    <tr key={p.id} className="border-t border-stone-100">
+                      <td className="px-4 py-2 font-mono text-xs">{p.publicId}</td>
+                      <td className="px-4 py-2 text-xs text-stone-600">
+                        {overdue ? <span className="text-red-600">已过期，下次访问会真删</span> : timeAgo(p.scheduledFor)}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <form action={cancelPendingDeletionAction}>
+                          <input type="hidden" name="id" value={p.id} />
+                          <button className="text-xs text-stone-600 hover:text-brand underline">取消删除</button>
+                        </form>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* 自动隐藏的留言 */}
       <section>

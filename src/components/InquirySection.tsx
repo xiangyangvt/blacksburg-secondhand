@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CopyButton } from './CopyButton';
 import { contactTypeLabel, timeAgo, CONTACT_TYPES } from '@/lib/utils';
+import { getStoredUtmSource } from '@/lib/utm';
 import { useT, useLocale } from '@/i18n/I18nProvider';
 
 const LS_LAST_CODE = 'hb_last_edit_code';
@@ -71,6 +72,7 @@ export function InquirySection({
           contactValue: contactValue.trim(),
           customContactLabel: contactType === 'other' ? customLabel.trim() || null : null,
           message: message.trim(),
+          utmSource: getStoredUtmSource(),
         }),
       });
       const data = await res.json();

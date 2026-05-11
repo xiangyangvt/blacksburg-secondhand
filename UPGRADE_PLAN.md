@@ -290,9 +290,47 @@ npm run build
 - **VT subreddit** + 学生会群 + Discord 等英文渠道
 - **SEO**：B3 落地后 detail 页天然支持长尾搜索"Blacksburg secondhand IKEA" 等
 
-## 九、下一步
+## 九、Sprint 2 实施记录（2026-05-11 完成）
 
-- Sprint 2 落实（12 个 task，~22-28h）
-- 部署 → 微信群 / 小红书启动新一轮推广
-- Sprint 3 候选：A1 分页 / A5 PWA / E5 Sentry / E6 备份 → R2 photoUrls 数组
+### Batch 2A（5/11 上午完成 + 后续 UX 精修）
+| ID | 项目 | 备注 |
+|---|---|---|
+| B3 ✅ | 单商品 detail 页 + 不跳转改造 | `/item/[id]` 仅服务外部分享链接；本站用户在 ItemCard 内完整看 |
+| B5 ✅ | OG 图片 | `opengraph-image.tsx`（拉丁字符，避开中文字体）；商品 OG 直接用第一张图 |
+| T15 ✅ | 分享物品信息 | 合并按钮"📋 分享物品信息"，含 URL + `utm_source=share` |
+
+### Batch 2B（5/11 完成）
+| ID | 项目 | 落地内容 |
+|---|---|---|
+| #9 ✅ | 草稿地基 | `Item.status` 加 `'draft'` 值（不需要 schema 改字段）；POST /api/items 接 `status`；新增 `/api/items/[id]/publish`、`/api/items/batch`、`/api/items/by-contact`（GET 公开 + POST 带 editCode 验证草稿） |
+| #10 ✅ | 批量导入 UI | PostModal 加 tab，`BatchImportPanel` 组件含批量图片上传（编号 1-60） + 文本框 + 全局信息 + 预览 |
+| #11 ✅ | parser + 预览 + 入库 | `src/lib/batchParser.ts`（YAML 风容错解析）+ 预览页 + `/api/items/batch` 单事务入库 |
+| #12 ✅ | AI 提示词 | 一键复制提示词组件，已嵌进 BatchImportPanel |
+| #13 ✅ | G4 我的发布 | `/my` 页：输入 contactValue 看 active，加输 editCode 看自己的草稿；草稿可一键发布；复用 PostModal 编辑 |
+| #14 ✅ | UTM 跟踪 | `src/lib/utm.ts` sessionStorage 捕获 + Item/Inquiry 加 `utmSource` 字段 + admin 渠道分布表 |
+| #16 ✅ | 本月新发布微点缀 | `/api/stats` 1h 缓存 + header 一行小字"本月已新发布 X 件 · 累计在售 Y 件" |
+| #17 ✅ | 待删队列 schema | `PendingCloudinaryDeletion` 表 + migration |
+| #18 ✅ | 延迟清图改造 | 软删/换图改入 24h 待删队列；GET /api/items 机会式触发 `processOverduePendingDeletions(50)` 真正 destroy；admin 加待删队列页，可取消单条 |
+
+### Sprint 2 本机部署前要跑
+
+```bash
+# 1. 应用两个新 migration（utmSource 字段 + PendingCloudinaryDeletion 表）
+npm run db:migrate
+
+# 2. 验证（修复 Prisma client 缓存里的 utmSource TS 错）
+npx tsc --noEmit
+npm run lint
+npm run build
+
+# 3. 部署
+./deploy.sh "feat: sprint 2B (batch import + G4 my posts + UTM + stats + R3 delay)"
+```
+
+部署后 Railway 的 `start:prod` 会自动给 prod PG `prisma db push` 加 `utmSource` 列和 `PendingCloudinaryDeletion` 表。
+
+## 十、下一步
+
+- Sprint 2 测试 → 部署 → 在微信群 / 小红书启动新一轮推广（详细渠道建议在第八章）
+- Sprint 3 候选：A1 分页 / A5 PWA / B1 全文检索 / E5 Sentry / E6 备份 → R2 photoUrls 数组
 

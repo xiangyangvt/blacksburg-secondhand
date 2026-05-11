@@ -3,17 +3,20 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import {
   CATEGORIES,
-  CONTACT_TYPES,
   getClientIp,
   serializePhotoUrls,
   parsePhotoUrls,
 } from '@/lib/utils';
+import { validateItemFields } from '@/lib/itemValidation';
+import { processOverduePendingDeletions } from '@/lib/uploader';
 
 const VALID_CATEGORIES = CATEGORIES.map(c => c.id);
-const VALID_CONTACT_TYPES = CONTACT_TYPES.map(c => c.id);
 
 // GET /api/items?type=&category=&q=&minPrice=&maxPrice=&since=&sort=
 export async function GET(req: NextRequest) {
+  // 机会式触发：每次 GET 时顺手扫一遍 Cloudinary 待删队列。fire-and-forget，不阻塞主响应
+  processOverduePendingDeletions().catch(() => {});
+
   const sp = req.nextUrl.searchParams;
   const type     = sp.get('type');     // sell | buy | null(全部)
   const category = sp.get('category'); // home/electronics/...
@@ -75,58 +78,64 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ items: serialized });
 }
 
-// POST /api/items  创建商品
+// POST /api/items  创建商品（可选 status: "active" | "draft"，默认 active）
 export async function POST(req: NextRequest) {
   let body: any;
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
-  const {
-    type, title, description, price, category, customTag,
-    contactType, contactValue, customContactLabel,
-    photoUrls, editCode,
-  } = body;
+  const { editCode, status, utmSource, ...rest } = body;
+  const desiredStatus: 'active' | 'draft' = status === 'draft' ? 'draft' : 'active';
+  const cleanedUtm = typeof utmSource === 'string' && utmSource ? utmSource.slice(0, 64) : null;
 
-  // 校验
-  if (type !== 'sell' && type !== 'buy') return err('类型必须是 sell 或 buy');
-  if (typeof title !== 'string' || !title.trim()) return err('标题不能为空');
-  if (title.length > 100) return err('标题最多 100 字');
-  if (typeof description !== 'string' || description.length > 2000) return err('描述最多 2000 字');
-  if (price !== null && (typeof price !== 'number' || price < 0 || price > 1_000_000)) return err('价格不合法');
-  if (!VALID_CATEGORIES.includes(category)) return err('分类不合法');
-  if (!VALID_CONTACT_TYPES.includes(contactType)) return err('联系方式类型不合法');
-  if (typeof contactValue !== 'string' || !contactValue.trim()) return err('联系方式不能为空');
-  if (!Array.isArray(photoUrls) || photoUrls.length > 6) return err('图片最多 6 张');
   if (typeof editCode !== 'string' || editCode.length < 6) return err('识别码至少 6 位');
 
-  // 隐式限速：同 IP 1 小时内最多 10 条
+  const fieldErr = validateItemFields(rest);
+  if (fieldErr) return err(fieldErr);
+
   const ip = getClientIp(req);
-  const recentCount = await prisma.item.count({
-    where: { ipAddress: ip, createdAt: { gte: new Date(Date.now() - 3600e3) } },
-  });
-  if (recentCount >= 10) return err('发布太频繁了，请 1 小时后再试', 429);
+
+  // 限速：active 走 1h 10 条；draft 走 IP 待发草稿不超过 50 条（防止滥用图床/数据库）
+  if (desiredStatus === 'active') {
+    const recentActive = await prisma.item.count({
+      where: {
+        ipAddress: ip,
+        status: 'active',
+        createdAt: { gte: new Date(Date.now() - 3600e3) },
+      },
+    });
+    if (recentActive >= 10) return err('发布太频繁了，请 1 小时后再试', 429);
+  } else {
+    const draftCount = await prisma.item.count({
+      where: { ipAddress: ip, status: 'draft' },
+    });
+    if (draftCount >= 50) return err('草稿太多（≤50 条），请先发布或删除一些', 429);
+  }
 
   const editCodeHash = await bcrypt.hash(editCode, 10);
 
   const item = await prisma.item.create({
     data: {
-      type,
-      title: title.trim(),
-      description: description.trim(),
-      price: price === null ? null : Math.round(price),
-      category,
-      customTag: customTag?.trim() || null,
-      contactType,
-      contactValue: contactValue.trim(),
-      customContactLabel: customContactLabel?.trim() || null,
-      photoUrls: serializePhotoUrls(photoUrls),
+      type: rest.type,
+      title: rest.title.trim(),
+      description: (rest.description ?? '').trim(),
+      price: rest.price === null ? null : Math.round(rest.price),
+      category: rest.category,
+      customTag: rest.customTag?.trim() || null,
+      contactType: rest.contactType,
+      contactValue: rest.contactValue.trim(),
+      customContactLabel: rest.customContactLabel?.trim() || null,
+      photoUrls: serializePhotoUrls(rest.photoUrls),
       editCodeHash,
+      status: desiredStatus,
       ipAddress: ip,
+      utmSource: cleanedUtm,
     },
   });
 
   return NextResponse.json({
     id: item.id,
+    status: item.status,
     success: true,
   });
 }

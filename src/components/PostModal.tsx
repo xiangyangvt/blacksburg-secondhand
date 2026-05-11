@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { ImageUpload } from './ImageUpload';
+import { BatchImportPanel } from './BatchImportPanel';
 import { CATEGORIES, CONTACT_TYPES } from '@/lib/utils';
+import { getStoredUtmSource } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
 import type { Item } from './ItemCard';
 
@@ -26,6 +28,8 @@ export function PostModal({
   onSaved: () => void;
 }) {
   const t = useT();
+  // create 模式才显示 tab 切换；edit 模式始终走单条表单
+  const [tab, setTab] = useState<'single' | 'batch'>('single');
   const [type,         setType]         = useState<'sell' | 'buy'>('sell');
   const [title,        setTitle]        = useState('');
   const [description,  setDescription]  = useState('');
@@ -90,6 +94,7 @@ export function PostModal({
       customContactLabel: contactType === 'other' ? (customLabel.trim() || null) : null,
       photoUrls,
       editCode,
+      utmSource: mode === 'create' ? getStoredUtmSource() : undefined,
     };
 
     setSubmitting(true);
@@ -125,13 +130,26 @@ export function PostModal({
   return (
     <div className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-4">
       <div className="bg-white rounded-lg w-full max-w-2xl my-4">
-        <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between rounded-t-lg">
+        <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between rounded-t-lg z-10">
           <h2 className="text-lg font-semibold">
             {mode === 'create' ? t('post.titleCreate') : t('post.titleEdit')}
           </h2>
           <button onClick={onClose} className="text-stone-500 hover:text-stone-900 text-2xl leading-none">×</button>
         </div>
 
+        {/* create 模式才显示 tab；edit 模式只走单条表单 */}
+        {mode === 'create' && (
+          <div className="border-b border-stone-200 px-5 flex gap-0">
+            <TabBtn active={tab === 'single'} onClick={() => setTab('single')}>{t('batch.tabSingle')}</TabBtn>
+            <TabBtn active={tab === 'batch'}  onClick={() => setTab('batch')}>{t('batch.tabBatch')}</TabBtn>
+          </div>
+        )}
+
+        {mode === 'create' && tab === 'batch' ? (
+          <div className="p-5">
+            <BatchImportPanel onSuccess={onSaved} onClose={onClose} />
+          </div>
+        ) : (
         <div className="p-5 space-y-4">
           <div>
             <Label>{t('post.fieldType')}</Label>
@@ -270,22 +288,26 @@ export function PostModal({
             </div>
           </div>
         </div>
+        )}
 
-        <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 rounded-b-lg">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-stone-300 rounded hover:bg-stone-100"
-          >
-            {t('post.cancel')}
-          </button>
-          <button
-            onClick={submit}
-            disabled={submitting}
-            className="px-5 py-2 bg-brand text-white rounded hover:bg-brand-dark disabled:opacity-50"
-          >
-            {submitting ? t('post.saving') : (mode === 'create' ? t('post.submitCreate') : t('post.submitEdit'))}
-          </button>
-        </div>
+        {/* 单条模式才显示底部固定按钮；批量模式自带提交按钮 */}
+        {(!(mode === 'create' && tab === 'batch')) && (
+          <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 rounded-b-lg">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-stone-300 rounded hover:bg-stone-100"
+            >
+              {t('post.cancel')}
+            </button>
+            <button
+              onClick={submit}
+              disabled={submitting}
+              className="px-5 py-2 bg-brand text-white rounded hover:bg-brand-dark disabled:opacity-50"
+            >
+              {submitting ? t('post.saving') : (mode === 'create' ? t('post.submitCreate') : t('post.submitEdit'))}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -306,6 +328,24 @@ function Pill({
         active
           ? 'bg-brand text-white border-brand'
           : 'bg-white text-stone-700 border-stone-300 hover:border-brand'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function TabBtn({
+  active, children, onClick,
+}: { active: boolean; children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-4 py-2 text-sm border-b-2 -mb-px ${
+        active
+          ? 'border-brand text-brand font-semibold'
+          : 'border-transparent text-stone-500 hover:text-stone-800'
       }`}
     >
       {children}

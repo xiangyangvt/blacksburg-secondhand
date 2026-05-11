@@ -15,6 +15,7 @@ export const messages = {
   'header.post':           { zh: '➕ 我要发布',                              en: '➕ Post Item' },
   'header.langZh':         { zh: '中',                                      en: '中' },
   'header.langEn':         { zh: 'EN',                                      en: 'EN' },
+  'header.statsLine':      { zh: '本月已新发布 {m} 件 · 累计在售 {t} 件',        en: '{m} new this month · {t} active total' },
 
   // 列表 / 空态
   'list.loading':          { zh: '加载中…',                                  en: 'Loading…' },
@@ -196,6 +197,50 @@ export const messages = {
   // 页脚
   'footer.opensource':     { zh: '本站开源 · MIT 协议 · 欢迎在 GitHub 提 issue / PR', en: 'Open source · MIT · Issues & PRs welcome on GitHub' },
   'footer.prohibited':     { zh: '⚠️ 禁止发布枪支、毒品、活物、违法物品。',         en: '⚠️ No firearms, drugs, live animals, or illegal items.' },
+
+  // 我的发布（G4）
+  'my.title':              { zh: '🗂 我的发布',                              en: '🗂 My Posts' },
+  'my.intro':              { zh: '输入你发布时用的联系方式查看所有商品。要看草稿请加输识别码。', en: 'Enter your contact to see your posts. Add your edit code to see drafts too.' },
+  'my.contactLabel':       { zh: '联系方式（如微信号 zhang3）',                en: 'Contact (e.g. wechat zhang3)' },
+  'my.editCodeLabel':      { zh: '识别码（看草稿才需要）',                     en: 'Edit code (only needed for drafts)' },
+  'my.lookup':              { zh: '查找',                                    en: 'Look up' },
+  'my.tabActive':          { zh: '上架中 ({n})',                              en: 'Active ({n})' },
+  'my.tabDraft':           { zh: '草稿 ({n})',                                en: 'Drafts ({n})' },
+  'my.publishBtn':         { zh: '✅ 发布',                                  en: '✅ Publish' },
+  'my.publishing':         { zh: '发布中…',                                  en: 'Publishing…' },
+  'my.deleteBtn':          { zh: '🗑 删除',                                  en: '🗑 Delete' },
+  'my.editBtn':            { zh: '✏️ 编辑',                                  en: '✏️ Edit' },
+  'my.empty':              { zh: '这里还没有任何商品',                         en: 'Nothing here yet' },
+  'my.draftEmpty':         { zh: '没有草稿。批量导入后的商品默认是草稿。',         en: 'No drafts. Items from batch import start as drafts.' },
+  'my.errLookup':          { zh: '查找失败',                                  en: 'Lookup failed' },
+  'my.headerLink':         { zh: '我的发布',                                  en: 'My Posts' },
+
+  // 批量导入
+  'batch.tabSingle':       { zh: '单条发布',                                en: 'Single' },
+  'batch.tabBatch':        { zh: '📥 批量导入',                              en: '📥 Batch import' },
+  'batch.step1Title':      { zh: '① 上传所有图片',                            en: '① Upload all photos' },
+  'batch.step1Hint':       { zh: '一次性把所有商品的照片传上来，记住每张的编号（1, 2, 3...），文本里用编号引用即可', en: 'Upload all photos at once; reference them by number in your text' },
+  'batch.step2Title':      { zh: '② 粘贴商品文本',                            en: '② Paste item text' },
+  'batch.step2Hint':       { zh: '每条商品用 --- 分隔。可以用 AI 工具帮你按格式生成（按下方按钮复制提示词）', en: 'Use --- between items. You can use AI tools to generate this text (copy prompt below)' },
+  'batch.aiPromptBtn':     { zh: '📋 复制给 AI 的提示词',                      en: '📋 Copy AI prompt' },
+  'batch.aiPromptCopied':  { zh: '✓ 提示词已复制，粘到 ChatGPT/Claude 让它帮你生成', en: '✓ Prompt copied, paste into ChatGPT/Claude' },
+  'batch.step3Title':      { zh: '③ 全局信息（所有商品共用）',                   en: '③ Global info (shared by all items)' },
+  'batch.previewBtn':      { zh: '解析并预览 →',                              en: 'Parse & preview →' },
+  'batch.previewTitle':    { zh: '预览解析结果',                                en: 'Preview' },
+  'batch.previewBack':     { zh: '← 修改文本',                                en: '← Back to edit' },
+  'batch.previewParsed':   { zh: '解析成功 {n} 条',                            en: '{n} parsed OK' },
+  'batch.previewErrors':   { zh: '有 {n} 条解析失败',                          en: '{n} failed' },
+  'batch.previewSubmit':   { zh: '✅ 全部入库为草稿（共 {n} 条）',                en: '✅ Import {n} as drafts' },
+  'batch.previewSubmitting': { zh: '入库中…',                                  en: 'Importing…' },
+  'batch.previewSuccess':  { zh: '✓ 已成功入库 {n} 条草稿，去「我的发布」一条条发布即可', en: '✓ {n} drafts created, go to My Posts to publish' },
+  'batch.errEmpty':        { zh: '请先粘贴商品文本',                            en: 'Paste item text first' },
+  'batch.errNoValid':      { zh: '没有可入库的有效条目（请先修复错误）',           en: 'No valid items (fix errors first)' },
+  'batch.errAllErrors':    { zh: '所有条目都有错，请检查格式',                    en: 'All items have errors' },
+  'batch.errMaxBatch':     { zh: '单次最多 30 条',                              en: 'Max 30 items per batch' },
+  'batch.dropPhotos':      { zh: '拖拽图片到这里 / 点击选择',                    en: 'Drag photos here / click to select' },
+  'batch.photoCount':      { zh: '已传 {n} 张',                                en: '{n} uploaded' },
+  'batch.photoRefBadge':   { zh: '编号 #{n}',                                  en: 'Ref #{n}' },
+  'batch.removePhoto':     { zh: '删除',                                       en: 'Delete' },
 
   // 单商品 detail 页
   'detail.back':           { zh: '← 回到首页',                                en: '← Back to home' },

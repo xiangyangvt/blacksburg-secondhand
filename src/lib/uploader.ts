@@ -130,3 +130,51 @@ export async function deleteCloudinaryImagesByUrls(urls: string[]): Promise<void
     .filter((id): id is string => !!id);
   await Promise.allSettled(publicIds.map(id => deleteCloudinaryImage(id)));
 }
+
+/**
+ * 把一组 URL 加入待删队列（默认延迟 24h）。卖家点"已售出"或换图时调用。
+ * 给用户后悔时间；过期了由 processOverduePendingDeletions 真正 destroy。
+ * 本地 /uploads/ 路径不入队（本地图先不动）。
+ */
+export async function schedulePendingCloudinaryDeletion(
+  urls: string[],
+  delayHours = 24,
+): Promise<void> {
+  if (!isCloudinaryAvailable()) return;
+  const publicIds = urls
+    .map(extractCloudinaryPublicId)
+    .filter((id): id is string => !!id);
+  if (publicIds.length === 0) return;
+
+  // 延迟到这一刻
+  const scheduledFor = new Date(Date.now() + delayHours * 3600e3);
+
+  // 动态 import 防止 uploader 被 client 组件意外引入时撞到 prisma
+  const { prisma } = await import('./prisma');
+  await prisma.pendingCloudinaryDeletion.createMany({
+    data: publicIds.map(publicId => ({ publicId, scheduledFor })),
+  });
+}
+
+/**
+ * 扫一遍过期待删队列，destroy 掉，然后删队列记录。
+ * 机会式触发：每次 GET /api/items 时调一次，带 limit 防长尾。
+ * 失败不抛错。
+ */
+export async function processOverduePendingDeletions(limit = 50): Promise<{ destroyed: number }> {
+  if (!isCloudinaryAvailable()) return { destroyed: 0 };
+
+  const { prisma } = await import('./prisma');
+  const overdue = await prisma.pendingCloudinaryDeletion.findMany({
+    where: { scheduledFor: { lte: new Date() } },
+    take: limit,
+    orderBy: { scheduledFor: 'asc' },
+  });
+  if (overdue.length === 0) return { destroyed: 0 };
+
+  await Promise.allSettled(overdue.map((p: { id: string; publicId: string }) => deleteCloudinaryImage(p.publicId)));
+  await prisma.pendingCloudinaryDeletion.deleteMany({
+    where: { id: { in: overdue.map((p: { id: string }) => p.id) } },
+  });
+  return { destroyed: overdue.length };
+}

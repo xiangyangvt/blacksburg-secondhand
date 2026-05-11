@@ -11,7 +11,9 @@ import { ScrollToTop } from '@/components/ScrollToTop';
 import { FabPostButton } from '@/components/FabPostButton';
 import { ShareButton } from '@/components/ShareButton';
 import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
+import { captureUtmFromUrl } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
+import Link from 'next/link';
 
 // 把 URL ?type=...&cat=... 解析回 Filters。未知/非法值都退到默认，保证健壮。
 function parseFiltersFromSearchParams(sp: ReadonlyURLSearchParams | URLSearchParams): Filters {
@@ -65,7 +67,16 @@ function HomePageInner() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [origin, setOrigin] = useState('');
-  useEffect(() => { setOrigin(clientOrigin()); }, []);
+  const [stats, setStats] = useState<{ thisMonthCount: number; totalActive: number } | null>(null);
+  useEffect(() => {
+    setOrigin(clientOrigin());
+    captureUtmFromUrl(); // 首屏抓 ?utm_source=xxx / ?from=xxx 存 sessionStorage，后续发布/询价都带上
+    // 取首页"本月新发布"微点缀；失败静默
+    fetch('/api/stats')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setStats(d); })
+      .catch(() => {});
+  }, []);
   // 初次渲染从 URL 解析；之后状态独立，由 state → URL 单向同步
   const [filters, setFiltersRaw] = useState<Filters>(() => parseFiltersFromSearchParams(searchParams));
   const [postModal, setPostModal] = useState<{ mode: 'create' | 'edit'; item?: Item } | null>(null);
@@ -204,6 +215,12 @@ function HomePageInner() {
             />
           </div>
 
+          <Link
+            href="/my"
+            className="text-xs sm:text-sm text-stone-600 hover:text-brand whitespace-nowrap underline-offset-2 hover:underline"
+          >
+            🗂 {t('my.headerLink')}
+          </Link>
           {origin && (
             <ShareButton
               shareText={buildSiteShareText({ origin })}
@@ -218,6 +235,12 @@ function HomePageInner() {
             {t('header.post')}
           </button>
         </div>
+
+        {stats && stats.totalActive > 0 && (
+          <div className="max-w-6xl mx-auto px-4 pb-2 text-xs text-stone-500">
+            {t('header.statsLine', { m: stats.thisMonthCount, t: stats.totalActive })}
+          </div>
+        )}
 
         {/* 手机端折叠筛选——和顶栏同一 sticky 单元，一起黏顶 */}
         <div className="md:hidden max-w-6xl mx-auto px-3 pb-2">

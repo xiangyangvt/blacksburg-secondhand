@@ -31,6 +31,7 @@ model Item {
   updatedAt           DateTime @updatedAt
   bumpedAt            DateTime @default(now())
   ipAddress           String?
+  utmSource           String?
 
   inquiries Inquiry[]
   reports   Report[]  @relation("ItemReports")
@@ -38,6 +39,7 @@ model Item {
   @@index([status, createdAt])
   @@index([category])
   @@index([type])
+  @@index([utmSource])
 }
 
 model Inquiry {
@@ -53,12 +55,22 @@ model Inquiry {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   ipAddress           String?
+  utmSource           String?
 
   item    Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   reports Report[] @relation("InquiryReports")
 
   @@index([itemId, createdAt])
   @@index([contactValue])
+}
+
+model PendingCloudinaryDeletion {
+  id           String   @id @default(cuid())
+  publicId     String
+  scheduledFor DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([scheduledFor])
 }
 
 model Report {
