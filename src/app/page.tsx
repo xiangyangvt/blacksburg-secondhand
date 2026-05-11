@@ -10,10 +10,10 @@ import { EditCodePrompt } from '@/components/EditCodePrompt';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { FabPostButton } from '@/components/FabPostButton';
 import { ShareButton } from '@/components/ShareButton';
+import { MyPostsPanel } from '@/components/MyPostsPanel';
 import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
-import Link from 'next/link';
 
 // 把 URL ?type=...&cat=... 解析回 Filters。未知/非法值都退到默认，保证健壮。
 function parseFiltersFromSearchParams(sp: ReadonlyURLSearchParams | URLSearchParams): Filters {
@@ -81,6 +81,7 @@ function HomePageInner() {
   const [filters, setFiltersRaw] = useState<Filters>(() => parseFiltersFromSearchParams(searchParams));
   const [postModal, setPostModal] = useState<{ mode: 'create' | 'edit'; item?: Item } | null>(null);
   const [codePrompt, setCodePrompt] = useState<CodeAction | null>(null);
+  const [myPanelOpen, setMyPanelOpen] = useState(false);
 
   // 改任何 filter 都自动滚回顶部（除了 q 输入，那个用户在打字时不打断）
   const setFilters = useCallback((updater: (f: Filters) => Filters) => {
@@ -215,12 +216,12 @@ function HomePageInner() {
             />
           </div>
 
-          <Link
-            href="/my"
-            className="text-xs sm:text-sm text-stone-600 hover:text-brand whitespace-nowrap underline-offset-2 hover:underline"
+          <button
+            onClick={() => setMyPanelOpen(true)}
+            className="px-3 sm:px-4 py-2 bg-white border border-brand text-brand rounded-full hover:bg-brand/5 active:bg-brand/10 text-sm font-medium whitespace-nowrap"
           >
             🗂 {t('my.headerLink')}
-          </Link>
+          </button>
           {origin && (
             <ShareButton
               shareText={buildSiteShareText({ origin })}
@@ -311,6 +312,10 @@ function HomePageInner() {
           onClose={() => setPostModal(null)}
           onSaved={fetchItems}
         />
+      )}
+
+      {myPanelOpen && (
+        <MyPostsPanel onClose={() => setMyPanelOpen(false)} />
       )}
 
       {codePrompt && (

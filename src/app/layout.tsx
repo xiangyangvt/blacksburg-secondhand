@@ -42,6 +42,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // 保留用户主动 pinch zoom 能力（看大图、放大照片要用）；
+  // 防"聚焦 input 自动 zoom"通过 globals.css 的 font-size:16px 实现，不靠禁掉缩放
   themeColor: '#7B1113',
 };
 

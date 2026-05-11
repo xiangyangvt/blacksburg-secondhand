@@ -7,24 +7,28 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
                "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue",
                Arial, sans-serif;
-  /* iOS Safari 双击放大 / 双指捏合放大都禁掉，保持"App"质感 */
+  /* 防 iOS 在切横/竖屏时自动调整字号大小（与用户主动 pinch zoom 无关） */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
-/* ===== 全局：表单输入字号兜底 16px ===== */
+/* ===== 全局：表单输入字号兜底 16px（防聚焦时自动 zoom） ===== */
 /*
-  iOS Safari 的著名行为：input/textarea/select 字号 < 16px 时聚焦会自动 zoom in。
-  之前每个组件手动加 .text-base，但容易漏。这里全站兜底：
-  所有 input/textarea/select 字号至少 16px。需要视觉上"小一号"时，用 padding/leading 控制，
-  不要再压字号。
+  iOS WebKit（Safari + iOS Chrome + iOS Edge，全都用同一引擎）共有的特性：
+  input/textarea/select 字号 < 16px 时，聚焦会自动 zoom in 到那个字号"看清楚"。
+  Android Chrome 在 viewport 正确时一般不触发；但加 16px 没有副作用，统一最简单。
+
+  关键：要加 !important，否则会被 Tailwind 的 .text-sm / .text-xs 类（utility 优先级高）覆盖，
+  之前没加 important 所以"看着改了但实际没生效"。
+
+  checkbox/radio/file/range 这些字号没意义，排除掉避免影响布局。
+  视觉上要"小一号"就用 padding/leading 调高度，别再压字号。
 */
-input,
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']),
 textarea,
 select {
-  font-size: 16px;
+  font-size: 16px !important;
 }
-/* select 在桌面端不会触发 zoom，但用统一字号最简单 */
 
 /* 隐藏滚动条但保留滚动 */
 .no-scrollbar::-webkit-scrollbar { display: none; }
