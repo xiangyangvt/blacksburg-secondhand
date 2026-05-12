@@ -93,6 +93,7 @@ export const messages = {
 
   // 时间
   'time.justNow':          { zh: '刚刚',                                    en: 'just now' },
+  'time.fresh':            { zh: '刚刚发布',                                en: 'Just posted' },
   'time.minutesAgo':       { zh: '{n} 分钟前',                              en: '{n} min ago' },
   'time.hoursAgo':         { zh: '{n} 小时前',                              en: '{n} h ago' },
   'time.daysAgo':          { zh: '{n} 天前',                                en: '{n} d ago' },

@@ -6,13 +6,16 @@ import { Pencil, Trash2, Flag, X, ChevronLeft, ChevronRight } from 'lucide-react
 import { CopyButton } from './CopyButton';
 import { ShareButton } from './ShareButton';
 import { InquirySection } from './InquirySection';
+import { MoreMenu } from './MoreMenu';
 import { buildItemShareText, clientOrigin } from '@/lib/shareText';
 import {
   categoryLabel,
   contactTypeLabel,
   formatPrice,
-  timeAgo,
   typeLabel,
+  categoryDotClass,
+  categoryBgClass,
+  freshnessBadge,
 } from '@/lib/utils';
 import { useT, useLocale } from '@/i18n/I18nProvider';
 
@@ -29,6 +32,8 @@ export type Item = {
   customContactLabel: string | null;
   photoUrls: string[];
   createdAt: string;
+  /** 最近活跃时间（编辑 / 新询价 / 卖家回复都会刷新）；用于新鲜度可视化 */
+  bumpedAt?: string;
   inquiries: any[];
 };
 
@@ -117,32 +122,13 @@ export function ItemCard({
     setZoomIdx(i => i === null ? null : (i + 1) % photos.length);
   };
 
-  // 三个 admin 按钮：图标 + 文字，中性配色。扁平化哲学：卡片本身就是 detail，不引导用户跳出去
-  const AdminButtons = (
-    <>
-      <button
-        onClick={() => onEdit(item)}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700 transition-colors"
-      >
-        <Pencil size={13} />
-        {t('card.edit')}
-      </button>
-      <button
-        onClick={() => onMarkSold(item)}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700 transition-colors"
-      >
-        <Trash2 size={13} />
-        {t('card.markSold')}
-      </button>
-      <button
-        onClick={() => onReport(item)}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700 transition-colors"
-      >
-        <Flag size={13} />
-        {t('card.report')}
-      </button>
-    </>
-  );
+  // ⋯ 菜单：卖家相关的操作（编辑 / 删除 / 举报）折进来
+  // 让买家视图更干净——卡片上不再常驻 3 个按钮抢注意力
+  const moreMenuItems = [
+    { icon: <Pencil size={14} />, label: t('card.edit'),     onClick: () => onEdit(item) },
+    { icon: <Trash2 size={14} />, label: t('card.markSold'), onClick: () => onMarkSold(item), danger: true },
+    { icon: <Flag size={14} />,   label: t('card.report'),   onClick: () => onReport(item) },
+  ];
 
   return (
     <div
@@ -201,22 +187,37 @@ export function ItemCard({
         </>
       )}
 
-      {/* === 标签行 === */}
-      <div className="flex items-center gap-1.5 text-[10px] md:text-xs mb-1.5 flex-wrap">
-        <span className={`px-2 py-0.5 rounded-full font-medium ${
-          item.type === 'sell' ? 'bg-brand text-white' : 'bg-accent text-white'
-        }`}>
-          {typeLabel(item.type, item.category, locale)}
-        </span>
-        <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 truncate max-w-[100px] md:max-w-none">
-          {categoryLabel(item.category, locale)}
-          {item.customTag && ` · ${item.customTag}`}
-        </span>
-        {/* 时间：默认手机端隐藏；展开后显示 */}
-        <span className={`text-stone-400 ml-auto ${expanded ? 'inline' : 'hidden md:inline'}`}>
-          {timeAgo(item.createdAt, locale)}
-        </span>
-      </div>
+      {/* === 标签行 ===
+          - 类型 chip（出售/求购，brand 色）
+          - 类目 chip（带类目色小圆点 + 浅色 tint 底）
+          - 新鲜度 badge（< 24h 绿色显眼；老贴视觉降权）
+          - ⋯ 菜单（卖家操作折叠）
+      */}
+      {(() => {
+        const fresh = freshnessBadge(item.bumpedAt ?? item.createdAt, locale);
+        return (
+          <div className="flex items-center gap-1.5 text-[10px] md:text-xs mb-1.5 flex-wrap">
+            <span className={`px-2 py-0.5 rounded-full font-medium ${
+              item.type === 'sell' ? 'bg-brand text-white' : 'bg-accent text-white'
+            }`}>
+              {typeLabel(item.type, item.category, locale)}
+            </span>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-stone-700 truncate max-w-[120px] md:max-w-none ${categoryBgClass(item.category)}`}>
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${categoryDotClass(item.category)}`} />
+              {categoryLabel(item.category, locale)}
+              {item.customTag && ` · ${item.customTag}`}
+            </span>
+            {/* 新鲜度：手机默认隐藏（节省视觉空间），展开后显示；桌面常驻 */}
+            <span className={`ml-auto whitespace-nowrap ${fresh.className} ${expanded ? 'inline' : 'hidden md:inline'}`}>
+              {fresh.label}
+            </span>
+            {/* ⋯ 菜单：手机展开后才显示；桌面常驻 */}
+            <span className={expanded ? 'inline' : 'hidden md:inline'}>
+              <MoreMenu items={moreMenuItems} />
+            </span>
+          </div>
+        );
+      })()}
 
       {/* === 标题 + 价格 === */}
       <div className="mb-2">
@@ -259,15 +260,8 @@ export function ItemCard({
         )}
       </div>
 
-      {/* === 编辑/删除/举报：桌面常驻；手机仅展开后显示，无"更多/收起"按钮 === */}
-      <div data-card-section="admin" className="hidden md:flex gap-2 flex-wrap text-xs mt-3">
-        {AdminButtons}
-      </div>
-      {expanded && (
-        <div className="md:hidden flex gap-1.5 flex-wrap mt-3 justify-center">
-          {AdminButtons}
-        </div>
-      )}
+      {/* 卖家操作（编辑/删除/举报）已折进上方标签行的 ⋯ 菜单。
+          这样买家视图更干净，卖家自己访问时仍可一键到达 */}
 
       {/* === 询价区：受控组件，open 跟 expanded 同步 === */}
       <InquirySection

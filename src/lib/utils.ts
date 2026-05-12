@@ -114,3 +114,68 @@ export function getClientIp(req: Request): string {
   if (fwd) return fwd.split(',')[0].trim();
   return req.headers.get('x-real-ip') ?? 'unknown';
 }
+
+// ===== 设计系统：类目色 + 新鲜度 =====
+
+// 类目对应的纯色（用于小圆点）。这里所有类名都是字面字符串，
+// 确保 Tailwind JIT 在 build 时能扫到（动态拼接的 className 会被丢）
+const CAT_DOT_CLASS: Record<string, string> = {
+  home:        'bg-cat-home',
+  electronics: 'bg-cat-electronics',
+  transport:   'bg-cat-transport',
+  books:       'bg-cat-books',
+  housing:     'bg-cat-housing',
+  other:       'bg-cat-other',
+};
+
+// 类目对应的浅色背景（10% 透明度），用于 chip 底色微微染色
+const CAT_BG_CLASS: Record<string, string> = {
+  home:        'bg-cat-home/10',
+  electronics: 'bg-cat-electronics/10',
+  transport:   'bg-cat-transport/10',
+  books:       'bg-cat-books/10',
+  housing:     'bg-cat-housing/10',
+  other:       'bg-cat-other/10',
+};
+
+/** 类目色小圆点的 Tailwind class（fallback 灰色） */
+export function categoryDotClass(category: string): string {
+  return CAT_DOT_CLASS[category] ?? 'bg-stone-400';
+}
+
+/** 类目背景 chip 的浅色 tint class */
+export function categoryBgClass(category: string): string {
+  return CAT_BG_CLASS[category] ?? 'bg-stone-100';
+}
+
+/**
+ * 新鲜度可视化：根据 bumpedAt（最近活跃时间）返回 label + Tailwind class
+ *   < 24h    → 绿色"刚刚发布"
+ *   < 7 天   → 中性灰
+ *   < 30 天  → 浅灰
+ *   > 30 天  → 极浅灰 + 斜体（视觉降权但不删）
+ */
+export function freshnessBadge(
+  date: Date | string,
+  locale: Locale = 'zh',
+): { label: string; className: string; isFresh: boolean } {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const ms = Date.now() - d.getTime();
+  const hours = ms / 3.6e6;
+  const days = hours / 24;
+
+  if (hours < 24) {
+    return {
+      label: lookup('time.fresh', locale),
+      className: 'text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full font-medium',
+      isFresh: true,
+    };
+  }
+  if (days < 7) {
+    return { label: timeAgo(d, locale), className: 'text-stone-500', isFresh: false };
+  }
+  if (days < 30) {
+    return { label: timeAgo(d, locale), className: 'text-stone-400', isFresh: false };
+  }
+  return { label: timeAgo(d, locale), className: 'text-stone-300 italic', isFresh: false };
+}
