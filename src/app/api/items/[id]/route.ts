@@ -68,6 +68,14 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
     data.type = updates.type;
   }
 
+  // 实质性更新才 bump 到列表前面：标题/描述/价格/图片/类型/分类变了算；
+  // 仅改联系方式 / customTag 不算（typo 修复、改个标签不应奖励排名）
+  const SUBSTANTIVE = ['title', 'description', 'price', 'photoUrls', 'type', 'category'] as const;
+  const hasSubstantiveChange = SUBSTANTIVE.some(k => updates[k] !== undefined);
+  if (hasSubstantiveChange) {
+    data.bumpedAt = new Date();
+  }
+
   await prisma.item.update({ where: { id }, data });
 
   // 编辑时如果替换了图，把被丢弃的 Cloudinary 图清掉（节省额度）

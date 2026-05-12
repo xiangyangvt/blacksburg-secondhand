@@ -33,6 +33,13 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
         sellerRepliedAt: reply ? new Date() : null,
       },
     });
+
+    // 卖家回复 = 商品活跃，bump 父商品到列表前面（撤回回复 reply='' 也算活跃）
+    await prisma.item.update({
+      where: { id: inquiry.itemId },
+      data: { bumpedAt: new Date() },
+    });
+
     return NextResponse.json({ success: true });
   }
 

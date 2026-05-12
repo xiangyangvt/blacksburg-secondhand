@@ -42,6 +42,12 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
     },
   });
 
+  // 新询价 = 商品活跃，bump 父商品到列表前面
+  await prisma.item.update({
+    where: { id },
+    data: { bumpedAt: new Date() },
+  });
+
   return NextResponse.json({ id: inquiry.id, success: true });
 }
 

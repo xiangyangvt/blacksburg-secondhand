@@ -24,17 +24,23 @@ const notoSC = Noto_Sans_SC({
 
 const SITE_NAME = '黑堡二手买卖 · Blacksburg Secondhand';
 const SITE_DESC = '黑堡（Blacksburg, VA）本地华人/学生二手物品交易平台。Local secondhand marketplace for the Blacksburg, VA community.';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL
+  || 'https://blacksburg-secondhand-production.up.railway.app';
 
 export const metadata: Metadata = {
   title: SITE_NAME,
   description: SITE_DESC,
   manifest: '/manifest.json',
+  // 关键：所有 OG / Twitter Card 的相对路径都基于这个绝对 URL 解析
+  // 不设的话 build 时默认 http://localhost:3000，导致微信抓的 OG 图 URL 是 localhost，预览没图
+  metadataBase: new URL(SITE_URL),
   openGraph: {
     title: SITE_NAME,
     description: SITE_DESC,
     type: 'website',
     locale: 'zh_CN',
     alternateLocale: 'en_US',
+    url: SITE_URL,
   },
   twitter: {
     card: 'summary',

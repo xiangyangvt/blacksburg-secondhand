@@ -50,11 +50,13 @@ export async function GET(req: NextRequest) {
     where.createdAt = { gte: new Date(now - ms) };
   }
 
+  // "最新"语义改成"最近活跃"：sort=newest 现在按 bumpedAt 排序
+  // bumpedAt 在创建时 = createdAt，在实质性编辑 / 新询价 / 卖家回复时刷新
   const orderBy =
     sort === 'oldest'    ? { createdAt: 'asc'  as const } :
     sort === 'priceAsc'  ? { price:     'asc'  as const } :
     sort === 'priceDesc' ? { price:     'desc' as const } :
-                           { createdAt: 'desc' as const };
+                           { bumpedAt:  'desc' as const };
 
   const items = await prisma.item.findMany({
     where,
