@@ -80,7 +80,12 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       description,
       images: cover ? [cover] : undefined,
     },
-    // 给微信"description"传统 meta 兜底（个别老版本不读 og:description）
+    // iOS Safari 系统分享 sheet 优先用 apple-touch-icon 作为预览缩略图
+    // root layout 的 apple-touch-icon 是 SVG（iOS share sheet 不识别），单商品页 override 成商品图
+    // 微信收到 iOS share 包时，缩略图字段拿到的就是 og 代理返回的 JPG
+    icons: cover ? {
+      apple: [{ url: cover, type: 'image/jpeg' }],
+    } : undefined,
     other: cover ? {
       'image': cover,
     } : undefined,
