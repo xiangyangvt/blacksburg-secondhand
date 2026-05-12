@@ -88,6 +88,16 @@ function HomePageInner() {
 
   // 分享链接 /?focus=ID：mount 时一次性读 URL，不放进 state（filter 改动不会丢这个）
   const [focusId] = useState<string | null>(() => searchParams.get('focus'));
+
+  // /cart 旧路由 redirect 过来时带 ?openCart=1 → mount 时触发购物车 panel 打开
+  useEffect(() => {
+    if (searchParams.get('openCart') === '1') {
+      // 等 CartButton 完成 mount 并注册 listener（一个 raf 就够，hydration 已完成）
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent('hb-open-cart'));
+      });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // items 加载完后判断 focus 商品是否存在；不存在显示"该商品已下架"banner
   const focusFound = !!focusId && items.some(it => it.id === focusId);
   const focusMissing = !!focusId && !loading && items.length > 0 && !focusFound;
