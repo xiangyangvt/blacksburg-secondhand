@@ -79,6 +79,11 @@ function RoommatesContent() {
 
   const [filters, setFilters] = useState<ListingFilters>(LISTING_FILTERS_DEFAULT);
 
+  // 分享链接 /roommates?focus=ID：mount 时一次性读 URL
+  const [focusId] = useState<string | null>(() => searchParams?.get('focus') ?? null);
+  const focusFound = !!focusId && listings.some(l => l.id === focusId);
+  const focusMissing = !!focusId && !loading && listings.length > 0 && !focusFound;
+
   useEffect(() => { captureUtmFromUrl(); }, []);
 
   // 初次挂载：从 URL 读 filter（仅一次，后续 filter 修改 → URL）
@@ -192,6 +197,13 @@ function RoommatesContent() {
           <ListingFilterBar filters={filters} onChange={onFilterChange} />
         </div>
 
+        {/* focus 命中失败提示（?focus=ID 但 listing 已下架/被筛掉） */}
+        {focusMissing && (
+          <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+            你访问的 listing 可能已下架 / 已匹配，下面是其他在租 listing。
+          </div>
+        )}
+
         {/* 最近浏览：仅有历史 + listings 不空时显示 */}
         {!loading && listings.length > 0 && <RecentListingStrip listings={listings} />}
 
@@ -214,6 +226,7 @@ function RoommatesContent() {
               <ListingCard
                 key={l.id}
                 listing={l}
+                autoExpand={l.id === focusId}
                 onApply={onApply}
                 onEdit={onEditListing}
                 onDelete={onDeleteListing}

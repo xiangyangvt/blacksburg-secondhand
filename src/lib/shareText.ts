@@ -22,8 +22,10 @@ export function buildItemShareText(opts: {
 }): string {
   const source = opts.source ?? 'share';
   const headline = itemCopyText(opts.title, opts.price, opts.itemType, opts.category);
-  // og=v2 用来 bust 微信的 OG 缓存（详见 OG_VERSION 注释）
-  const url = `${opts.origin}/item/${opts.itemId}?utm_source=${encodeURIComponent(source)}&og=v${OG_VERSION}`;
+  // 扁平化分享：URL 指向主页 + ?focus=ID
+  // 接收者打开看到的是平台首页 + 该商品自动展开，符合"网站只有一个主页"的产品哲学
+  // /item/[id] 路由仍保留（旧分享链接兼容），但新分享不再生成
+  const url = `${opts.origin}/?focus=${opts.itemId}&utm_source=${encodeURIComponent(source)}&og=v${OG_VERSION}`;
   return `${headline}\n${url}`;
 }
 
@@ -60,7 +62,8 @@ export function buildListingShareText(opts: {
 
   const areaStr = opts.areas.length > 0 ? ' · ' + opts.areas.slice(0, 2).join('/') : '';
   const headline = `【${opts.typeLabel}】${opts.title} · ${budgetStr}${areaStr}`;
-  const url = `${opts.origin}/roommates?listing=${opts.listingId}&utm_source=${encodeURIComponent(source)}&og=v${OG_VERSION}`;
+  // 扁平化分享：URL 指向 /roommates + ?focus=ID（统一术语用 focus，跟二手对齐）
+  const url = `${opts.origin}/roommates?focus=${opts.listingId}&utm_source=${encodeURIComponent(source)}&og=v${OG_VERSION}`;
   return `${headline}\n${url}`;
 }
 

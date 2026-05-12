@@ -86,6 +86,12 @@ function HomePageInner() {
   const [codePrompt, setCodePrompt] = useState<CodeAction | null>(null);
   const [myPanelOpen, setMyPanelOpen] = useState(false);
 
+  // 分享链接 /?focus=ID：mount 时一次性读 URL，不放进 state（filter 改动不会丢这个）
+  const [focusId] = useState<string | null>(() => searchParams.get('focus'));
+  // items 加载完后判断 focus 商品是否存在；不存在显示"该商品已下架"banner
+  const focusFound = !!focusId && items.some(it => it.id === focusId);
+  const focusMissing = !!focusId && !loading && items.length > 0 && !focusFound;
+
   // 改任何 filter 都自动滚回顶部（除了 q 输入，那个用户在打字时不打断）
   const setFilters = useCallback((updater: (f: Filters) => Filters) => {
     setFiltersRaw(prev => {
@@ -275,6 +281,13 @@ function HomePageInner() {
         </div>
 
         <section className="flex-1 min-w-0">
+          {/* focus 命中失败提示（?focus=ID 但商品已下架/被筛掉） */}
+          {focusMissing && (
+            <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+              你访问的商品可能已下架 / 已售出，下面是其他在售商品。
+            </div>
+          )}
+
           {/* 最近浏览 strip：仅在有历史时显示，自动过滤掉已下架/删除的 */}
           {!loading && items.length > 0 && <RecentViewStrip items={items} />}
 
@@ -305,6 +318,7 @@ function HomePageInner() {
                 <ItemCard
                   key={item.id}
                   item={item}
+                  autoExpand={item.id === focusId}
                   onEdit={(it)        => setCodePrompt({ kind: 'edit',   item: it })}
                   onMarkSold={(it)    => setCodePrompt({ kind: 'delete', item: it })}
                   onReport={handleReport}

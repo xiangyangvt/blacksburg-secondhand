@@ -100,20 +100,33 @@ export function ListingCard({
   onEdit,
   onDelete,
   onReport,
+  autoExpand = false,
 }: {
   listing: Listing;
   onApply: (l: Listing) => void;
   onEdit?: (l: Listing) => void;
   onDelete?: (l: Listing) => void;
   onReport?: (l: Listing) => void;
+  /** 分享链接 /roommates?focus=ID 打开时，对应卡片自动展开 + scroll */
+  autoExpand?: boolean;
 }) {
   const [imgIdx, setImgIdx] = useState(0);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(autoExpand);
   const [zoomIdx, setZoomIdx] = useState<number | null>(null);
   const [origin, setOrigin] = useState('');
   const cardRef = useRef<HTMLElement>(null);
 
   useEffect(() => { setOrigin(clientOrigin()); }, []);
+
+  // autoExpand 触发：focus 进来的目标卡片自动展开 + scroll
+  useEffect(() => {
+    if (!autoExpand) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      })
+    );
+  }, [autoExpand]);
 
   const typeMeta = LISTING_TYPES.find(t => t.id === listing.type);
   const typeColor = TYPE_COLOR[listing.type] ?? TYPE_COLOR.find_roommate;

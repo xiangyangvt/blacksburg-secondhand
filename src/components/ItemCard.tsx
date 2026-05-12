@@ -48,6 +48,7 @@ export function ItemCard({
   onReport,
   onDeleteInquiryAsSeller,
   refresh,
+  autoExpand = false,
 }: {
   item: Item;
   onEdit: (item: Item) => void;
@@ -55,6 +56,8 @@ export function ItemCard({
   onReport: (item: Item) => void;
   onDeleteInquiryAsSeller: (item: Item, inquiryId: string) => void;
   refresh: () => void;
+  /** 主页用 ?focus=ID 进来时，对应卡片 mount 自动展开 + 滚到视野中央 */
+  autoExpand?: boolean;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -63,11 +66,21 @@ export function ItemCard({
   const [revealed, setRevealed] = useState<{ contactType: string; contactValue: string; customContactLabel: string | null } | null>(null);
   const [revealing, setRevealing] = useState(false);
   // 统一的展开状态 —— 三种 click 来源都 toggle 它
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(autoExpand);
   const photos = item.photoUrls;
   const cardRef = useRef<HTMLDivElement>(null);
   const [origin, setOrigin] = useState('');
   useEffect(() => { setOrigin(clientOrigin()); }, []);
+
+  // autoExpand 触发：分享链接 ?focus=ID 打开时，对应卡片自动展开 + scroll
+  useEffect(() => {
+    if (!autoExpand) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      })
+    );
+  }, [autoExpand]);
 
   /**
    * 两种展开来源都 toggle 同一个 expanded 状态：
