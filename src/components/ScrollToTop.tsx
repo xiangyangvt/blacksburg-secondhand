@@ -19,7 +19,8 @@ export function ScrollToTop() {
     <button
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
       aria-label="回到顶部"
-      className="fixed left-5 bottom-5 z-20 w-14 h-14 rounded-full bg-white border border-stone-300 shadow-lg flex items-center justify-center hover:bg-stone-50 active:bg-stone-100"
+      // 半透明 + backdrop-blur：浮在卡片上不会"压住"内容；hover 恢复实色
+      className="fixed left-5 bottom-5 z-20 w-14 h-14 rounded-full bg-white/80 backdrop-blur-sm border border-stone-300 shadow-lg flex items-center justify-center hover:bg-white active:bg-stone-100 transition-colors"
     >
       {/* 上箭头 + 顶部横线 = 跳到最顶（媒体播放器风格） */}
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
