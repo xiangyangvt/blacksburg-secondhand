@@ -12,6 +12,7 @@ import { FabPostButton } from '@/components/FabPostButton';
 import { ShareButton } from '@/components/ShareButton';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
 import { RecentViewStrip } from '@/components/RecentViewStrip';
+import { PlatformTabs } from '@/components/PlatformTabs';
 import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
@@ -206,7 +207,11 @@ function HomePageInner() {
       {/* 顶栏 — 全程 sticky（含手机端折叠筛选），始终黏在屏顶
           设计 V2：去 emoji、wordmark 取代 emoji 站名、品牌红只在主 CTA 出现 */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+        {/* 平台切换 tab 行（最顶上） */}
+        <div className="max-w-6xl mx-auto px-3 md:px-4 pt-2 pb-1.5">
+          <PlatformTabs />
+        </div>
+        <div className="max-w-6xl mx-auto px-4 pb-3 flex items-center gap-3">
           {/* 最左：Wordmark 站名 */}
           <h1 className="text-base sm:text-lg font-bold text-stone-900 whitespace-nowrap tracking-tight flex-shrink-0">
             黑堡<span className="text-brand">二手</span>
