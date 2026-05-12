@@ -22,6 +22,8 @@ export const messages = {
   'list.empty':            { zh: '暂无符合条件的商品',                        en: 'No items match your filters' },
   'list.beFirst':          { zh: '做第一个发布的人 →',                        en: 'Be the first to post →' },
   'list.count':            { zh: '共 {n} 件',                                en: '{n} item(s)' },
+  'list.recentTitle':      { zh: '🕒 你最近看过的',                          en: '🕒 Recently viewed' },
+  'list.recentClear':      { zh: '清空',                                    en: 'Clear' },
 
   // 筛选侧栏
   'filter.category':       { zh: '分类',                                    en: 'Category' },

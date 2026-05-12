@@ -41,19 +41,35 @@ jobs:
           pg_dump --version
 
       - name: Run pg_dump
+        # pipefail 关键 —— 不加的话 pg_dump 失败但 gzip 成功，会得到一个 20 字节的空 .gz
+        # 之前就这么"骗"了我们一次，artifact 上传了个空文件没人发现
+        shell: bash
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          set -euo pipefail
           mkdir -p backups
           TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
+          RAW="backups/bbsh-dump-${TIMESTAMP}.sql"
           OUTFILE="backups/bbsh-dump-${TIMESTAMP}.sql.gz"
-          echo "▶ dumping to $OUTFILE..."
-          # --no-owner / --no-acl：恢复时不要求与原 owner / 角色匹配
-          # --clean / --if-exists：恢复时先 DROP 旧表，便于干净重建
-          # gzip：压缩，10-20× 缩小
+
+          echo "▶ dumping to $RAW (will gzip after)..."
+          # 两步走：先 dump 到文件（pg_dump 失败立刻退出），再 gzip
+          # 不再用 `pg_dump | gzip` 管道，避免错误被 gzip 吞掉
           pg_dump "$DATABASE_URL" \
             --no-owner --no-acl --clean --if-exists \
-            | gzip -9 > "$OUTFILE"
+            --file="$RAW"
+
+          # Sanity check：dump 文件应该 > 1KB（即使空库也至少有 schema CREATE 语句）
+          RAW_BYTES=$(stat -c%s "$RAW" 2>/dev/null || stat -f%z "$RAW")
+          echo "raw dump size: $RAW_BYTES bytes"
+          if [ "$RAW_BYTES" -lt 1024 ]; then
+            echo "::error::dump 太小了（$RAW_BYTES 字节），疑似 pg_dump 静默失败"
+            head -20 "$RAW" || true
+            exit 1
+          fi
+
+          gzip -9 "$RAW"
           SIZE=$(du -h "$OUTFILE" | cut -f1)
           echo "✓ 备份完成: $OUTFILE ($SIZE)"
           ls -lh backups/

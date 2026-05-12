@@ -43,11 +43,22 @@ mkdir -p backups
 TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
 OUTFILE="backups/bbsh-dump-${TIMESTAMP}.sql.gz"
 
-say "备份到 ${OUTFILE} ..."
+RAW="backups/bbsh-dump-${TIMESTAMP}.sql"
+
+say "备份到 ${RAW} ..."
+# 两步走（先 dump 到文件，再 gzip）—— 避免 pg_dump | gzip 管道吞错误
 pg_dump "$DATABASE_URL" \
   --no-owner --no-acl --clean --if-exists \
-  | gzip -9 > "$OUTFILE"
+  --file="$RAW"
 
+RAW_BYTES=$(stat -c%s "$RAW" 2>/dev/null || stat -f%z "$RAW")
+if [ "$RAW_BYTES" -lt 1024 ]; then
+  err "dump 太小了（$RAW_BYTES 字节），可能连数据库失败"
+  head -20 "$RAW" || true
+  exit 1
+fi
+
+gzip -9 "$RAW"
 SIZE=$(du -h "$OUTFILE" | cut -f1)
 ok "备份完成：$OUTFILE ($SIZE)"
 echo ""
