@@ -218,18 +218,15 @@ export function ListingPostModal({
 
   // 生活方式
   const [showLifestyle, setShowLifestyle] = useState(false);
-  const [lifestyle, setLifestyle] = useState<Record<string, string>>(() => {
-    if (!initialListing) return {};
-    return {
-      sleepSchedule: initialListing.sleepSchedule ?? '',
-      cleanliness:   initialListing.cleanliness ?? '',
-      social:        initialListing.social ?? '',
-      smoking:       initialListing.smoking ?? '',
-      drinking:      initialListing.drinking ?? '',
-      pets:          initialListing.pets ?? '',
-      guests:        initialListing.guests ?? '',
-    };
-  });
+  const [lifestyle, setLifestyle] = useState<Record<string, string>>(() => ({
+    sleepSchedule: initialListing?.sleepSchedule ?? '',
+    cleanliness:   initialListing?.cleanliness ?? '',
+    social:        initialListing?.social ?? '',
+    smoking:       initialListing?.smoking ?? '',
+    drinking:      initialListing?.drinking ?? '',
+    pets:          initialListing?.pets ?? '',
+    guests:        initialListing?.guests ?? '',
+  }));
 
   // 联系方式
   const [contactType, setContactType] = useState<string>(initialListing?.contactType ?? 'wechat');
