@@ -21,6 +21,7 @@ export function MobileFilterToggle({
 }) {
   const t = useT();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
 
   const categoryOptions = [
     { value: 'all',          label: t('filter.all') },
@@ -69,6 +70,7 @@ export function MobileFilterToggle({
 
         {/* 更多 */}
         <button
+          ref={moreBtnRef}
           type="button"
           onClick={() => setSheetOpen(true)}
           className="flex items-center gap-1.5 flex-shrink-0 rounded-chip border border-stone-300 bg-white hover:bg-stone-100 text-stone-700 text-sm px-3 py-1.5 transition-colors"
@@ -89,8 +91,8 @@ export function MobileFilterToggle({
         )}
       </div>
 
-      {/* 更多 sheet：里面装类型 + 时间 (类目/排序/价格 已在 chip 里覆盖) */}
-      {sheetOpen && <MoreSheet filters={filters} onChange={onChange} onClose={() => setSheetOpen(false)} />}
+      {/* 更多 panel：从"更多"chip 下方降下来，盖住下方主页内容 */}
+      {sheetOpen && <MoreSheet anchorRef={moreBtnRef} filters={filters} onChange={onChange} onClose={() => setSheetOpen(false)} />}
     </div>
   );
 }
@@ -129,7 +131,13 @@ function ChipDropdown<T extends string>({
 
   const openMenu = () => {
     const rect = btnRef.current?.getBoundingClientRect();
-    if (rect) setPos({ top: rect.bottom + 4, left: rect.left, minWidth: Math.max(rect.width, 140) });
+    if (rect) {
+      const popWidth = Math.max(rect.width, 160);
+      // clamp left：超出视口右边时把 popover 左移；保留 16px 边距
+      const maxLeft = window.innerWidth - popWidth - 16;
+      const left = Math.max(16, Math.min(rect.left, maxLeft));
+      setPos({ top: rect.bottom + 4, left, minWidth: popWidth });
+    }
     setOpen(true);
   };
 
@@ -173,8 +181,8 @@ function ChipDropdown<T extends string>({
       {open && mounted && pos && createPortal(
         <div
           ref={menuRef}
-          style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.minWidth }}
-          className="z-[60] bg-white border border-stone-200 rounded-lg shadow-overlay overflow-hidden max-h-[60vh] overflow-y-auto"
+          style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.minWidth, maxWidth: 'calc(100vw - 32px)' }}
+          className="z-[60] bg-white border border-stone-200 rounded-lg shadow-overlay overflow-hidden max-h-[60dvh] overflow-y-auto"
         >
           {options.map(o => (
             <button
@@ -223,9 +231,14 @@ function PriceChip({
     ? `$${filters.minPrice || '0'}–${filters.maxPrice || '∞'}`
     : '';
 
+  const POPOVER_W = 260;
   const openMenu = () => {
     const rect = btnRef.current?.getBoundingClientRect();
-    if (rect) setPos({ top: rect.bottom + 4, left: rect.left });
+    if (rect) {
+      const maxLeft = window.innerWidth - POPOVER_W - 16;
+      const left = Math.max(16, Math.min(rect.left, maxLeft));
+      setPos({ top: rect.bottom + 4, left });
+    }
     setOpen(true);
   };
 
@@ -267,7 +280,7 @@ function PriceChip({
       {open && mounted && pos && createPortal(
         <div
           ref={menuRef}
-          style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: 240 }}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: POPOVER_W }}
           className="z-[60] bg-white border border-stone-200 rounded-lg shadow-overlay p-3"
         >
           <div className="text-xs text-stone-500 mb-2">价格 (USD)</div>
@@ -310,40 +323,40 @@ function PriceChip({
 }
 
 /* ============================================================
-   MoreSheet: bottom sheet 装类型 + 时间 + 全部清空
+   MoreSheet: 从"更多"chip 下方降下来的 panel（不是底部 sheet）
    ============================================================ */
 function MoreSheet({
+  anchorRef,
   filters,
   onChange,
   onClose,
 }: {
+  anchorRef: React.RefObject<HTMLButtonElement>;
   filters: Filters;
   onChange: (next: Partial<Filters>) => void;
   onClose: () => void;
 }) {
   const t = useT();
-  const dragStartY = useRef<number | null>(null);
+  // panel 顶部 Y：紧贴"更多"chip 下方
+  const [topY, setTopY] = useState(140);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
+    const rect = anchorRef.current?.getBoundingClientRect();
+    if (rect) setTopY(rect.bottom + 8);
     return () => { document.body.style.overflow = ''; };
-  }, []);
+  }, [anchorRef]);
 
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
-      <div className="fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-2xl shadow-overlay max-h-[70vh] flex flex-col">
-        <div
-          className="flex justify-center py-3"
-          onTouchStart={e => { dragStartY.current = e.touches[0].clientY; }}
-          onTouchMove={e => {
-            if (dragStartY.current === null) return;
-            if (e.touches[0].clientY - dragStartY.current > 30) { onClose(); dragStartY.current = null; }
-          }}
-        >
-          <span className="block w-10 h-1 bg-stone-300 rounded-full" />
-        </div>
-        <div className="flex items-center justify-between px-5 pb-2">
+      {/* 顶部锚定，最大高度用 dvh（动态视口高度，iOS Safari 折叠地址栏后会更新）；
+          calc 减去 topY 和底部 12px 边距，确保 panel 不溢出 */}
+      <div
+        style={{ top: topY, maxHeight: `calc(100dvh - ${topY + 12}px)` }}
+        className="fixed inset-x-3 z-50 bg-white rounded-2xl shadow-overlay flex flex-col overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-5 pt-4 pb-2">
           <h2 className="text-base font-semibold text-stone-900">更多筛选</h2>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-100" aria-label="关闭"><X size={20} /></button>
         </div>

@@ -1,14 +1,14 @@
--- Sprint 4 L1+L2：室友&转租 数据模型
+-- Sprint 4 L1：室友&转租 数据模型
 --
 -- 新建：
 --   Listing 表（4 种类型 A/B/C/D）
 --   Application 表（申请-同意流程）
 -- 扩展：
 --   Report 表加 listingId / applicationId / 新 targetType
--- 迁移：
---   旧 housing 类目 Item → Listing
---   sell (转租) → type=sublet (C)；buy (求租) → type=co_rent (B)
---   原 item 保留不删（status 不变），但应用层会从 /api/items 过滤掉 category=housing
+--
+-- 数据迁移：取消（旧 housing 类目只剩 Sean 自己 1 条，手动重发更简单可靠）
+-- 处理方式：/api/items GET 把 category='housing' 的 row 排除，前端看不到；
+--           Sean 在 /我的发布 二手 tab 里可看到老的 housing item，手动删除后到 /roommates 重发
 
 -- ====== CreateTable: Listing ======
 CREATE TABLE "Listing" (
@@ -100,38 +100,4 @@ CREATE INDEX "Report_inquiryId_idx"     ON "Report"("inquiryId");
 CREATE INDEX "Report_listingId_idx"     ON "Report"("listingId");
 CREATE INDEX "Report_applicationId_idx" ON "Report"("applicationId");
 
--- ====== L2: 数据迁移 housing items → Listing ======
--- 旧 sell (转租) → type='sublet' (C)
--- 旧 buy  (求租) → type='co_rent' (B)
--- 其他字段尽量映射；不能解析的字段留默认值
--- 注意：原 Item 行不删，但应用层 GET /api/items 会过滤掉 category='housing'
-INSERT INTO "Listing" (
-    "id", "type",
-    "posterGender", "lookingForGender",
-    "title", "description", "photoUrls",
-    "hasPlace", "areas",
-    "budgetMin", "budgetMax",
-    "contactType", "contactValue", "customContactLabel",
-    "editCodeHash", "status",
-    "createdAt", "updatedAt", "bumpedAt",
-    "ipAddress", "utmSource",
-    "migratedFromItem"
-)
-SELECT
-    -- 用同样的 id 但加前缀，避免 collision（万一以后想再迁移一次）
-    'mig_' || "id",
-    CASE WHEN "type" = 'sell' THEN 'sublet' ELSE 'co_rent' END,
-    'unspecified',
-    'any',
-    "title", "description", "photoUrls",
-    CASE WHEN "type" = 'sell' THEN 1 ELSE 0 END,
-    '[]',
-    "price", "price",                         -- 用原价填 min/max 两个；用户后续可改
-    "contactType", "contactValue", "customContactLabel",
-    "editCodeHash", "status",
-    "createdAt", "updatedAt", "bumpedAt",
-    "ipAddress", "utmSource",
-    1
-FROM "Item"
-WHERE "category" = 'housing'
-  AND "status" IN ('active', 'hidden');     -- deleted 的不迁
+-- 数据迁移部分已删除（见文件顶部注释）

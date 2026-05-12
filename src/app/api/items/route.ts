@@ -26,9 +26,11 @@ export async function GET(req: NextRequest) {
   const since    = sp.get('since');    // 1d | 1w | 1m | all
   const sort     = sp.get('sort') ?? 'newest'; // newest | oldest | priceAsc | priceDesc
 
-  const where: any = { status: 'active' };
+  // 排除 housing 类目 —— 已经被 Sprint 4 迁到独立的"室友&转租"平台
+  // 老用户的 housing item 行还在 Item 表里，但前端不再展示
+  const where: any = { status: 'active', NOT: { category: 'housing' } };
   if (type === 'sell' || type === 'buy') where.type = type;
-  if (category && VALID_CATEGORIES.includes(category as any)) where.category = category;
+  if (category && VALID_CATEGORIES.includes(category as any) && category !== 'housing') where.category = category;
   if (q) {
     // 搜索匹配标题、描述、自定义标签、联系方式
     // ⚠️ 故意不匹配识别码 hash —— 那是密码，不能成为搜索目标
