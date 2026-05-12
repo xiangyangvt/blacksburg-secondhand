@@ -4,6 +4,7 @@
 // 之前是 /cart 独立路由，Sean 反馈要保持扁平化网站，改成主页内 modal 浮窗
 
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import NextImage from 'next/image';
 import {
@@ -20,6 +21,8 @@ export function ShoppingCartPanel({ onClose }: { onClose: () => void }) {
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   // ESC 关 + 锁滚动
   useEffect(() => {
@@ -103,9 +106,12 @@ export function ShoppingCartPanel({ onClose }: { onClose: () => void }) {
     return `你好，我想买你发布的这几件：\n${lines.join('\n')}`;
   };
 
-  return (
+  // Portal 到 body：跳出主页 sticky header 的 backdrop-blur stacking context，
+  // 否则 panel 的 fixed 定位会被困在 header 的 z-30 层里，导致 modal 不能盖住主页内容
+  if (!mounted) return null;
+  return createPortal(
     <div
-      className="fixed inset-0 z-40 bg-black/50 flex items-start justify-center overflow-y-auto p-3 sm:p-4"
+      className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center overflow-y-auto p-3 sm:p-4"
       onClick={onClose}
     >
       <div
@@ -299,6 +305,7 @@ export function ShoppingCartPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
