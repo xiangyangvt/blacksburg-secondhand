@@ -11,7 +11,7 @@ import { ScrollToTop } from '@/components/ScrollToTop';
 import { FabPostButton } from '@/components/FabPostButton';
 import { ShareButton } from '@/components/ShareButton';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
-import { RecentViewStrip } from '@/components/RecentViewStrip';
+import { getRecentViewIds } from '@/lib/recentViews';
 import { PlatformSwitcher } from '@/components/PlatformSwitcher';
 import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
@@ -92,6 +92,14 @@ function HomePageInner() {
   const focusFound = !!focusId && items.some(it => it.id === focusId);
   const focusMissing = !!focusId && !loading && items.length > 0 && !focusFound;
 
+  // "最近看过" client-side filter：用 localStorage 里的 recentViewIds 过滤 items
+  // 用 state + mount 时读避免 SSR/hydration 不一致
+  const [recentIds, setRecentIds] = useState<string[]>([]);
+  useEffect(() => { setRecentIds(getRecentViewIds('item')); }, [items]);
+  const visibleItems = filters.onlyRecent
+    ? items.filter(it => recentIds.includes(it.id))
+    : items;
+
   // 改任何 filter 都自动滚回顶部（除了 q 输入，那个用户在打字时不打断）
   const setFilters = useCallback((updater: (f: Filters) => Filters) => {
     setFiltersRaw(prev => {
@@ -150,7 +158,13 @@ function HomePageInner() {
     try {
       const res = await fetch(`/api/items?${sp}`);
       const data = await res.json();
-      setItems(data.items ?? []);
+      const fetched: Item[] = data.items ?? [];
+      setItems(fetched);
+      // 跟购物清单同步：找不到 id 的 cart item 静默移除；找到的更新 snapshot
+      try {
+        const { syncCart } = await import('@/lib/shoppingCart');
+        syncCart(fetched);
+      } catch {}
     } finally {
       setLoading(false);
     }
@@ -289,33 +303,39 @@ function HomePageInner() {
             </div>
           )}
 
-          {/* 最近浏览 strip：仅在有历史时显示，自动过滤掉已下架/删除的 */}
-          {!loading && items.length > 0 && <RecentViewStrip items={items} />}
+          {/* "最近看过" 改成 filter chip 了（在 MobileFilterToggle / FilterSidebar 里），不再 strip */}
 
           {/* 计数 */}
-          {!loading && items.length > 0 && (
+          {!loading && visibleItems.length > 0 && (
             <div className="text-xs text-stone-500 mb-2 px-1">
-              {t('list.count', { n: items.length })}
+              {t('list.count', { n: visibleItems.length })}
+              {filters.onlyRecent && <span className="text-brand ml-1">· 只看最近浏览过</span>}
             </div>
           )}
 
           {loading ? (
             <SkeletonGrid />
-          ) : items.length === 0 ? (
+          ) : visibleItems.length === 0 ? (
             <div className="text-center text-stone-500 py-20">
               <PackageOpen size={56} strokeWidth={1.2} className="mx-auto mb-4 text-stone-300" />
-              <div className="mb-3">{t('list.empty')}</div>
-              <button
-                onClick={() => setPostModal({ mode: 'create' })}
-                className="text-brand underline hover:text-brand-dark"
-              >
-                {t('list.beFirst')}
-              </button>
+              <div className="mb-3">
+                {filters.onlyRecent
+                  ? '你没浏览过任何符合筛选条件的商品'
+                  : t('list.empty')}
+              </div>
+              {!filters.onlyRecent && (
+                <button
+                  onClick={() => setPostModal({ mode: 'create' })}
+                  className="text-brand underline hover:text-brand-dark"
+                >
+                  {t('list.beFirst')}
+                </button>
+              )}
             </div>
           ) : (
             // 手机 2 列网格 / 桌面单列宽卡
             <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
-              {items.map(item => (
+              {visibleItems.map(item => (
                 <ItemCard
                   key={item.id}
                   item={item}

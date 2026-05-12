@@ -1,8 +1,10 @@
 'use client';
 
+import { Clock } from 'lucide-react';
 import { CATEGORIES } from '@/lib/utils';
 import { useT } from '@/i18n/I18nProvider';
 import { Dropdown } from './Dropdown';
+import { CartButton } from './CartButton';
 
 export type Filters = {
   type:     'all' | 'sell' | 'buy';
@@ -12,6 +14,8 @@ export type Filters = {
   maxPrice: string;
   since:    'all' | '1d' | '1w' | '1m';
   sort:     'newest' | 'oldest' | 'priceAsc' | 'priceDesc';
+  /** 只看我最近浏览过的（localStorage 里的 recentViewIds） — client-side 过滤 */
+  onlyRecent?: boolean;
 };
 
 export function FilterSidebar({
@@ -25,6 +29,23 @@ export function FilterSidebar({
 
   return (
     <aside className="md:w-56 md:flex-shrink-0 space-y-4">
+      {/* 桌面端购物车入口 + 最近看过 toggle —— 顶部独立小栏 */}
+      <div className="flex items-center justify-between gap-2 bg-white border border-stone-200 rounded-lg p-2">
+        <button
+          type="button"
+          onClick={() => onChange({ onlyRecent: !filters.onlyRecent })}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-chip border text-xs transition-colors ${
+            filters.onlyRecent
+              ? 'border-brand bg-brand/10 text-brand font-medium'
+              : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-100'
+          }`}
+        >
+          <Clock size={13} />
+          最近看过
+        </button>
+        <CartButton />
+      </div>
+
       {/* 分类 — 手机平铺换行，桌面纵列 */}
       <div>
         <h3 className="text-xs uppercase font-semibold text-stone-500 mb-2">{t('filter.category')}</h3>

@@ -7,8 +7,9 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { SlidersHorizontal, ChevronDown, X } from 'lucide-react';
+import { SlidersHorizontal, ChevronDown, X, Clock } from 'lucide-react';
 import { FilterSidebar, type Filters } from './FilterSidebar';
+import { CartButton } from './CartButton';
 import { CATEGORIES } from '@/lib/utils';
 import { useT } from '@/i18n/I18nProvider';
 
@@ -40,55 +41,77 @@ export function MobileFilterToggle({
     || filters.category !== 'all'
     || filters.minPrice || filters.maxPrice
     || filters.since !== 'all'
-    || filters.sort !== 'newest';
+    || filters.sort !== 'newest'
+    || filters.onlyRecent;
 
   const clearAll = () => onChange({
     type: 'all', category: 'all',
     minPrice: '', maxPrice: '',
     since: 'all', sort: 'newest',
+    onlyRecent: false,
   });
 
   return (
     <div className="md:hidden">
-      {/* flex-wrap 替代 horizontal scroll：4 个 chip 放不下时自动换行而非藏在右侧 */}
-      <div className="flex flex-wrap items-center gap-1.5 py-0.5">
-        <ChipDropdown
-          label="类目"
-          value={filters.category}
-          options={categoryOptions}
-          defaultValue="all"
-          onChange={(v) => onChange({ category: v })}
-        />
-        <ChipDropdown
-          label="排序"
-          value={filters.sort}
-          options={sortOptions}
-          defaultValue="newest"
-          onChange={(v) => onChange({ sort: v as Filters['sort'] })}
-        />
-        <PriceChip filters={filters} onChange={onChange} />
+      {/* 外层 flex：左侧 chips 换行不影响右侧购物车 "墙"
+          align-items: start 让购物车按钮固定在第一行高度 */}
+      <div className="flex items-start gap-2">
+        <div className="flex-1 flex flex-wrap items-center gap-1.5 py-0.5">
+          <ChipDropdown
+            label="类目"
+            value={filters.category}
+            options={categoryOptions}
+            defaultValue="all"
+            onChange={(v) => onChange({ category: v })}
+          />
+          <ChipDropdown
+            label="排序"
+            value={filters.sort}
+            options={sortOptions}
+            defaultValue="newest"
+            onChange={(v) => onChange({ sort: v as Filters['sort'] })}
+          />
+          <PriceChip filters={filters} onChange={onChange} />
 
-        {/* 更多 */}
-        <button
-          ref={moreBtnRef}
-          type="button"
-          onClick={() => setSheetOpen(true)}
-          className="flex items-center gap-1.5 flex-shrink-0 rounded-chip border border-stone-300 bg-white hover:bg-stone-100 text-stone-700 text-sm px-3 py-1.5 transition-colors"
-        >
-          <SlidersHorizontal size={13} />
-          更多
-        </button>
-
-        {/* 一键清空（仅有 active filter 时才出现） */}
-        {hasAnyFilter && (
+          {/* 最近看过：toggle chip，激活时变 brand 高亮 */}
           <button
             type="button"
-            onClick={clearAll}
-            className="flex-shrink-0 text-xs text-stone-500 hover:text-stone-900 px-2 py-1.5 underline-offset-2 hover:underline whitespace-nowrap"
+            onClick={() => onChange({ onlyRecent: !filters.onlyRecent })}
+            className={`inline-flex items-center gap-1 flex-shrink-0 rounded-chip border text-sm px-3 py-1.5 transition-colors ${
+              filters.onlyRecent
+                ? 'border-brand bg-brand/10 text-brand font-medium'
+                : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-100'
+            }`}
           >
-            清空
+            <Clock size={13} />
+            <span className="whitespace-nowrap">最近看过</span>
           </button>
-        )}
+
+          {/* 更多 */}
+          <button
+            ref={moreBtnRef}
+            type="button"
+            onClick={() => setSheetOpen(true)}
+            className="flex items-center gap-1.5 flex-shrink-0 rounded-chip border border-stone-300 bg-white hover:bg-stone-100 text-stone-700 text-sm px-3 py-1.5 transition-colors"
+          >
+            <SlidersHorizontal size={13} />
+            更多
+          </button>
+
+          {/* 一键清空（仅有 active filter 时才出现） */}
+          {hasAnyFilter && (
+            <button
+              type="button"
+              onClick={clearAll}
+              className="flex-shrink-0 text-xs text-stone-500 hover:text-stone-900 px-2 py-1.5 underline-offset-2 hover:underline whitespace-nowrap"
+            >
+              清空
+            </button>
+          )}
+        </div>
+
+        {/* 购物车入口 —— 固定在筛选条右侧的"墙"，左侧 chip 多了换行不影响这里 */}
+        <CartButton className="flex-shrink-0 self-start" />
       </div>
 
       {/* 更多 panel：从"更多"chip 下方降下来，盖住下方主页内容 */}

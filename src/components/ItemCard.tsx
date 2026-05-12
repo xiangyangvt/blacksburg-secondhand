@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { Pencil, Trash2, Flag, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { Pencil, Trash2, Flag, X, ChevronLeft, ChevronRight, Eye, ShoppingBag, Check } from 'lucide-react';
 import { CopyButton } from './CopyButton';
 import { ShareButton } from './ShareButton';
 import { InquirySection } from './InquirySection';
 import { MoreMenu } from './MoreMenu';
 import { buildItemShareText, clientOrigin } from '@/lib/shareText';
 import { markRecentView } from '@/lib/recentViews';
+import { addToCart, removeFromCart, isInCart, subscribeCart } from '@/lib/shoppingCart';
 import {
   categoryLabel,
   contactTypeLabel,
@@ -65,6 +66,43 @@ export function ItemCard({
   // 联系方式 reveal 状态：null = 未点击；object = 已 reveal
   const [revealed, setRevealed] = useState<{ contactType: string; contactValue: string; customContactLabel: string | null } | null>(null);
   const [revealing, setRevealing] = useState(false);
+  // 购物清单状态：mount + subscribe 让按钮状态跨标签/同标签同步
+  const [inCart, setInCart] = useState(false);
+  const [cartBusy, setCartBusy] = useState(false);
+  useEffect(() => {
+    const update = () => setInCart(isInCart(item.id));
+    update();
+    return subscribeCart(update);
+  }, [item.id]);
+
+  const toggleCart = async () => {
+    if (cartBusy) return;
+    if (inCart) {
+      removeFromCart(item.id);
+      return;
+    }
+    setCartBusy(true);
+    try {
+      // 加入清单 = 用户的明确购买意向 → 顺便 reveal 联系方式拿 contactValue（同时给卖家 reveal count +1）
+      const res = await fetch(`/api/items/${item.id}/reveal-contact`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || '加入失败'); return; }
+      const ret = addToCart({
+        id: item.id,
+        title: item.title,
+        price: item.price,
+        itemType: item.type,
+        category: item.category,
+        photoUrl: item.photoUrls[0] ?? null,
+        contactType: data.contactType,
+        contactValue: data.contactValue,
+        customContactLabel: data.customContactLabel,
+      });
+      if (ret === 'full') alert('购物清单满了（≤50 件），先去清单删除一些再加');
+    } finally {
+      setCartBusy(false);
+    }
+  };
   // 统一的展开状态 —— 三种 click 来源都 toggle 它
   const [expanded, setExpanded] = useState(autoExpand);
   const photos = item.photoUrls;
@@ -163,25 +201,40 @@ export function ItemCard({
       {/* === 图片：手机端封面图（正方形）/ 桌面端缩略图横排 === */}
       {photos.length > 0 && (
         <>
-          {/* Mobile：只显示第一张作为封面，点击进 lightbox */}
-          <button
-            onClick={() => setZoomIdx(0)}
-            className="md:hidden block w-full aspect-square mb-2 relative overflow-hidden rounded"
-            aria-label={t('card.viewPhoto', { i: 1, n: photos.length })}
-          >
-            <Image
-              src={photos[0]}
-              alt={item.title}
-              fill
-              sizes="(max-width: 768px) 50vw, 0"
-              className="object-cover"
-            />
-            {photos.length > 1 && (
-              <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
-                {t('card.photoCount', { n: photos.length })}
-              </span>
-            )}
-          </button>
+          {/* Mobile：封面图 + 右上角购物车浮按钮（按钮在图外面，避免 button-in-button） */}
+          <div className="md:hidden relative mb-2">
+            <button
+              onClick={() => setZoomIdx(0)}
+              className="block w-full aspect-square overflow-hidden rounded"
+              aria-label={t('card.viewPhoto', { i: 1, n: photos.length })}
+            >
+              <Image
+                src={photos[0]}
+                alt={item.title}
+                fill
+                sizes="(max-width: 768px) 50vw, 0"
+                className="object-cover"
+              />
+              {photos.length > 1 && (
+                <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                  {t('card.photoCount', { n: photos.length })}
+                </span>
+              )}
+            </button>
+            {/* 加入清单浮按钮 —— 紧凑模式买家明确"想要"的入口 */}
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleCart(); }}
+              disabled={cartBusy}
+              aria-label={inCart ? '从购物清单移除' : '加入购物清单'}
+              className={`absolute top-1.5 right-1.5 w-8 h-8 rounded-full flex items-center justify-center shadow-card active:scale-90 transition-all disabled:opacity-60 ${
+                inCart
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-white/90 text-stone-700 hover:bg-white backdrop-blur-sm'
+              }`}
+            >
+              {inCart ? <Check size={16} strokeWidth={3} /> : <ShoppingBag size={15} strokeWidth={2.2} />}
+            </button>
+          </div>
 
           {/* Desktop：完整缩略图横排 */}
           <div className="hidden md:flex gap-2 overflow-x-auto no-scrollbar mb-3 pb-1">
@@ -299,6 +352,20 @@ export function ItemCard({
             <CopyButton text={revealed.contactValue} />
           </>
         )}
+        {/* 加入清单 / 已加入：买家批量买的入口（展开模式文字按钮） */}
+        <button
+          onClick={toggleCart}
+          disabled={cartBusy}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs whitespace-nowrap transition-colors disabled:opacity-50 ${
+            inCart
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+              : 'bg-white border-stone-300 text-stone-700 hover:bg-stone-100'
+          }`}
+        >
+          {inCart ? <Check size={13} strokeWidth={2.5} /> : <ShoppingBag size={13} />}
+          {inCart ? '已加入清单' : '加入清单'}
+        </button>
+
         {/* 分享：内容是「标题 — $价格 + 链接」，方便丢到微信里 */}
         {origin && (
           <ShareButton
