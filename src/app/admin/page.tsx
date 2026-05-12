@@ -111,7 +111,91 @@ async function cancelPendingDeletionAction(formData: FormData) {
 }
 
 // ===== 主页面 =====
-export default async function AdminPage({ searchParams }: { searchParams: { error?: string } }) {
+type Period = 'hour' | 'day' | 'week' | 'month';
+
+const PERIOD_CONFIG: Record<Period, {
+  label: string;
+  bucketCount: number;
+  sinceMs: number;
+  bucketKey: (d: Date) => string;     // 把 date 归到所在 bucket 的 key
+  bucketStart: (offset: number) => Date; // 当前往前 offset 个 bucket 的开始时间（用于预填空桶）
+  formatLabel: (key: string) => string;
+}> = {
+  hour: {
+    label: '小时',
+    bucketCount: 24,
+    sinceMs: 24 * 3600e3,
+    bucketKey: (d) => `${d.toISOString().slice(0, 13)}:00`, // YYYY-MM-DDTHH:00
+    bucketStart: (offset) => {
+      const d = new Date();
+      d.setMinutes(0, 0, 0);
+      d.setHours(d.getHours() - offset);
+      return d;
+    },
+    formatLabel: (key) => {
+      const hh = key.slice(11, 13);
+      return `${parseInt(hh, 10)}:00`;
+    },
+  },
+  day: {
+    label: '天',
+    bucketCount: 14,
+    sinceMs: 14 * 86400e3,
+    bucketKey: (d) => d.toISOString().slice(0, 10), // YYYY-MM-DD
+    bucketStart: (offset) => {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - offset);
+      return d;
+    },
+    formatLabel: (key) => {
+      const [, m, dd] = key.split('-');
+      return `${parseInt(m, 10)}/${parseInt(dd, 10)}`;
+    },
+  },
+  week: {
+    label: '周',
+    bucketCount: 12,
+    sinceMs: 12 * 7 * 86400e3,
+    // 周一为周起点（getDay: 0=日 1=一 ... 6=六）
+    bucketKey: (d) => {
+      const monday = new Date(d);
+      monday.setHours(0, 0, 0, 0);
+      const dow = monday.getDay();
+      const diff = dow === 0 ? -6 : 1 - dow;
+      monday.setDate(monday.getDate() + diff);
+      return monday.toISOString().slice(0, 10);
+    },
+    bucketStart: (offset) => {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      const dow = d.getDay();
+      const diff = dow === 0 ? -6 : 1 - dow;
+      d.setDate(d.getDate() + diff - offset * 7);
+      return d;
+    },
+    formatLabel: (key) => {
+      const [, m, dd] = key.split('-');
+      return `${parseInt(m, 10)}/${parseInt(dd, 10)}`;
+    },
+  },
+  month: {
+    label: '月',
+    bucketCount: 6,
+    sinceMs: 6 * 31 * 86400e3,
+    bucketKey: (d) => d.toISOString().slice(0, 7), // YYYY-MM
+    bucketStart: (offset) => {
+      const d = new Date();
+      d.setDate(1);
+      d.setHours(0, 0, 0, 0);
+      d.setMonth(d.getMonth() - offset);
+      return d;
+    },
+    formatLabel: (key) => `${parseInt(key.slice(5, 7), 10)}月`,
+  },
+};
+
+export default async function AdminPage({ searchParams }: { searchParams: { error?: string; period?: string } }) {
   // 没设密码或还是默认密码：拒绝
   if (!getAdminPassword()) {
     return (
@@ -185,11 +269,16 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     take: 100,
   });
 
-  // 访问统计 —— 近 14 天每日浏览量 / 独立访客，按平台分桶（二手 vs 室友）
+  // 访问统计 —— 按选定时间跨度（小时/天/周/月）和平台分桶
   // 二手：/、/item/[id]；室友：/roommates；其它（/my、/admin 等）忽略
-  const since14 = new Date(Date.now() - 14 * 86400e3);
+  const period: Period = (['hour', 'day', 'week', 'month'].includes(searchParams.period ?? '')
+    ? searchParams.period
+    : 'day') as Period;
+  const cfg = PERIOD_CONFIG[period];
+
+  const since = new Date(Date.now() - cfg.sinceMs);
   const views = await prisma.pageView.findMany({
-    where: { createdAt: { gte: since14 } },
+    where: { createdAt: { gte: since } },
     select: { createdAt: true, visitorId: true, path: true },
     take: 50000,
   });
@@ -198,12 +287,13 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     if (p === '/roommates' || p.startsWith('/roommates')) return 'listing';
     return null;
   };
-  // 每个平台单独建桶
+
+  // 预填空桶（保证 chart 连续 + 顺序）
   const buildBuckets = () => {
     const m = new Map<string, { pageviews: number; visitors: Set<string> }>();
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400e3);
-      m.set(d.toISOString().slice(0, 10), { pageviews: 0, visitors: new Set() });
+    for (let i = cfg.bucketCount - 1; i >= 0; i--) {
+      const key = cfg.bucketKey(cfg.bucketStart(i));
+      m.set(key, { pageviews: 0, visitors: new Set() });
     }
     return m;
   };
@@ -215,10 +305,10 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
   for (const v of views) {
     const kind = classifyPath(v.path);
     if (!kind) continue;
-    const day = v.createdAt.toISOString().slice(0, 10);
+    const key = cfg.bucketKey(v.createdAt);
     const m = kind === 'item' ? itemBuckets : listingBuckets;
     const vset = kind === 'item' ? itemVisitors : listingVisitors;
-    const b = m.get(day);
+    const b = m.get(key);
     if (b) {
       b.pageviews += 1;
       b.visitors.add(v.visitorId);
@@ -226,8 +316,8 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     }
   }
   const toSeries = (m: Map<string, { pageviews: number; visitors: Set<string> }>) =>
-    Array.from(m.entries()).map(([day, b]) => ({
-      day,
+    Array.from(m.entries()).map(([key, b]) => ({
+      label: cfg.formatLabel(key),
       pageviews: b.pageviews,
       visitors: b.visitors.size,
     }));
@@ -270,10 +360,29 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
 
       {/* 访问统计柱状图 —— 二手 / 室友 分开（独立截图分享） */}
       <section className="mb-8 space-y-4">
-        <h2 className="text-lg font-semibold">📈 访问统计 · 近 14 天</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-lg font-semibold">📈 访问统计</h2>
+          {/* 时间跨度切换：?period=hour|day|week|month；点击触发整页刷新 */}
+          <div className="flex gap-1 text-xs">
+            {(['hour', 'day', 'week', 'month'] as const).map(p => (
+              <a
+                key={p}
+                href={`/admin?period=${p}`}
+                className={`px-3 py-1.5 rounded-chip border transition-colors ${
+                  period === p
+                    ? 'bg-brand text-white border-brand font-medium'
+                    : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-100'
+                }`}
+              >
+                {PERIOD_CONFIG[p].label}
+              </a>
+            ))}
+          </div>
+        </div>
         <TrafficChart
           title="🛒 二手"
           subtitle="/、/item/[id]"
+          period={period}
           series={itemSeries}
           totalPageviews={itemTotalPV}
           totalVisitors={itemVisitors.size}
@@ -282,6 +391,7 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
         <TrafficChart
           title="🏠 室友 & 租房"
           subtitle="/roommates"
+          period={period}
           series={listingSeries}
           totalPageviews={listingTotalPV}
           totalVisitors={listingVisitors.size}
@@ -502,6 +612,7 @@ function MiniStat({ label, value }: { label: string; value: number }) {
 function TrafficChart({
   title,
   subtitle,
+  period,
   series,
   totalPageviews,
   totalVisitors,
@@ -509,13 +620,19 @@ function TrafficChart({
 }: {
   title?: string;
   subtitle?: string;
-  series: Array<{ day: string; pageviews: number; visitors: number }>;
+  period?: Period;
+  series: Array<{ label: string; pageviews: number; visitors: number }>;
   totalPageviews: number;
   totalVisitors: number;
   barColors?: { pv: [string, string]; uv: [string, string] };
 }) {
   const gradId = `barGrad-${title?.replace(/\s+/g, '') ?? 'def'}`;
   const visitGradId = `visitGrad-${title?.replace(/\s+/g, '') ?? 'def'}`;
+  // 跨度文案
+  const periodText = period === 'hour' ? '近 24 小时'
+    : period === 'week' ? '近 12 周'
+    : period === 'month' ? '近 6 个月'
+    : '近 14 天';
   const W = 700;
   const H = 220;
   const PAD_LEFT = 28;
@@ -532,14 +649,9 @@ function TrafficChart({
   const bw = chartW / series.length;
   const barW = Math.max(4, bw * 0.6);
 
-  // x 轴只标第一天 + 最后一天（中间太挤）
-  const firstDay = series[0]?.day ?? '';
-  const lastDay = series[series.length - 1]?.day ?? '';
-  const fmtDay = (iso: string) => {
-    if (!iso) return '';
-    const [, m, d] = iso.split('-');
-    return `${parseInt(m, 10)}/${parseInt(d, 10)}`;
-  };
+  // x 轴只标首尾（中间太挤）；label 已经按 period 格式化好
+  const firstLabel = series[0]?.label ?? '';
+  const lastLabel = series[series.length - 1]?.label ?? '';
 
   return (
     <div className="bg-stone-950 rounded-card p-4 md:p-5 shadow-overlay">
@@ -550,7 +662,7 @@ function TrafficChart({
             <div className="text-base font-semibold text-white">{title}</div>
             {subtitle && <div className="text-[11px] text-stone-500 mt-0.5 font-mono">{subtitle}</div>}
           </div>
-          <div className="text-xs text-stone-500">近 14 天</div>
+          <div className="text-xs text-stone-500">{periodText}</div>
         </div>
       )}
       <div className="flex items-baseline gap-6 mb-3 flex-wrap">
@@ -602,7 +714,7 @@ function TrafficChart({
           const pvH = (d.pageviews / niceMax) * chartH;
           const vH  = (d.visitors  / niceMax) * chartH;
           return (
-            <g key={d.day}>
+            <g key={d.label + i}>
               {/* 浏览量（背景，紫色）*/}
               <rect
                 x={x}
@@ -612,7 +724,7 @@ function TrafficChart({
                 fill={`url(#${gradId})`}
                 rx={2}
               >
-                <title>{`${d.day}: ${d.pageviews} 浏览 · ${d.visitors} 访客`}</title>
+                <title>{`${d.label}: ${d.pageviews} 浏览 · ${d.visitors} 访客`}</title>
               </rect>
               {/* 独立访客（前景，蓝色叠加，宽度更窄）*/}
               <rect
@@ -629,8 +741,8 @@ function TrafficChart({
         })}
 
         {/* x 轴日期标签：首尾 */}
-        <text x={PAD_LEFT} y={H - 6} fontSize={10} fill="#71717a">{fmtDay(firstDay)}</text>
-        <text x={W - PAD_RIGHT} y={H - 6} fontSize={10} fill="#71717a" textAnchor="end">{fmtDay(lastDay)}</text>
+        <text x={PAD_LEFT} y={H - 6} fontSize={10} fill="#71717a">{firstLabel}</text>
+        <text x={W - PAD_RIGHT} y={H - 6} fontSize={10} fill="#71717a" textAnchor="end">{lastLabel}</text>
       </svg>
 
       {/* 图例 */}
