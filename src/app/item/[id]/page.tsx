@@ -25,6 +25,15 @@ async function loadItem(id: string) {
   return item;
 }
 
+// 类目中文 label（用于 OG description 信号密度）
+const CATEGORY_ZH: Record<string, string> = {
+  home: '家居家具',
+  electronics: '数码电器',
+  transport: '交通工具',
+  books: '书籍教材',
+  other: '其他',
+};
+
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const item = await loadItem(params.id);
   if (!item) {
@@ -35,8 +44,18 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   }
   const photos = parsePhotoUrls(item.photoUrls);
   const priceText = item.price === null ? '面议' : `$${item.price}`;
+  const typeText = item.type === 'sell' ? '出售' : '求购';
+  const categoryText = CATEGORY_ZH[item.category] ?? '';
   const title = `${item.title} — ${priceText} · 黑堡二手买卖`;
-  const description = item.description?.slice(0, 140) || `${item.title}，黑堡本地华人/学生二手交易`;
+
+  // description 把"信号密度"提到最高：[类型] · 价格 · 类目 · 商品描述摘要
+  // 微信 chat 分享卡片在标题下面会显示这段；信号密度越高，微信越愿意渲染
+  const descParts = [
+    `【${typeText}】${priceText}`,
+    categoryText,
+    item.description?.replace(/\s+/g, ' ').trim().slice(0, 80),
+  ].filter(Boolean);
+  const description = descParts.join(' · ') || `${item.title}，黑堡本地华人/学生二手交易`;
 
   // 微信兼容性优化：
   // 1. 用 Cloudinary 转成 1200×1200 JPG —— 强制 jpg 而不是 webp，微信/QQ 的图片渲染对 webp 仍偶发不稳
@@ -97,6 +116,9 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
       ...inq,
       createdAt: inq.createdAt.toISOString(),
       sellerRepliedAt: inq.sellerRepliedAt?.toISOString() ?? null,
+      // 留言人联系方式也脱敏：用户点"查看联系方式"才会调 API 拿
+      contactValue: '',
+      customContactLabel: null,
     })) as any,
   };
 

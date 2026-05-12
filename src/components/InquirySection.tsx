@@ -57,6 +57,30 @@ export function InquirySection({
   const [replyCode, setReplyCode] = useState('');
   const [replySubmitting, setReplySubmitting] = useState(false);
 
+  // 留言人联系方式 reveal 状态：inquiryId → { contactValue, customContactLabel }
+  // contactValue 在 GET 接口里已脱敏；点击"查看联系方式"才调 reveal API 拿到
+  const [revealedInq, setRevealedInq] = useState<Record<string, { contactValue: string; customContactLabel: string | null }>>({});
+  const [revealingId, setRevealingId] = useState<string | null>(null);
+
+  const revealInquiryContact = async (inquiryId: string) => {
+    if (revealedInq[inquiryId] || revealingId === inquiryId) return;
+    setRevealingId(inquiryId);
+    try {
+      const res = await fetch(`/api/inquiries/${inquiryId}/reveal-contact`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setRevealedInq(prev => ({
+          ...prev,
+          [inquiryId]: { contactValue: data.contactValue, customContactLabel: data.customContactLabel },
+        }));
+      } else {
+        alert(data.error || '查看失败');
+      }
+    } finally {
+      setRevealingId(null);
+    }
+  };
+
   const submit = async () => {
     if (!contactValue.trim() || !message.trim()) {
       alert(t('inq.errEmpty'));
@@ -90,11 +114,12 @@ export function InquirySection({
     }
   };
 
+  // confirm prompt：现在 inquiry.contactValue 已脱敏，prompt 改为只问，不展示原值
+  const confirmContactPrompt = (inq: Inquiry) =>
+    prompt(`请输入你留言时填的 ${contactTypeLabel(inq.contactType, inq.customContactLabel, locale)} 来确认身份：`);
+
   const deleteSelf = async (inq: Inquiry) => {
-    const cv = prompt(t('inq.confirmContact', {
-      label: contactTypeLabel(inq.contactType, inq.customContactLabel, locale),
-      value: inq.contactValue,
-    }));
+    const cv = confirmContactPrompt(inq);
     if (!cv) return;
     const res = await fetch(`/api/inquiries/${inq.id}?contactValue=${encodeURIComponent(cv)}`, { method: 'DELETE' });
     if (!res.ok) {
@@ -106,10 +131,7 @@ export function InquirySection({
   };
 
   const editSelf = async (inq: Inquiry) => {
-    const cv = prompt(t('inq.confirmContact', {
-      label: contactTypeLabel(inq.contactType, inq.customContactLabel, locale),
-      value: inq.contactValue,
-    }));
+    const cv = confirmContactPrompt(inq);
     if (!cv) return;
     const newMsg = prompt(t('inq.editPrompt'), inq.message);
     if (!newMsg || !newMsg.trim()) return;
@@ -210,10 +232,23 @@ export function InquirySection({
               {/* 买家留言 */}
               <div>
                 <div className="flex flex-wrap items-center gap-2 text-stone-600 text-xs mb-1">
-                  <span className="font-medium text-stone-800">
-                    {contactTypeLabel(inq.contactType, inq.customContactLabel, locale)}: {inq.contactValue}
-                  </span>
-                  <CopyButton text={inq.contactValue} />
+                  {/* 留言人联系方式：默认隐藏，点"查看联系方式"按钮才显示 */}
+                  {revealedInq[inq.id] ? (
+                    <>
+                      <span className="font-medium text-stone-800">
+                        {contactTypeLabel(inq.contactType, revealedInq[inq.id].customContactLabel, locale)}: {revealedInq[inq.id].contactValue}
+                      </span>
+                      <CopyButton text={revealedInq[inq.id].contactValue} />
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => revealInquiryContact(inq.id)}
+                      disabled={revealingId === inq.id}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-chip bg-brand text-white text-[11px] font-medium hover:bg-brand-dark active:scale-95 disabled:opacity-50"
+                    >
+                      {revealingId === inq.id ? '加载中…' : '查看联系方式'}
+                    </button>
+                  )}
                   <span className="text-stone-400">·</span>
                   <span>{timeAgo(inq.createdAt, locale)}</span>
                   <span className="ml-auto flex gap-1">

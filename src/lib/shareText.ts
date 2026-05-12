@@ -1,5 +1,11 @@
 // 把商品组装成"微信复制 → 粘贴 → 别人能看懂"的纯文本
 // 链接默认带 utm_source=share 便于后台统计分享带量
+//
+// OG_VERSION = 给分享链接附加的 cache-buster query。微信对一个 URL 抓 OG 后会
+// 缓存最长 7 天，如果首次抓取时 OG 还没接好（无图/无描述），后面改了 OG 微信
+// 也不会重新抓。每次大改 OG 后 bump 这个版本号，新分享链接的 URL 就跟旧缓存
+// 不同，微信会重新抓一遍。
+const OG_VERSION = '2';
 
 import { itemCopyText } from './utils';
 import type { ItemType } from './utils';
@@ -16,7 +22,8 @@ export function buildItemShareText(opts: {
 }): string {
   const source = opts.source ?? 'share';
   const headline = itemCopyText(opts.title, opts.price, opts.itemType, opts.category);
-  const url = `${opts.origin}/item/${opts.itemId}?utm_source=${encodeURIComponent(source)}`;
+  // og=v2 用来 bust 微信的 OG 缓存（详见 OG_VERSION 注释）
+  const url = `${opts.origin}/item/${opts.itemId}?utm_source=${encodeURIComponent(source)}&og=v${OG_VERSION}`;
   return `${headline}\n${url}`;
 }
 
@@ -26,7 +33,7 @@ export function buildSiteShareText(opts: {
   source?: string;
 }): string {
   const source = opts.source ?? 'share';
-  const url = `${opts.origin}/?utm_source=${encodeURIComponent(source)}`;
+  const url = `${opts.origin}/?utm_source=${encodeURIComponent(source)}&og=v${OG_VERSION}`;
   // 中文友好的一句话介绍
   return `黑堡二手买卖 · 本地华人/学生免登录二手平台\n${url}`;
 }
@@ -53,7 +60,7 @@ export function buildListingShareText(opts: {
 
   const areaStr = opts.areas.length > 0 ? ' · ' + opts.areas.slice(0, 2).join('/') : '';
   const headline = `【${opts.typeLabel}】${opts.title} · ${budgetStr}${areaStr}`;
-  const url = `${opts.origin}/roommates?listing=${opts.listingId}&utm_source=${encodeURIComponent(source)}`;
+  const url = `${opts.origin}/roommates?listing=${opts.listingId}&utm_source=${encodeURIComponent(source)}&og=v${OG_VERSION}`;
   return `${headline}\n${url}`;
 }
 

@@ -79,6 +79,12 @@ export async function GET(req: NextRequest) {
     contactValue: '',                 // 隐私：默认隐藏，前端点"查看联系方式"才调 reveal API 拿
     customContactLabel: null,         // 同上：可能含敏感个人信息
     // contactType 保留：UI 用它显示"微信"/"手机"等标签，类型本身不敏感
+    // 留言里的联系方式同样脱敏：留言人填的 contact 也要点 reveal 才出现
+    inquiries: it.inquiries.map(inq => ({
+      ...inq,
+      contactValue: '',
+      customContactLabel: null,
+    })),
   }));
 
   return NextResponse.json({ items: serialized });
