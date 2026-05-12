@@ -21,6 +21,7 @@ import {
   typeLabel,
 } from '@/lib/utils';
 import { buildItemShareText, clientOrigin } from '@/lib/shareText';
+import { markRecentView } from '@/lib/recentViews';
 import { useT, useLocale } from '@/i18n/I18nProvider';
 import type { Item } from './ItemCard';
 
@@ -34,7 +35,11 @@ export function ItemDetailView({ item }: { item: Item }) {
   const [codePrompt, setCodePrompt] = useState<'delete' | { kind: 'sellerDelInq'; inquiryId: string } | null>(null);
   const [origin, setOrigin] = useState('');
 
-  useEffect(() => { setOrigin(clientOrigin()); }, []);
+  useEffect(() => {
+    setOrigin(clientOrigin());
+    // 访问 detail 页 = 强烈的浏览意图，记进最近浏览
+    markRecentView(item.id);
+  }, [item.id]);
 
   // Lightbox 键盘控制
   useEffect(() => {

@@ -8,6 +8,7 @@ import { ShareButton } from './ShareButton';
 import { InquirySection } from './InquirySection';
 import { MoreMenu } from './MoreMenu';
 import { buildItemShareText, clientOrigin } from '@/lib/shareText';
+import { markRecentView } from '@/lib/recentViews';
 import {
   categoryLabel,
   contactTypeLabel,
@@ -71,6 +72,9 @@ export function ItemCard({
     setExpanded(prev => {
       const next = !prev;
       if (next) {
+        // 展开 = 用户对这件商品感兴趣 → 记进"最近浏览"
+        markRecentView(item.id);
+
         // 双 rAF 等 col-span-2 + 内容渲染都完成
         requestAnimationFrame(() =>
           requestAnimationFrame(() => {
@@ -133,6 +137,7 @@ export function ItemCard({
   return (
     <div
       ref={cardRef}
+      data-item-id={item.id}
       onClick={onCardClick}
       className={`bg-white rounded-lg shadow-sm border ${expanded ? 'border-brand/40' : 'border-stone-200'} p-3 md:p-4 hover:shadow-md transition-all cursor-pointer scroll-mt-24 ${expanded ? 'col-span-2 md:col-span-1' : ''}`}
     >

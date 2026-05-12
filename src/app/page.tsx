@@ -11,6 +11,7 @@ import { ScrollToTop } from '@/components/ScrollToTop';
 import { FabPostButton } from '@/components/FabPostButton';
 import { ShareButton } from '@/components/ShareButton';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
+import { RecentViewStrip } from '@/components/RecentViewStrip';
 import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
@@ -276,6 +277,9 @@ function HomePageInner() {
         </div>
 
         <section className="flex-1 min-w-0">
+          {/* 最近浏览 strip：仅在有历史时显示，自动过滤掉已下架/删除的 */}
+          {!loading && items.length > 0 && <RecentViewStrip items={items} />}
+
           {/* 计数 */}
           {!loading && items.length > 0 && (
             <div className="text-xs text-stone-500 mb-2 px-1">
