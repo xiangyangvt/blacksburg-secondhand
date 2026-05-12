@@ -3,7 +3,7 @@
 // /roommates 主页 — Sprint 4 L6（满）
 // L6 后半：filter chip 行（URL query 同步）+ ListingCard 双态
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, PackageOpen, Construction } from 'lucide-react';
 import { ListingCard, type Listing } from '@/components/ListingCard';
@@ -43,7 +43,22 @@ function filtersToQuery(f: ListingFilters): URLSearchParams {
   return sp;
 }
 
+// Next.js 要求：用了 useSearchParams() 的组件必须包在 <Suspense> 里才能预渲染
 export default function RoommatesPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen">
+        <div className="max-w-6xl mx-auto px-3 md:px-4 py-4">
+          <SkeletonGrid />
+        </div>
+      </main>
+    }>
+      <RoommatesContent />
+    </Suspense>
+  );
+}
+
+function RoommatesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
