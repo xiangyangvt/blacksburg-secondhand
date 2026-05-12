@@ -161,13 +161,14 @@ function HomePageInner() {
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
   const handleEdit = async (code: string, item: Item) => {
-    const res = await fetch(`/api/items/${item.id}`, {
-      method: 'PATCH',
+    // 用专门的 verify-code 端点（之前是发"假 PATCH"验证，hack 性质，改用干净的方式）
+    const res = await fetch(`/api/items/${item.id}/verify-code`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ editCode: code, title: item.title }),
+      body: JSON.stringify({ editCode: code }),
     });
-    if (!res.ok) {
-      const data = await res.json();
+    const data = await res.json();
+    if (!res.ok || !data.valid) {
       alert(data.error || t('code.errWrong'));
       return;
     }

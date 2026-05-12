@@ -123,7 +123,18 @@ function RoommatesContent() {
 
   const handleEditConfirm = async (code: string) => {
     if (!codePrompt || codePrompt.kind !== 'edit') return;
-    // 用 GET 不能拿 contactValue（公开 API 把它擦了）；最稳是从 localStorage 取（卖家本人会有）
+    // 先验证识别码 —— 错码不让进编辑界面（避免用户填一堆才被告知失败）
+    const res = await fetch(`/api/listings/${codePrompt.listing.id}/verify-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ editCode: code }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.valid) {
+      alert(data.error || '识别码错误');
+      return; // 留在 EditCodePrompt，让用户重试
+    }
+    // 通过 → 用 GET 不能拿 contactValue（公开 API 擦了）；从 localStorage 取（卖家本人会有）
     let contactValue = '';
     try { contactValue = localStorage.getItem('hb_my_contact_value') ?? ''; } catch {}
     setEditTarget({
@@ -138,6 +149,17 @@ function RoommatesContent() {
 
   const handleDeleteConfirm = async (code: string) => {
     if (!codePrompt || codePrompt.kind !== 'delete') return;
+    // 先验证识别码（错码不弹"确认删除"骚扰用户）
+    const v = await fetch(`/api/listings/${codePrompt.listing.id}/verify-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ editCode: code }),
+    });
+    const vData = await v.json();
+    if (!v.ok || !vData.valid) {
+      alert(vData.error || '识别码错误');
+      return;
+    }
     if (!confirm('删除后无法恢复，确定？')) return;
     const id = codePrompt.listing.id;
     const res = await fetch(`/api/listings/${id}?editCode=${encodeURIComponent(code)}`, { method: 'DELETE' });
