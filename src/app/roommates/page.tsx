@@ -11,6 +11,7 @@ import { RecentListingStrip } from '@/components/RecentListingStrip';
 import { PlatformSwitcher } from '@/components/PlatformSwitcher';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
 import { ListingPostModal } from '@/components/ListingPostModal';
+import { ListingApplyModal } from '@/components/ListingApplyModal';
 import { captureUtmFromUrl } from '@/lib/utm';
 
 export default function RoommatesPage() {
@@ -18,6 +19,7 @@ export default function RoommatesPage() {
   const [loading, setLoading] = useState(true);
   const [myPanelOpen, setMyPanelOpen] = useState(false);
   const [postModalOpen, setPostModalOpen] = useState(false);
+  const [applyTarget, setApplyTarget] = useState<Listing | null>(null);
 
   useEffect(() => { captureUtmFromUrl(); }, []);
 
@@ -34,10 +36,7 @@ export default function RoommatesPage() {
 
   useEffect(() => { fetchListings(); }, [fetchListings]);
 
-  // L8 还没做，先用 alert 占位
-  const onApply = (l: Listing) => {
-    alert(`申请联系: ${l.title}\n\nL8 申请 modal 即将上线`);
-  };
+  const onApply = (l: Listing) => setApplyTarget(l);
   const onPost = () => setPostModalOpen(true);
 
   return (
@@ -105,6 +104,14 @@ export default function RoommatesPage() {
         <ListingPostModal
           onClose={() => setPostModalOpen(false)}
           onSaved={fetchListings}
+        />
+      )}
+
+      {applyTarget && (
+        <ListingApplyModal
+          listing={applyTarget}
+          onClose={() => setApplyTarget(null)}
+          onSent={fetchListings}
         />
       )}
     </main>
