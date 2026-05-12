@@ -3,6 +3,50 @@
 import type { Locale, MessageKey } from '@/i18n/messages';
 import { messages } from '@/i18n/messages';
 
+// ===== 室友&转租平台常量 =====
+
+/** 室友 listing 4 种类型 */
+export const LISTING_TYPES = [
+  { id: 'find_roommate', i18nKey: 'listing.type.find_roommate' as const, label: '找室友',     intent: 'home_owner' },     // A
+  { id: 'co_rent',       i18nKey: 'listing.type.co_rent'       as const, label: '合租伙伴',   intent: 'team_up' },        // B
+  { id: 'sublet',        i18nKey: 'listing.type.sublet'        as const, label: '转租',       intent: 'lease_transfer' }, // C
+  { id: 'summer',        i18nKey: 'listing.type.summer'        as const, label: '暑期短租',   intent: 'short_term' },     // D
+] as const;
+export type ListingTypeId = typeof LISTING_TYPES[number]['id'];
+
+/** 黑堡常见居住区域（chips 多选） */
+export const LISTING_AREAS = [
+  'Downtown',
+  'Foxridge',
+  'Hethwood',
+  'Oak Lane',
+  'Toms Creek',
+  'University City',
+  '其他',
+] as const;
+
+/** 性别选项 */
+export const LISTING_GENDERS = ['F', 'M', 'nb', 'unspecified'] as const;
+export type ListingGender = typeof LISTING_GENDERS[number];
+
+/** 找谁 = 是否接受跨性别 */
+export const LISTING_LOOKING_FOR = ['F-only', 'M-only', 'any'] as const;
+export type ListingLookingFor = typeof LISTING_LOOKING_FOR[number];
+
+/** 年龄档（5 岁档） */
+export const LISTING_AGE_RANGES = ['<22', '22-25', '25-30', '30+'] as const;
+
+/** 7 个生活方式维度 + 选项 */
+export const LIFESTYLE_DIMS = {
+  sleepSchedule: ['early', 'late', 'flexible'],
+  cleanliness:   ['neat', 'average', 'casual'],
+  social:        ['quiet', 'occasional', 'frequent'],
+  smoking:       ['no', 'ok', 'yes'],
+  drinking:      ['no', 'occasional', 'frequent'],
+  pets:          ['none', 'cat', 'dog', 'other'],
+  guests:        ['no', 'occasional', 'ok'],
+} as const;
+
 export const CATEGORIES = [
   { id: 'home',        i18nKey: 'cat.home'        as const },
   { id: 'electronics', i18nKey: 'cat.electronics' as const },
