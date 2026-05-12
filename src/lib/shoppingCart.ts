@@ -19,6 +19,18 @@ export type CartItem = {
   customContactLabel: string | null;
 };
 
+// fire-and-forget 通知 server cart 变化（用于 visitor 去重的真实 cartCount 计数）
+// 失败不影响本地状态：本地是 source of truth，server 是 best-effort 聚合视图
+function notifyServer(itemId: string, action: 'add' | 'remove'): void {
+  if (typeof window === 'undefined') return;
+  fetch(`/api/items/${itemId}/cart`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 function load(): CartItem[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -64,16 +76,19 @@ export function addToCart(snapshot: Omit<CartItem, 'addedAt'>): true | 'exists' 
   if (cart.length >= MAX) return 'full';
   cart.push({ ...snapshot, addedAt: Date.now() });
   save(cart);
+  notifyServer(snapshot.id, 'add');
   return true;
 }
 
 export function removeFromCart(itemId: string): void {
   save(load().filter(c => c.id !== itemId));
+  notifyServer(itemId, 'remove');
 }
 
 export function removeMany(ids: string[]): void {
   const set = new Set(ids);
   save(load().filter(c => !set.has(c.id)));
+  ids.forEach(id => notifyServer(id, 'remove'));
 }
 
 /**
@@ -113,9 +128,14 @@ export function syncCart(items: Array<{
       customContactLabel: typeof it.customContactLabel === 'string' ? it.customContactLabel : c.customContactLabel,
     });
   }
+  // 找出静默移除的 ids，通知 server 减计数（item 被卖家 hidden 但未 delete 的情况）
+  const nextIds = new Set(next.map(n => n.id));
+  const removedIds = cart.filter(c => !nextIds.has(c.id)).map(c => c.id);
+
   // 只在有变化时才写回，避免无谓 dispatch
   if (next.length !== cart.length || next.some((n, i) => JSON.stringify(n) !== JSON.stringify(cart[i]))) {
     save(next);
+    removedIds.forEach(id => notifyServer(id, 'remove'));
   }
 }
 

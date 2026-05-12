@@ -677,9 +677,9 @@ function MyItemRow({
           <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
             {categoryLabel(item.category, locale)}
           </span>
-          {!isDraft && typeof item.contactRevealCount === 'number' && item.contactRevealCount > 0 && (
-            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200" title="累计被查看联系方式 / 加入购物清单的次数（粗略热度指标）">
-              🛍 在 {item.contactRevealCount} 人的购物清单
+          {!isDraft && typeof (item as any).cartCount === 'number' && (item as any).cartCount > 0 && (
+            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200" title="买家把这件加进购物清单的独立人数（visitor 去重）">
+              🛍 在 {(item as any).cartCount} 人的购物清单
             </span>
           )}
           <span className="text-stone-400 ml-auto">{timeAgo(item.createdAt, locale)}</span>

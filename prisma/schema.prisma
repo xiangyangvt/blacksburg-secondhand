@@ -33,8 +33,9 @@ model Item {
   utmSource           String?  // 用户首次访问时的 ?utm_source=xxx 或 ?from=xxx；用于渠道分析
   contactRevealCount  Int      @default(0)  // 联系方式被点击展示的累计次数（同 IP 24h 内去重）
 
-  inquiries Inquiry[]
-  reports   Report[]  @relation("ItemReports")
+  inquiries   Inquiry[]
+  reports     Report[]     @relation("ItemReports")
+  cartEntries CartEntry[]
 
   @@index([status, createdAt])
   @@index([category])
@@ -64,6 +65,21 @@ model Inquiry {
 
   @@index([itemId, createdAt])
   @@index([contactValue])
+}
+
+// 二手购物清单 —— 买家把感兴趣的 item 加进本地购物清单时，server 也记一笔
+// 用现有的 hb_vid cookie 跟 PageView 共用一个 visitor 概念
+// 每个 (itemId, visitorId) 唯一约束 = 真实"独立持有人数"，去重，移除时 delete
+model CartEntry {
+  id        String   @id @default(cuid())
+  itemId    String
+  visitorId String   // 来自 hb_vid cookie
+  addedAt   DateTime @default(now())
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, visitorId])
+  @@index([itemId])
 }
 
 // 页面访问统计 —— 用于 admin 后台自建轻量埋点

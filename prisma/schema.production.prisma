@@ -34,8 +34,9 @@ model Item {
   utmSource           String?
   contactRevealCount  Int      @default(0)
 
-  inquiries Inquiry[]
-  reports   Report[]  @relation("ItemReports")
+  inquiries   Inquiry[]
+  reports     Report[]     @relation("ItemReports")
+  cartEntries CartEntry[]
 
   @@index([status, createdAt])
   @@index([category])
@@ -63,6 +64,18 @@ model Inquiry {
 
   @@index([itemId, createdAt])
   @@index([contactValue])
+}
+
+model CartEntry {
+  id        String   @id @default(cuid())
+  itemId    String
+  visitorId String
+  addedAt   DateTime @default(now())
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, visitorId])
+  @@index([itemId])
 }
 
 model PageView {

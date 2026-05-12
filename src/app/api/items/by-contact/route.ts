@@ -15,6 +15,8 @@ function serialize(item: any) {
     ...item,
     photoUrls: parsePhotoUrls(item.photoUrls),
     editCodeHash: undefined,
+    cartCount: item._count?.cartEntries ?? 0,  // 真实"在 N 人购物清单"计数（visitor 去重）
+    _count: undefined,
   };
 }
 
@@ -28,6 +30,7 @@ export async function GET(req: NextRequest) {
     take: 200,
     include: {
       inquiries: { where: { status: 'active' }, orderBy: { createdAt: 'asc' } },
+      _count: { select: { cartEntries: true } },
     },
   });
 
@@ -53,6 +56,7 @@ export async function POST(req: NextRequest) {
     take: 200,
     include: {
       inquiries: { where: { status: 'active' }, orderBy: { createdAt: 'asc' } },
+      _count: { select: { cartEntries: true } },
     },
   });
 
