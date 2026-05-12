@@ -91,9 +91,12 @@ model Listing {
   housingLayout       String?
   moveInStart         DateTime?
   moveInEnd           DateTime?
+  moveInFuzzy         String?
   budgetMin           Int?
   budgetMax           Int?
   areas               String   @default("[]")
+  currentResidents    Int?
+  furnished           Boolean?
 
   sleepSchedule       String?
   cleanliness         String?

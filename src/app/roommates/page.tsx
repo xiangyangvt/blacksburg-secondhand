@@ -1,10 +1,10 @@
 'use client';
 
-// /roommates 主页 — Sprint 4 L6（半）
-// 这一版仅列表 + ListingCard，没接 filter chip 也没 detail 页和申请 modal
-// L7 / L8 / 后续会补全
+// /roommates 主页 — Sprint 4 L6（满）
+// L6 后半：filter chip 行（URL query 同步）+ ListingCard 双态
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, PackageOpen, Construction } from 'lucide-react';
 import { ListingCard, type Listing } from '@/components/ListingCard';
 import { RecentListingStrip } from '@/components/RecentListingStrip';
@@ -12,21 +12,62 @@ import { PlatformSwitcher } from '@/components/PlatformSwitcher';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
 import { ListingPostModal } from '@/components/ListingPostModal';
 import { ListingApplyModal } from '@/components/ListingApplyModal';
+import {
+  ListingFilterBar,
+  LISTING_FILTERS_DEFAULT,
+  type ListingFilters,
+} from '@/components/ListingFilterBar';
+import { FabPostButton } from '@/components/FabPostButton';
+import { ScrollToTop } from '@/components/ScrollToTop';
 import { captureUtmFromUrl } from '@/lib/utm';
 
+function parseFiltersFromQuery(sp: URLSearchParams): ListingFilters {
+  return {
+    type:        sp.get('type')        ?? 'all',
+    canApplyAs:  (sp.get('canApplyAs') as ListingFilters['canApplyAs']) ?? 'any',
+    areas:       sp.get('areas')?.split(',').filter(Boolean) ?? [],
+    budgetMin:   sp.get('budgetMin')   ?? '',
+    budgetMax:   sp.get('budgetMax')   ?? '',
+    sort:        (sp.get('sort') as ListingFilters['sort']) ?? 'newest',
+  };
+}
+
+function filtersToQuery(f: ListingFilters): URLSearchParams {
+  const sp = new URLSearchParams();
+  if (f.type !== 'all')         sp.set('type', f.type);
+  if (f.canApplyAs !== 'any')   sp.set('canApplyAs', f.canApplyAs);
+  if (f.areas.length > 0)       sp.set('areas', f.areas.join(','));
+  if (f.budgetMin)              sp.set('budgetMin', f.budgetMin);
+  if (f.budgetMax)              sp.set('budgetMax', f.budgetMax);
+  if (f.sort !== 'newest')      sp.set('sort', f.sort);
+  return sp;
+}
+
 export default function RoommatesPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [myPanelOpen, setMyPanelOpen] = useState(false);
   const [postModalOpen, setPostModalOpen] = useState(false);
   const [applyTarget, setApplyTarget] = useState<Listing | null>(null);
 
+  const [filters, setFilters] = useState<ListingFilters>(LISTING_FILTERS_DEFAULT);
+
   useEffect(() => { captureUtmFromUrl(); }, []);
 
-  const fetchListings = useCallback(async () => {
+  // 初次挂载：从 URL 读 filter（仅一次，后续 filter 修改 → URL）
+  useEffect(() => {
+    setFilters(parseFiltersFromQuery(new URLSearchParams(searchParams?.toString() ?? '')));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchListings = useCallback(async (f: ListingFilters) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/listings?sort=newest');
+      const sp = filtersToQuery(f);
+      if (!sp.has('sort')) sp.set('sort', 'newest');  // 兜底
+      const res = await fetch(`/api/listings?${sp.toString()}`);
       const data = await res.json();
       setListings(data.items ?? []);
     } finally {
@@ -34,7 +75,16 @@ export default function RoommatesPage() {
     }
   }, []);
 
-  useEffect(() => { fetchListings(); }, [fetchListings]);
+  useEffect(() => { fetchListings(filters); }, [filters, fetchListings]);
+
+  const onFilterChange = (next: Partial<ListingFilters>) => {
+    const merged = { ...filters, ...next };
+    setFilters(merged);
+    // 同步 URL（不刷新页面）
+    const sp = filtersToQuery(merged);
+    const qs = sp.toString();
+    router.replace(qs ? `/roommates?${qs}` : '/roommates', { scroll: false });
+  };
 
   const onApply = (l: Listing) => setApplyTarget(l);
   const onPost = () => setPostModalOpen(true);
@@ -71,6 +121,11 @@ export default function RoommatesPage() {
           </div>
         </div>
 
+        {/* Filter chip 行 */}
+        <div className="mb-3">
+          <ListingFilterBar filters={filters} onChange={onFilterChange} />
+        </div>
+
         {/* 最近浏览：仅有历史 + listings 不空时显示 */}
         {!loading && listings.length > 0 && <RecentListingStrip listings={listings} />}
 
@@ -79,7 +134,7 @@ export default function RoommatesPage() {
         ) : listings.length === 0 ? (
           <div className="text-center text-stone-500 py-20">
             <PackageOpen size={56} strokeWidth={1.2} className="mx-auto mb-4 text-stone-300" />
-            <div className="mb-3">这里还没有 listing</div>
+            <div className="mb-3">这里还没有匹配的 listing</div>
             <button
               onClick={onPost}
               className="text-brand underline hover:text-brand-dark"
@@ -88,7 +143,7 @@ export default function RoommatesPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
             {listings.map(l => (
               <ListingCard key={l.id} listing={l} onApply={onApply} />
             ))}
@@ -103,7 +158,7 @@ export default function RoommatesPage() {
       {postModalOpen && (
         <ListingPostModal
           onClose={() => setPostModalOpen(false)}
-          onSaved={fetchListings}
+          onSaved={() => fetchListings(filters)}
         />
       )}
 
@@ -111,16 +166,22 @@ export default function RoommatesPage() {
         <ListingApplyModal
           listing={applyTarget}
           onClose={() => setApplyTarget(null)}
-          onSent={fetchListings}
+          onSent={() => fetchListings(filters)}
         />
       )}
+
+      {/* 手机端浮动发布按钮 — 跟二手对齐 */}
+      <FabPostButton onClick={onPost} label="发布" ariaLabel="发布 listing" />
+
+      {/* 浮动回顶部按钮（滚动 >400px 才出现） */}
+      <ScrollToTop />
     </main>
   );
 }
 
 function SkeletonGrid() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
       {[1, 2, 3, 4].map(i => (
         <div key={i} className="bg-white rounded-card border border-stone-200 p-4 animate-pulse">
           <div className="aspect-[4/3] bg-stone-100 rounded mb-3" />

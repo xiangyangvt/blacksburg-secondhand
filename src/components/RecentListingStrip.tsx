@@ -1,8 +1,9 @@
 'use client';
 
 // "你最近看过的" — listing 版
-// 触发记录的时机：用户点击 ListingCard 的"申请联系"按钮
-// （没有展开交互的卡片，"申请意向"是最强的兴趣信号）
+// 触发记录的时机：
+//   - 点击 ListingCard 展开（明确的兴趣信号）
+//   - 点"申请联系"按钮（更强的兴趣信号）
 
 import { useEffect, useState } from 'react';
 import NextImage from 'next/image';
@@ -46,7 +47,7 @@ export function RecentListingStrip({ listings }: { listings: Listing[] }) {
       <div className="flex items-center justify-between mb-1.5 px-1">
         <h2 className="text-xs font-medium text-stone-500 flex items-center gap-1">
           <Clock size={12} />
-          你最近申请过的
+          你最近看过的
         </h2>
         <button
           onClick={onClear}

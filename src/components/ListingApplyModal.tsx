@@ -10,6 +10,7 @@ import {
   CONTACT_TYPES,
   LISTING_AGE_RANGES,
   LISTING_TYPES,
+  LISTING_GENDERS_UI,
 } from '@/lib/utils';
 import { getStoredUtmSource } from '@/lib/utm';
 import type { Listing } from './ListingCard';
@@ -123,7 +124,7 @@ export function ListingApplyModal({
         localStorage.setItem(LS_LAST_CONTACT_T, contactType);
         localStorage.setItem(LS_LAST_CONTACT_V, contactValue.trim());
       } catch {}
-      alert('✓ 申请已发送\n\n对方决定后你能在「我的发布 → 我发的申请」看到结果。\n（本期"申请记录"tab 还在路上，先用相同的联系方式 + 识别码到 /my 也能查到。）');
+      alert('✓ 申请已发送\n\n对方决定后你能在「我的发布 → 我发的申请」看到结果。');
       onSent();
       onClose();
     } finally {
@@ -145,14 +146,14 @@ export function ListingApplyModal({
           <div className="bg-stone-50 border border-stone-200 rounded-lg p-3">
             <div className="text-sm font-semibold text-stone-900 truncate">{listing.title}</div>
             <div className="text-xs text-stone-500 mt-1">
-              对方：{listing.posterGender === 'F' ? 'F' : listing.posterGender === 'M' ? 'M' : listing.posterGender === 'nb' ? '非二元' : '未透露'}
+              对方：{listing.posterGender === 'F' ? '女生' : listing.posterGender === 'M' ? '男生' : listing.posterGender === 'nb' ? '非二元' : '未透露'}
               {listing.ageRange && ` · ${listing.ageRange}`}
               {' · 找：'}
               <span className={`font-medium ${
                 listing.lookingForGender === 'any' ? 'text-stone-700' : 'text-brand'
               }`}>
-                {listing.lookingForGender === 'F-only' ? '仅 F'
-                  : listing.lookingForGender === 'M-only' ? '仅 M'
+                {listing.lookingForGender === 'F-only' ? '仅女生'
+                  : listing.lookingForGender === 'M-only' ? '仅男生'
                   : '不限性别'}
               </span>
             </div>
@@ -161,19 +162,18 @@ export function ListingApplyModal({
           {/* 性别 */}
           <div>
             <Label required>你是</Label>
-            <Pills value={applicantGender} onChange={setApplicantGender} options={[
-              { v: 'F',           l: 'F' },
-              { v: 'M',           l: 'M' },
-              { v: 'nb',          l: '非二元' },
-              { v: 'unspecified', l: '不愿透露' },
-            ]} />
+            <Pills
+              value={applicantGender}
+              onChange={setApplicantGender}
+              options={LISTING_GENDERS_UI.map(g => ({ v: g.v, l: g.l }))}
+            />
           </div>
 
           {genderBlocked && (
             <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800 flex items-start gap-2">
               <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
               <div>
-                对方在找 <strong>{listing.lookingForGender === 'F-only' ? '仅 F' : '仅 M'}</strong>，
+                对方在找 <strong>{listing.lookingForGender === 'F-only' ? '仅女生' : '仅男生'}</strong>，
                 按你选的性别申请会被拒。可以改性别选项，或换一条 listing 申请。
               </div>
             </div>

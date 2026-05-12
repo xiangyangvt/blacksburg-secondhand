@@ -98,9 +98,12 @@ model Listing {
   housingLayout       String?  // "1B1B" 等
   moveInStart         DateTime?
   moveInEnd           DateTime?
+  moveInFuzzy         String?  // "immediate"|"within_month"|"spring_term"|"summer"|"fall_term"|"flexible" — A/B 的模糊入住时间
   budgetMin           Int?
   budgetMax           Int?
   areas               String   @default("[]") // JSON 字符串数组：["Foxridge", "Downtown"]
+  currentResidents    Int?     // A: 现住几人（你将加入 N 人）
+  furnished           Boolean? // C/D: 是否带家具
 
   // 7 个生活方式 chips
   sleepSchedule       String?  // "early" | "late" | "flexible"

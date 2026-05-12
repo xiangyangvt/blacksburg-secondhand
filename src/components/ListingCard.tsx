@@ -1,15 +1,16 @@
 'use client';
 
-// 室友 listing 卡片
-// 设计：扁平、信息密度高、申请联系是主 CTA
-// 沿用二手 ItemCard 的视觉语法（小圆点类目色、新鲜度 badge 等）
+// 室友 listing 卡片 —— 双态版（紧凑 / 展开）
+// 设计：跟二手 ItemCard 一致的 progressive disclosure 模式
+//   - 手机端默认双列紧凑（封面 + 类型 + 标题 + 预算 + 区域）
+//   - 点击 → expanded：col-span-2 占满整行，显示完整内容 + 申请联系按钮
+//   - 桌面端始终单列（grid-cols-2 md:grid-cols-1 + col-span-2 md:col-span-1）
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import NextImage from 'next/image';
 import { Mail, Calendar, MapPin } from 'lucide-react';
 import {
   LISTING_TYPES,
-  LISTING_AREAS,
   LIFESTYLE_DIMS,
   freshnessBadge,
 } from '@/lib/utils';
@@ -51,7 +52,7 @@ const TYPE_COLOR: Record<string, { chip: string; dot: string }> = {
 };
 
 const GENDER_LABEL: Record<string, string> = {
-  F: 'F女', M: 'M男', nb: '非二元', unspecified: '未透露',
+  F: '女', M: '男', nb: '非二元', unspecified: '未透露',
 };
 
 const LIFESTYLE_LABEL: Record<string, Record<string, string>> = {
@@ -91,6 +92,9 @@ export function ListingCard({
   onApply: (l: Listing) => void;
 }) {
   const [imgIdx, setImgIdx] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  const cardRef = useRef<HTMLElement>(null);
+
   const typeMeta = LISTING_TYPES.find(t => t.id === listing.type);
   const typeColor = TYPE_COLOR[listing.type] ?? TYPE_COLOR.find_roommate;
   const fresh = freshnessBadge(listing.bumpedAt ?? listing.createdAt, 'zh');
@@ -104,6 +108,29 @@ export function ListingCard({
 
   const photos = Array.isArray(listing.photoUrls) ? listing.photoUrls : [];
 
+  const toggleExpand = () => {
+    setExpanded(prev => {
+      const next = !prev;
+      if (next) {
+        // 展开 = 用户感兴趣 → 记进"最近浏览"
+        markRecentView(listing.id, 'listing');
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          })
+        );
+      }
+      return next;
+    });
+  };
+
+  // 点卡片空白处 → toggle；点按钮/缩略图等交互元素不触发
+  const onCardClick = (e: React.MouseEvent<HTMLElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, textarea, select, label')) return;
+    toggleExpand();
+  };
+
   const handleApply = () => {
     markRecentView(listing.id, 'listing');
     onApply(listing);
@@ -111,10 +138,14 @@ export function ListingCard({
 
   return (
     <article
+      ref={cardRef}
       data-listing-id={listing.id}
-      className="bg-white rounded-card shadow-card border border-stone-200 overflow-hidden hover:shadow-card-hover transition-shadow"
+      onClick={onCardClick}
+      className={`bg-white rounded-card shadow-card border overflow-hidden hover:shadow-card-hover transition-all cursor-pointer scroll-mt-24 ${
+        expanded ? 'border-brand/40 col-span-2 md:col-span-1' : 'border-stone-200'
+      }`}
     >
-      {/* 图片区 */}
+      {/* 图片区 —— 紧凑模式只显示封面，展开后才有缩略图 carousel */}
       {photos.length > 0 && (
         <div className="relative">
           <div className="aspect-[4/3] bg-stone-100 relative">
@@ -122,7 +153,7 @@ export function ListingCard({
               src={photos[imgIdx]}
               alt={listing.title}
               fill
-              sizes="(max-width:768px) 100vw, 50vw"
+              sizes="(max-width:768px) 50vw, 50vw"
               className="object-cover"
             />
             {photos.length > 1 && (
@@ -131,12 +162,13 @@ export function ListingCard({
               </div>
             )}
           </div>
-          {photos.length > 1 && (
+          {/* 多图缩略图条：只在展开时显示 */}
+          {photos.length > 1 && expanded && (
             <div className="flex gap-1 px-2 py-1 overflow-x-auto no-scrollbar bg-stone-50">
               {photos.map((url, i) => (
                 <button
                   key={i}
-                  onClick={() => setImgIdx(i)}
+                  onClick={(e) => { e.stopPropagation(); setImgIdx(i); }}
                   className={`flex-shrink-0 w-12 h-12 rounded overflow-hidden border-2 transition-colors ${
                     i === imgIdx ? 'border-brand' : 'border-transparent opacity-70'
                   }`}
@@ -150,60 +182,63 @@ export function ListingCard({
       )}
 
       <div className="p-3 md:p-4">
-        {/* 头部：类型 / 性别 / 新鲜度 */}
+        {/* 头部：类型 chip 始终显示；性别 / 新鲜度 紧凑手机端隐藏（桌面始终显示） */}
         <div className="flex items-center gap-1.5 text-xs mb-2 flex-wrap">
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border font-medium ${typeColor.chip}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${typeColor.dot}`} />
             {typeMeta?.label ?? listing.type}
           </span>
-          <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
+          <span className={`px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 ${expanded ? 'inline' : 'hidden md:inline'}`}>
             {GENDER_LABEL[listing.posterGender] ?? listing.posterGender}
             {listing.ageRange && ` · ${listing.ageRange}`}
           </span>
-          <span className={`ml-auto whitespace-nowrap ${fresh.className}`}>
+          <span className={`ml-auto whitespace-nowrap ${fresh.className} ${expanded ? 'inline' : 'hidden md:inline'}`}>
             {fresh.label}
           </span>
         </div>
 
         {/* 标题 */}
-        <h3 className="text-base md:text-lg font-semibold text-stone-900 leading-tight mb-1 line-clamp-2">
+        <h3 className={`text-base md:text-lg font-semibold text-stone-900 leading-tight mb-1 ${expanded ? '' : 'line-clamp-2'}`}>
           {listing.title}
         </h3>
 
-        {/* 预算（醒目） */}
-        <div className="text-lg md:text-xl font-bold text-brand mb-2">
+        {/* 预算 */}
+        <div className="text-base md:text-xl font-bold text-brand mb-2">
           {formatBudget(listing.budgetMin, listing.budgetMax)}
         </div>
 
-        {/* 描述 (line clamp 3 行) */}
+        {/* 描述：紧凑手机端隐藏，展开 / 桌面显示 */}
         {listing.description && (
-          <p className="text-sm text-stone-700 mb-2 line-clamp-3 whitespace-pre-wrap">
+          <p className={`text-sm text-stone-700 mb-2 whitespace-pre-wrap ${expanded ? '' : 'hidden md:block md:line-clamp-3'}`}>
             {listing.description}
           </p>
         )}
 
-        {/* 元信息行：入住时间 + 户型 + 区域 */}
+        {/* 元信息行：紧凑只显示区域；展开 / 桌面显示日期 + 户型 + 区域 */}
         <div className="flex items-center gap-3 text-xs text-stone-500 mb-2 flex-wrap">
           {(listing.moveInStart || listing.moveInEnd) && (
-            <span className="inline-flex items-center gap-1">
+            <span className={`items-center gap-1 ${expanded ? 'inline-flex' : 'hidden md:inline-flex'}`}>
               <Calendar size={12} />
               {formatDateRange(listing.moveInStart, listing.moveInEnd)}
             </span>
           )}
           {listing.housingLayout && (
-            <span>{listing.housingLayout}</span>
+            <span className={expanded ? 'inline' : 'hidden md:inline'}>{listing.housingLayout}</span>
           )}
           {listing.areas.length > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <MapPin size={12} />
-              {listing.areas.join(' · ')}
+            <span className="inline-flex items-center gap-1 truncate max-w-full">
+              <MapPin size={12} className="flex-shrink-0" />
+              <span className="truncate">
+                {expanded ? listing.areas.join(' · ') : listing.areas.slice(0, 2).join(' · ')}
+                {!expanded && listing.areas.length > 2 && ` +${listing.areas.length - 2}`}
+              </span>
             </span>
           )}
         </div>
 
-        {/* 生活方式 chips */}
+        {/* 生活方式 chips：紧凑手机端隐藏 */}
         {lifestyleChips.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-3">
+          <div className={`flex-wrap gap-1 mb-3 ${expanded ? 'flex' : 'hidden md:flex'}`}>
             {lifestyleChips.map((c, i) => (
               <span
                 key={i}
@@ -215,21 +250,26 @@ export function ListingCard({
           </div>
         )}
 
-        {/* 找谁 + 申请联系 */}
-        <div className="flex items-center justify-between pt-2 border-t border-stone-100">
+        {/* 找谁 + 申请联系：紧凑手机端隐藏；展开 / 桌面显示 */}
+        <div className={`items-center justify-between pt-2 border-t border-stone-100 ${expanded ? 'flex' : 'hidden md:flex'}`}>
           <div className="text-xs text-stone-500">
-            {listing.lookingForGender === 'F-only' ? '仅找 F'
-              : listing.lookingForGender === 'M-only' ? '仅找 M'
+            {listing.lookingForGender === 'F-only' ? '仅找女生'
+              : listing.lookingForGender === 'M-only' ? '仅找男生'
               : '不限性别'}
           </div>
           <button
-            onClick={handleApply}
+            onClick={(e) => { e.stopPropagation(); handleApply(); }}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand text-white rounded-chip text-sm font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card"
           >
             <Mail size={14} />
             申请联系
           </button>
         </div>
+
+        {/* 紧凑手机端的"点开看详情"提示 */}
+        {!expanded && (
+          <div className="md:hidden text-[11px] text-stone-400 mt-1">点开看详情 →</div>
+        )}
       </div>
     </article>
   );

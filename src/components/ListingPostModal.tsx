@@ -1,7 +1,12 @@
 'use client';
 
-// Listing 发帖 modal（A/B/C/D 四种类型走同一表单 + 条件字段）
-// 设计：顶部 4 个大按钮选类型，下方字段动态显示
+// Listing 发帖 modal —— A/B/C/D 类型差异化版
+// - 性别：男生 / 女生（不再有 nb / unspecified；DB 仍接受历史值以兼容）
+// - 年龄段：<21 / 21-25 / >25
+// - 入住时间：A/B 用模糊 chips（立即/1月内/春/暑/秋/灵活），可选具体日期
+//             C/D 用具体日期（必填）
+// - A 特有：现住几人（"你将加入 N 人"）
+// - C/D 特有：是否带家具（D 默认勾选）
 
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
@@ -10,6 +15,8 @@ import {
   LISTING_TYPES,
   LISTING_AREAS,
   LISTING_AGE_RANGES,
+  LISTING_GENDERS_UI,
+  LISTING_MOVEIN_FUZZY,
   CONTACT_TYPES,
 } from '@/lib/utils';
 import { getStoredUtmSource } from '@/lib/utm';
@@ -20,7 +27,18 @@ const LS_LAST_CONTACT_V = 'hb_my_contact_value';
 
 type TypeId = typeof LISTING_TYPES[number]['id'];
 
-// 每种类型对应的入住日期 label（A/B 是"开始可入住"，C/D 是"lease 起止"固定）
+/**
+ * 每种类型的元信息 + 字段开关
+ * - hasPlace：是否本人已有房（影响 DB 字段；A/C/D 是；B 否）
+ * - layoutLabel：户型字段显示文案
+ * - dateRequiredBoth：是否要求 start+end 都填（C/D 是）
+ * - showMoveInFuzzy：是否显示模糊 chips（A/B 是）
+ * - showCurrentResidents：是否显示"现住几人"（仅 A）
+ * - showFurnished：是否显示"是否带家具"（C/D）
+ * - defaultFurnished：furnished 字段初始值（D 默认 true，其他 false）
+ * - photoHint：照片上传的引导文案
+ * - areaHint：区域字段的副标题
+ */
 const TYPE_META: Record<TypeId, {
   label: string;
   desc: string;
@@ -29,22 +47,48 @@ const TYPE_META: Record<TypeId, {
   layoutLabel: string;
   dateLabel: string;
   dateRequiredBoth: boolean;
+  showMoveInFuzzy: boolean;
+  showCurrentResidents: boolean;
+  showFurnished: boolean;
+  defaultFurnished: boolean;
+  photoHint: string;
+  areaHint: string;
 }> = {
   find_roommate: {
-    label: '找室友',     desc: '有房，找一起住的人',  emoji: '🏠', hasPlace: true,
-    layoutLabel: '户型',  dateLabel: '可入住时间',     dateRequiredBoth: false,
+    label: '有房找室友',  desc: '有房，找一起住的人',  emoji: '🏠',
+    hasPlace: true,
+    layoutLabel: '户型', dateLabel: '可入住时间', dateRequiredBoth: false,
+    showMoveInFuzzy: true, showCurrentResidents: true, showFurnished: false,
+    defaultFurnished: false,
+    photoHint: '展现品味/性格的照片：房间、宠物、爱好都行，不需要正脸',
+    areaHint: '你现住的位置',
   },
   co_rent: {
-    label: '合租伙伴',   desc: '还没签约，找队友一起找房', emoji: '🤝', hasPlace: false,
+    label: '找队友合租',  desc: '还没签约，找队友一起找房', emoji: '🤝',
+    hasPlace: false,
     layoutLabel: '期望户型', dateLabel: '期望入住时间', dateRequiredBoth: false,
+    showMoveInFuzzy: true, showCurrentResidents: false, showFurnished: false,
+    defaultFurnished: false,
+    photoHint: '展现品味/性格的照片：宠物、书架、爱好都行，不需要正脸',
+    areaHint: '期望区域',
   },
   sublet: {
-    label: '转租',       desc: 'lease 提前结束，转出去', emoji: '📅', hasPlace: true,
-    layoutLabel: '户型',  dateLabel: 'Lease 起止日期', dateRequiredBoth: true,
+    label: '转租',        desc: 'lease 提前结束，转出去', emoji: '📅',
+    hasPlace: true,
+    layoutLabel: '户型', dateLabel: 'Lease 起止日期', dateRequiredBoth: true,
+    showMoveInFuzzy: false, showCurrentResidents: false, showFurnished: true,
+    defaultFurnished: false,
+    photoHint: '出租房间的实景图（客厅、卧室、厨房等）',
+    areaHint: '房子位置',
   },
   summer: {
-    label: '暑期短租',   desc: '暑假 2-3 个月空房',    emoji: '☀️', hasPlace: true,
-    layoutLabel: '户型',  dateLabel: '暑期日期',       dateRequiredBoth: true,
+    label: '暑期短租',    desc: '暑假 2-3 个月空房',    emoji: '☀️',
+    hasPlace: true,
+    layoutLabel: '户型', dateLabel: '暑期日期', dateRequiredBoth: true,
+    showMoveInFuzzy: false, showCurrentResidents: false, showFurnished: true,
+    defaultFurnished: true,  // 暑期短租默认带家具
+    photoHint: '出租房间的实景图（客厅、卧室、厨房等）',
+    areaHint: '房子位置',
   },
 };
 
@@ -97,7 +141,7 @@ export function ListingPostModal({
   const [type, setType] = useState<TypeId>('find_roommate');
 
   // 自我表达
-  const [posterGender, setPosterGender] = useState<string>('unspecified');
+  const [posterGender, setPosterGender] = useState<string>('');  // 强制选择
   const [ageRange, setAgeRange] = useState<string>('');
   const [lookingForGender, setLookingForGender] = useState<string>('any');
 
@@ -106,15 +150,20 @@ export function ListingPostModal({
   const [description, setDescription] = useState('');
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
 
-  // 房屋
+  // 房屋（通用）
   const [housingLayout, setHousingLayout] = useState('');
   const [moveInStart, setMoveInStart] = useState('');
   const [moveInEnd, setMoveInEnd] = useState('');
+  const [moveInFuzzy, setMoveInFuzzy] = useState('');
   const [budgetMin, setBudgetMin] = useState('');
   const [budgetMax, setBudgetMax] = useState('');
   const [areas, setAreas] = useState<string[]>([]);
 
-  // 生活方式（折叠默认隐藏）
+  // 类型特有
+  const [currentResidents, setCurrentResidents] = useState('');
+  const [furnished, setFurnished] = useState(false);
+
+  // 生活方式
   const [showLifestyle, setShowLifestyle] = useState(false);
   const [lifestyle, setLifestyle] = useState<Record<string, string>>({});
 
@@ -140,16 +189,32 @@ export function ListingPostModal({
 
   const meta = TYPE_META[type];
 
+  // 类型切换时：清理不属于当前类型的字段 + 应用默认值（特别是 D 的 furnished=true）
+  useEffect(() => {
+    if (!meta.showMoveInFuzzy) setMoveInFuzzy('');
+    if (!meta.showCurrentResidents) setCurrentResidents('');
+    if (meta.showFurnished) {
+      setFurnished(meta.defaultFurnished);
+    } else {
+      setFurnished(false);
+    }
+  }, [type]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const toggleArea = (a: string) => {
     setAreas(curr => curr.includes(a) ? curr.filter(x => x !== a) : [...curr, a]);
   };
 
   const submit = async () => {
+    if (!posterGender) return alert('请选择你的性别');
     if (!title.trim()) return alert('标题不能为空');
     if (!contactValue.trim()) return alert('联系方式不能为空');
     if (editCode.length < 6) return alert('识别码至少 6 位');
     if (meta.dateRequiredBoth && (!moveInStart || !moveInEnd)) {
-      return alert('转租 / 暑期需要填完整的起止日期');
+      return alert(`${meta.dateLabel}：起止日期都必填`);
+    }
+    if (meta.showCurrentResidents && currentResidents !== '') {
+      const n = Number(currentResidents);
+      if (!Number.isFinite(n) || n < 0 || n > 20) return alert('"现住几人"应为 0–20');
     }
 
     const payload = {
@@ -164,9 +229,14 @@ export function ListingPostModal({
       housingLayout: housingLayout.trim() || null,
       moveInStart: moveInStart || null,
       moveInEnd: moveInEnd || null,
+      moveInFuzzy: meta.showMoveInFuzzy ? (moveInFuzzy || null) : null,
       budgetMin: budgetMin === '' ? null : Number(budgetMin),
       budgetMax: budgetMax === '' ? null : Number(budgetMax),
       areas,
+      currentResidents: meta.showCurrentResidents && currentResidents !== ''
+        ? Number(currentResidents)
+        : null,
+      furnished: meta.showFurnished ? furnished : null,
       ...lifestyle,
       contactType,
       contactValue: contactValue.trim(),
@@ -200,14 +270,13 @@ export function ListingPostModal({
     <div className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-0 sm:p-4">
       <div className="bg-white w-full max-w-2xl sm:rounded-lg min-h-screen sm:min-h-0 my-0 sm:my-4">
 
-        {/* 顶部固定 */}
         <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between rounded-t-lg">
           <h2 className="text-lg font-semibold text-stone-900">发布 listing</h2>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-100" aria-label="关闭"><X size={22} /></button>
         </div>
 
         <div className="p-5 space-y-5">
-          {/* 1. 类型 4 个大按钮 */}
+          {/* 1. 类型 */}
           <section>
             <Label required>这是哪种？</Label>
             <div className="grid grid-cols-2 gap-2">
@@ -237,13 +306,14 @@ export function ListingPostModal({
           {/* 2. 自我表达 */}
           <section className="space-y-3">
             <Label>关于我（公开展示，方便对方了解你）</Label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <Sub>我是</Sub>
-                <Pills value={posterGender} onChange={setPosterGender} options={[
-                  { v: 'F', l: 'F' }, { v: 'M', l: 'M' },
-                  { v: 'nb', l: '非二元' }, { v: 'unspecified', l: '不愿透露' },
-                ]} />
+                <Sub>我是 <span className="text-brand">*</span></Sub>
+                <Pills
+                  value={posterGender}
+                  onChange={setPosterGender}
+                  options={LISTING_GENDERS_UI.map(g => ({ v: g.v, l: g.l }))}
+                />
               </div>
               <div>
                 <Sub>年龄段</Sub>
@@ -256,9 +326,9 @@ export function ListingPostModal({
             <div>
               <Sub>找谁（性别筛选基于双方自我表达）</Sub>
               <Pills value={lookingForGender} onChange={setLookingForGender} options={[
-                { v: 'any', l: '不限性别' },
-                { v: 'F-only', l: '仅 F' },
-                { v: 'M-only', l: '仅 M' },
+                { v: 'any',    l: '不限性别' },
+                { v: 'F-only', l: '仅女生' },
+                { v: 'M-only', l: '仅男生' },
               ]} />
             </div>
           </section>
@@ -271,32 +341,44 @@ export function ListingPostModal({
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 maxLength={100}
-                placeholder="一句话介绍：例 研一妹子找 9 月入住女室友"
+                placeholder={
+                  type === 'find_roommate' ? '例：研一妹子找 9 月入住女室友' :
+                  type === 'co_rent'       ? '例：男生求一起找 2B1B 室友' :
+                  type === 'sublet'        ? '例：5/15–8/15 转租 1B1B' :
+                                              '例：暑期 2 个月转租，5/20–7/30'
+                }
                 className="w-full border border-stone-300 rounded px-3 py-2"
               />
             </div>
             <div>
-              <Label>详细介绍（成色、户型、性格、希望对方等）</Label>
+              <Label>详细介绍</Label>
               <textarea
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 maxLength={2000}
                 rows={5}
-                placeholder="可写：自我介绍、希望对方的性格、生活习惯、为什么找室友等"
+                placeholder={
+                  type === 'find_roommate' || type === 'co_rent'
+                    ? '可写：自我介绍、希望对方的性格、生活习惯、为什么找室友等'
+                    : '可写：户型细节、家具配置、邻居环境、转租原因等'
+                }
                 className="w-full border border-stone-300 rounded px-3 py-2 leading-relaxed"
               />
             </div>
           </section>
 
-          {/* 4. 照片 */}
+          {/* 4. 照片（提示语随类型变化） */}
           <section>
-            <Label>照片（推荐房间 / 厨房 / 工作角 / 书架，不建议正脸自拍）</Label>
+            <Label>照片</Label>
+            <p className="text-xs text-stone-500 mb-2">{meta.photoHint}</p>
             <ImageUpload urls={photoUrls} onChange={setPhotoUrls} />
           </section>
 
-          {/* 5. 房屋字段 */}
+          {/* 5. 房屋字段（类型相关） */}
           <section className="space-y-3 bg-stone-50 rounded-lg p-3 border border-stone-200">
-            <div className="text-xs text-stone-500 uppercase font-semibold">房屋</div>
+            <div className="text-xs text-stone-500 uppercase font-semibold">
+              {meta.hasPlace ? '关于房子' : '关于你想找的房子'}
+            </div>
 
             <div>
               <Sub>{meta.layoutLabel}</Sub>
@@ -308,28 +390,97 @@ export function ListingPostModal({
               />
             </div>
 
-            <div>
-              <Sub>{meta.dateLabel}{meta.dateRequiredBoth && ' *'}</Sub>
-              <div className="flex items-center gap-2">
+            {/* A: 现住几人（你将加入 N 人） */}
+            {meta.showCurrentResidents && (
+              <div>
+                <Sub>你将加入几人（含房东 / 其他室友）</Sub>
                 <input
-                  type="date"
-                  value={moveInStart}
-                  onChange={e => setMoveInStart(e.target.value)}
-                  className="flex-1 border border-stone-300 rounded px-3 py-2"
+                  type="number" inputMode="numeric" min={0} max={20}
+                  value={currentResidents}
+                  onChange={e => setCurrentResidents(e.target.value)}
+                  placeholder="例：2"
+                  className="w-32 border border-stone-300 rounded px-3 py-2"
                 />
-                <span className="text-stone-400">至</span>
-                <input
-                  type="date"
-                  value={moveInEnd}
-                  onChange={e => setMoveInEnd(e.target.value)}
-                  className="flex-1 border border-stone-300 rounded px-3 py-2"
-                />
+                <span className="ml-2 text-xs text-stone-500">人</span>
               </div>
-            </div>
+            )}
+
+            {/* C/D: 是否带家具 */}
+            {meta.showFurnished && (
+              <div>
+                <Sub>家具</Sub>
+                <label className="inline-flex items-center gap-2 px-3 py-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={furnished}
+                    onChange={e => setFurnished(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm text-stone-700">带家具（furnished）</span>
+                </label>
+              </div>
+            )}
+
+            {/* A/B: 模糊入住时间 chips */}
+            {meta.showMoveInFuzzy && (
+              <div>
+                <Sub>{meta.dateLabel}</Sub>
+                <Pills
+                  value={moveInFuzzy}
+                  onChange={setMoveInFuzzy}
+                  options={[
+                    { v: '', l: '不填' },
+                    ...LISTING_MOVEIN_FUZZY.map(x => ({ v: x.v, l: x.l })),
+                  ]}
+                />
+                <details className="mt-2">
+                  <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-700">
+                    或填具体日期范围（可选）
+                  </summary>
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="date"
+                      value={moveInStart}
+                      onChange={e => setMoveInStart(e.target.value)}
+                      className="flex-1 border border-stone-300 rounded px-3 py-2"
+                    />
+                    <span className="text-stone-400">至</span>
+                    <input
+                      type="date"
+                      value={moveInEnd}
+                      onChange={e => setMoveInEnd(e.target.value)}
+                      className="flex-1 border border-stone-300 rounded px-3 py-2"
+                    />
+                  </div>
+                </details>
+              </div>
+            )}
+
+            {/* C/D: 具体日期（必填） */}
+            {meta.dateRequiredBoth && (
+              <div>
+                <Sub>{meta.dateLabel} <span className="text-brand">*</span></Sub>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={moveInStart}
+                    onChange={e => setMoveInStart(e.target.value)}
+                    className="flex-1 border border-stone-300 rounded px-3 py-2"
+                  />
+                  <span className="text-stone-400">至</span>
+                  <input
+                    type="date"
+                    value={moveInEnd}
+                    onChange={e => setMoveInEnd(e.target.value)}
+                    className="flex-1 border border-stone-300 rounded px-3 py-2"
+                  />
+                </div>
+              </div>
+            )}
 
             <div>
               <Sub>月租预算 (USD)</Sub>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-stone-500">$</span>
                 <input
                   type="number" inputMode="numeric" min={0}
@@ -352,7 +503,7 @@ export function ListingPostModal({
             </div>
 
             <div>
-              <Sub>区域（可多选）</Sub>
+              <Sub>{meta.areaHint}（可多选）</Sub>
               <div className="flex flex-wrap gap-1.5">
                 {LISTING_AREAS.map(a => {
                   const active = areas.includes(a);
@@ -454,7 +605,6 @@ export function ListingPostModal({
           </section>
         </div>
 
-        {/* 底部固定 */}
         <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 rounded-b-lg">
           <button onClick={onClose} className="px-4 py-2 border border-stone-300 rounded hover:bg-stone-100">
             取消

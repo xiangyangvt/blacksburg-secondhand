@@ -25,16 +25,33 @@ export const LISTING_AREAS = [
   '其他',
 ] as const;
 
-/** 性别选项 */
+/** 性别选项（DB-level，仍接受历史值 'nb'/'unspecified' 以保后向兼容）*/
 export const LISTING_GENDERS = ['F', 'M', 'nb', 'unspecified'] as const;
 export type ListingGender = typeof LISTING_GENDERS[number];
+
+/** UI-level 性别选项：发帖/申请表单只让用户选 M/F */
+export const LISTING_GENDERS_UI = [
+  { v: 'M', l: '男生' },
+  { v: 'F', l: '女生' },
+] as const;
 
 /** 找谁 = 是否接受跨性别 */
 export const LISTING_LOOKING_FOR = ['F-only', 'M-only', 'any'] as const;
 export type ListingLookingFor = typeof LISTING_LOOKING_FOR[number];
 
-/** 年龄档（5 岁档） */
-export const LISTING_AGE_RANGES = ['<22', '22-25', '25-30', '30+'] as const;
+/** 年龄档（新版 3 档） */
+export const LISTING_AGE_RANGES = ['<21', '21-25', '>25'] as const;
+
+/** 入住模糊时间 chips（A/B 用，C/D 用具体日期）*/
+export const LISTING_MOVEIN_FUZZY = [
+  { v: 'immediate',    l: '立即' },
+  { v: 'within_month', l: '1 个月内' },
+  { v: 'spring_term',  l: '春季学期' },
+  { v: 'summer',       l: '暑假' },
+  { v: 'fall_term',    l: '秋季学期' },
+  { v: 'flexible',     l: '灵活' },
+] as const;
+export const LISTING_MOVEIN_FUZZY_IDS = LISTING_MOVEIN_FUZZY.map(x => x.v) as readonly string[];
 
 /** 7 个生活方式维度 + 选项 */
 export const LIFESTYLE_DIMS = {

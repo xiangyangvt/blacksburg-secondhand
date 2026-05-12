@@ -2,7 +2,7 @@
 
 import {
   LISTING_TYPES, LISTING_AREAS, LISTING_GENDERS, LISTING_LOOKING_FOR,
-  LISTING_AGE_RANGES, LIFESTYLE_DIMS, CONTACT_TYPES,
+  LISTING_AGE_RANGES, LIFESTYLE_DIMS, CONTACT_TYPES, LISTING_MOVEIN_FUZZY_IDS,
 } from './utils';
 
 const VALID_TYPES        = LISTING_TYPES.map(t => t.id);
@@ -11,6 +11,7 @@ const VALID_GENDERS      = LISTING_GENDERS as readonly string[];
 const VALID_LOOKING_FOR  = LISTING_LOOKING_FOR as readonly string[];
 const VALID_AGE_RANGES   = LISTING_AGE_RANGES as readonly string[];
 const VALID_CONTACT_TYPES = CONTACT_TYPES.map(c => c.id);
+const VALID_MOVEIN_FUZZY  = LISTING_MOVEIN_FUZZY_IDS;
 
 /** 返回错误字符串或 null（合法） */
 export function validateListingFields(f: any): string | null {
@@ -50,6 +51,19 @@ export function validateListingFields(f: any): string | null {
     }
   }
 
+  // 新增字段
+  if (f.moveInFuzzy !== undefined && f.moveInFuzzy !== null && f.moveInFuzzy !== '' && !VALID_MOVEIN_FUZZY.includes(f.moveInFuzzy)) {
+    return '入住时间选项不合法';
+  }
+  if (f.currentResidents !== undefined && f.currentResidents !== null) {
+    if (typeof f.currentResidents !== 'number' || f.currentResidents < 0 || f.currentResidents > 20) {
+      return '现住几人不合法';
+    }
+  }
+  if (f.furnished !== undefined && f.furnished !== null && typeof f.furnished !== 'boolean') {
+    return 'furnished 字段格式不合法';
+  }
+
   return null;
 }
 
@@ -80,5 +94,8 @@ export function normalizeListingFields(f: any) {
     contactType:        f.contactType,
     contactValue:       f.contactValue.trim(),
     customContactLabel: f.customContactLabel?.trim() || null,
+    moveInFuzzy:        f.moveInFuzzy || null,
+    currentResidents:   (f.currentResidents === null || f.currentResidents === undefined || f.currentResidents === '') ? null : Math.round(Number(f.currentResidents)),
+    furnished:          f.furnished === undefined ? null : !!f.furnished,
   };
 }
