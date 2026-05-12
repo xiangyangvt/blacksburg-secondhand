@@ -29,6 +29,7 @@ import { buildItemShareText, clientOrigin } from '@/lib/shareText';
 import { ShareButton } from './ShareButton';
 import { CopyButton } from './CopyButton';
 import { PostModal } from './PostModal';
+import { ListingPostModal, type ListingEditInitial } from './ListingPostModal';
 import { EditCodePrompt } from './EditCodePrompt';
 import type { Item } from './ItemCard';
 import type { Listing } from './ListingCard';
@@ -128,6 +129,7 @@ function MyPostsBody({ onClose }: { onClose?: () => void }) {
   const [editItem, setEditItem] = useState<Item | null>(null);
   const [deleteItem, setDeleteItem] = useState<Item | null>(null);
   const [deleteListing, setDeleteListing] = useState<ListingWithStatus | null>(null);
+  const [editListing, setEditListing] = useState<ListingWithStatus | null>(null);
   const [origin, setOrigin] = useState('');
 
   useEffect(() => {
@@ -441,6 +443,7 @@ function MyPostsBody({ onClose }: { onClose?: () => void }) {
                           key={listing.id}
                           listing={listing}
                           locale={locale}
+                          onEdit={() => setEditListing(listing)}
                           onDelete={() => setDeleteListing(listing)}
                           onPublish={() => handlePublishListing(listing)}
                           isDraft={listing.status === 'draft'}
@@ -536,6 +539,17 @@ function MyPostsBody({ onClose }: { onClose?: () => void }) {
             if (!confirm('删除后无法恢复，确定？')) return;
             await handleDeleteListing(code, deleteListing);
           }}
+        />
+      )}
+
+      {/* 编辑 listing —— 用户已经在面板顶部 lookup 验证过，直接复用 editCode 打开表单 */}
+      {editListing && (
+        <ListingPostModal
+          mode="edit"
+          initialListing={editListing as ListingEditInitial}
+          initialEditCode={editCode}
+          onClose={() => setEditListing(null)}
+          onSaved={() => { setEditListing(null); lookup(); }}
         />
       )}
     </>
@@ -719,11 +733,12 @@ function MyItemRow({
 }
 
 function MyListingRow({
-  listing, locale, isDraft, onDelete, onPublish,
+  listing, locale, isDraft, onEdit, onDelete, onPublish,
 }: {
   listing: ListingWithStatus;
   locale: 'zh' | 'en';
   isDraft: boolean;
+  onEdit: () => void;
   onDelete: () => void;
   onPublish: () => void;
 }) {
@@ -809,6 +824,13 @@ function MyListingRow({
               发布
             </button>
           )}
+          <button
+            onClick={onEdit}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 transition-colors"
+          >
+            <Pencil size={13} />
+            编辑
+          </button>
           <button
             onClick={onDelete}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 transition-colors"
