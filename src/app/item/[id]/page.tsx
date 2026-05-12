@@ -48,7 +48,11 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   // 1. 用 Cloudinary 转成 1200×1200 JPG —— 强制 jpg 而不是 webp，微信/QQ 的图片渲染对 webp 仍偶发不稳
   // 2. 显式 width / height 让微信知道图片尺寸（部分版本要求）
   // 3. 同时输出 Twitter Card（其他平台 + 个别国内 scraper 也读 twitter:image）
-  const cover = photos.length > 0 ? toCloudinaryThumb(photos[0], 1200, 'jpg') : null;
+  // 4. og:image URL 末尾追加 ?ogv=4 cache buster：微信对图片 URL 也独立缓存，必须改 URL 字符串才能让它重抓
+  //    （Cloudinary 忽略未知 query，图片内容不变；只是让 URL 字符串跟旧的不一样）
+  const OG_IMG_VERSION = '4';
+  const coverRaw = photos.length > 0 ? toCloudinaryThumb(photos[0], 1200, 'jpg') : null;
+  const cover = coverRaw ? `${coverRaw}?ogv=${OG_IMG_VERSION}` : null;
 
   return {
     title,

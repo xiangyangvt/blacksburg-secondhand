@@ -5,7 +5,7 @@
 // 缓存最长 7 天，如果首次抓取时 OG 还没接好（无图/无描述），后面改了 OG 微信
 // 也不会重新抓。每次大改 OG 后 bump 这个版本号，新分享链接的 URL 就跟旧缓存
 // 不同，微信会重新抓一遍。
-const OG_VERSION = '3';
+const OG_VERSION = '4';
 
 import { itemCopyText } from './utils';
 import type { ItemType } from './utils';
