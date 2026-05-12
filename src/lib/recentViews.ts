@@ -1,62 +1,64 @@
 // 最近浏览记录：纯前端 localStorage，无登录态
-// 记录用户点击展开过的 item id（最多 10 个，按访问时间倒序）
+// 'item' 和 'listing' 各有独立的 storage key
 
-const KEY = 'hb_recent_views';
+const KEY_ITEM    = 'hb_recent_views';        // 历史兼容（不要改名，老用户已有数据）
+const KEY_LISTING = 'hb_recent_listings';
 const MAX = 10;
+
+export type ViewKind = 'item' | 'listing';
 
 type RecentEntry = {
   id: string;
-  ts: number; // 最后访问时间戳，用于排序 + 过期 / 清理
+  ts: number;
 };
 
-/** 客户端：读取最近浏览 id 列表（最新在前） */
-export function getRecentViewIds(): string[] {
+function storageKey(kind: ViewKind): string {
+  return kind === 'listing' ? KEY_LISTING : KEY_ITEM;
+}
+
+/** 取最近浏览 id 列表（最新在前）。kind 默认 'item' 保持向后兼容。 */
+export function getRecentViewIds(kind: ViewKind = 'item'): string[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = window.localStorage.getItem(storageKey(kind));
     if (!raw) return [];
     const arr: RecentEntry[] = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
-    return arr
-      .sort((a, b) => b.ts - a.ts)
-      .map(e => e.id);
+    return arr.sort((a, b) => b.ts - a.ts).map(e => e.id);
   } catch {
     return [];
   }
 }
 
-/** 客户端：把某条 item 标记为"刚刚看过"。最新挪到队首；超出 MAX 截断 */
-export function markRecentView(id: string): void {
+/** 标记某条 item/listing 为"刚刚看过"。 */
+export function markRecentView(id: string, kind: ViewKind = 'item'): void {
   if (typeof window === 'undefined') return;
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const key = storageKey(kind);
+    const raw = window.localStorage.getItem(key);
     const arr: RecentEntry[] = raw ? JSON.parse(raw) : [];
     const filtered = Array.isArray(arr) ? arr.filter(e => e.id !== id) : [];
     filtered.unshift({ id, ts: Date.now() });
-    const next = filtered.slice(0, MAX);
-    window.localStorage.setItem(KEY, JSON.stringify(next));
-  } catch {
-    // localStorage 满 / 隐私模式 / 等都静默忽略
-  }
-}
-
-/** 清空最近浏览（用户手动点"清空" 用） */
-export function clearRecentViews(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.removeItem(KEY);
+    window.localStorage.setItem(key, JSON.stringify(filtered.slice(0, MAX)));
   } catch {}
 }
 
-/** 客户端：移除一条已失效的 id（商品被删除时清掉） */
-export function removeRecentView(id: string): void {
+/** 清空 */
+export function clearRecentViews(kind: ViewKind = 'item'): void {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.removeItem(storageKey(kind)); } catch {}
+}
+
+/** 移除一条失效条目 */
+export function removeRecentView(id: string, kind: ViewKind = 'item'): void {
   if (typeof window === 'undefined') return;
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const key = storageKey(kind);
+    const raw = window.localStorage.getItem(key);
     if (!raw) return;
     const arr: RecentEntry[] = JSON.parse(raw);
     if (!Array.isArray(arr)) return;
     const next = arr.filter(e => e.id !== id);
-    window.localStorage.setItem(KEY, JSON.stringify(next));
+    window.localStorage.setItem(key, JSON.stringify(next));
   } catch {}
 }

@@ -13,6 +13,7 @@ import {
   LIFESTYLE_DIMS,
   freshnessBadge,
 } from '@/lib/utils';
+import { markRecentView } from '@/lib/recentViews';
 
 export type Listing = {
   id: string;
@@ -103,8 +104,16 @@ export function ListingCard({
 
   const photos = Array.isArray(listing.photoUrls) ? listing.photoUrls : [];
 
+  const handleApply = () => {
+    markRecentView(listing.id, 'listing');
+    onApply(listing);
+  };
+
   return (
-    <article className="bg-white rounded-card shadow-card border border-stone-200 overflow-hidden hover:shadow-card-hover transition-shadow">
+    <article
+      data-listing-id={listing.id}
+      className="bg-white rounded-card shadow-card border border-stone-200 overflow-hidden hover:shadow-card-hover transition-shadow"
+    >
       {/* 图片区 */}
       {photos.length > 0 && (
         <div className="relative">
@@ -214,7 +223,7 @@ export function ListingCard({
               : '不限性别'}
           </div>
           <button
-            onClick={() => onApply(listing)}
+            onClick={handleApply}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand text-white rounded-chip text-sm font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card"
           >
             <Mail size={14} />

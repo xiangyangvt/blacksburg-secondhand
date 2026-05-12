@@ -7,14 +7,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, PackageOpen, Construction } from 'lucide-react';
 import { ListingCard, type Listing } from '@/components/ListingCard';
+import { RecentListingStrip } from '@/components/RecentListingStrip';
 import { PlatformSwitcher } from '@/components/PlatformSwitcher';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
+import { ListingPostModal } from '@/components/ListingPostModal';
 import { captureUtmFromUrl } from '@/lib/utm';
 
 export default function RoommatesPage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [myPanelOpen, setMyPanelOpen] = useState(false);
+  const [postModalOpen, setPostModalOpen] = useState(false);
 
   useEffect(() => { captureUtmFromUrl(); }, []);
 
@@ -35,9 +38,7 @@ export default function RoommatesPage() {
   const onApply = (l: Listing) => {
     alert(`申请联系: ${l.title}\n\nL8 申请 modal 即将上线`);
   };
-  const onPost = () => {
-    alert('发布 listing 即将上线（L7 表单）');
-  };
+  const onPost = () => setPostModalOpen(true);
 
   return (
     <main className="min-h-screen">
@@ -71,6 +72,9 @@ export default function RoommatesPage() {
           </div>
         </div>
 
+        {/* 最近浏览：仅有历史 + listings 不空时显示 */}
+        {!loading && listings.length > 0 && <RecentListingStrip listings={listings} />}
+
         {loading ? (
           <SkeletonGrid />
         ) : listings.length === 0 ? (
@@ -95,6 +99,13 @@ export default function RoommatesPage() {
 
       {myPanelOpen && (
         <MyPostsPanel onClose={() => setMyPanelOpen(false)} />
+      )}
+
+      {postModalOpen && (
+        <ListingPostModal
+          onClose={() => setPostModalOpen(false)}
+          onSaved={fetchListings}
+        />
       )}
     </main>
   );
