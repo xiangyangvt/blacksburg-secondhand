@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { Pencil, Trash2, Flag, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Pencil, Trash2, Flag, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { CopyButton } from './CopyButton';
 import { ShareButton } from './ShareButton';
 import { InquirySection } from './InquirySection';
@@ -29,12 +29,15 @@ export type Item = {
   category: string;
   customTag: string | null;
   contactType: string;
+  /** 公开 GET 返回时为空字符串；reveal API 才会返回真实值 */
   contactValue: string;
   customContactLabel: string | null;
   photoUrls: string[];
   createdAt: string;
   /** 最近活跃时间（编辑 / 新询价 / 卖家回复都会刷新）；用于新鲜度可视化 */
   bumpedAt?: string;
+  /** 被点击查看联系方式的累计次数（卖家可见） */
+  contactRevealCount?: number;
   inquiries: any[];
 };
 
@@ -56,6 +59,9 @@ export function ItemCard({
   const t = useT();
   const locale = useLocale();
   const [zoomIdx, setZoomIdx] = useState<number | null>(null);
+  // 联系方式 reveal 状态：null = 未点击；object = 已 reveal
+  const [revealed, setRevealed] = useState<{ contactType: string; contactValue: string; customContactLabel: string | null } | null>(null);
+  const [revealing, setRevealing] = useState(false);
   // 统一的展开状态 —— 三种 click 来源都 toggle 它
   const [expanded, setExpanded] = useState(false);
   const photos = item.photoUrls;
@@ -241,14 +247,46 @@ export function ItemCard({
         </p>
       )}
 
-      {/* === 联系方式 + 复制按钮 — 手机端仅展开后显示，桌面常驻 === */}
+      {/* === 联系方式 — 默认隐藏；点击"查看联系方式"按钮才显示
+            隐私目的：避免联系方式被批量爬取，同时给卖家"被几个人查看"的指标 === */}
       <div className={`${expanded ? 'flex' : 'hidden md:flex'} items-center gap-1.5 mb-2 flex-wrap text-xs md:text-sm`}>
-        <span className="text-stone-600 truncate min-w-0">
-          {contactTypeLabel(item.contactType, item.customContactLabel, locale)}：
-          <span className="font-mono text-stone-900 select-all ml-1">{item.contactValue}</span>
-        </span>
-        <CopyButton text={item.contactValue} />
-        {/* 复制 = 分享：内容是「标题 — $价格 + 链接」，方便丢到微信里 */}
+        {!revealed ? (
+          <button
+            onClick={async () => {
+              if (revealing) return;
+              setRevealing(true);
+              try {
+                const res = await fetch(`/api/items/${item.id}/reveal-contact`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                  setRevealed({
+                    contactType: data.contactType,
+                    contactValue: data.contactValue,
+                    customContactLabel: data.customContactLabel,
+                  });
+                } else {
+                  alert(data.error || '查看失败');
+                }
+              } finally {
+                setRevealing(false);
+              }
+            }}
+            disabled={revealing}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-chip bg-brand text-white text-xs font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card disabled:opacity-50"
+          >
+            <Eye size={13} />
+            {revealing ? '加载中…' : '查看联系方式'}
+          </button>
+        ) : (
+          <>
+            <span className="text-stone-600 truncate min-w-0">
+              {contactTypeLabel(revealed.contactType, revealed.customContactLabel, locale)}：
+              <span className="font-mono text-stone-900 select-all ml-1">{revealed.contactValue}</span>
+            </span>
+            <CopyButton text={revealed.contactValue} />
+          </>
+        )}
+        {/* 分享：内容是「标题 — $价格 + 链接」，方便丢到微信里 */}
         {origin && (
           <ShareButton
             shareText={buildItemShareText({

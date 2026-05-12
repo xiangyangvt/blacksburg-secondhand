@@ -663,6 +663,11 @@ function MyItemRow({
           <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
             {categoryLabel(item.category, locale)}
           </span>
+          {!isDraft && typeof item.contactRevealCount === 'number' && item.contactRevealCount > 0 && (
+            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+              👁 {item.contactRevealCount} 次联系
+            </span>
+          )}
           <span className="text-stone-400 ml-auto">{timeAgo(item.createdAt, locale)}</span>
         </div>
 

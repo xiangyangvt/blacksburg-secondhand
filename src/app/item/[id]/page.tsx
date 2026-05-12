@@ -89,8 +89,8 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
     category: item.category,
     customTag: item.customTag,
     contactType: item.contactType,
-    contactValue: item.contactValue,
-    customContactLabel: item.customContactLabel,
+    contactValue: '',  // 隐私：默认隐藏，点"查看联系方式"按钮才会调 API 拿
+    customContactLabel: null,
     photoUrls: parsePhotoUrls(item.photoUrls),
     createdAt: item.createdAt.toISOString(),
     inquiries: item.inquiries.map(inq => ({

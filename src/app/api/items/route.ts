@@ -32,13 +32,12 @@ export async function GET(req: NextRequest) {
   if (type === 'sell' || type === 'buy') where.type = type;
   if (category && VALID_CATEGORIES.includes(category as any) && category !== 'housing') where.category = category;
   if (q) {
-    // 搜索匹配标题、描述、自定义标签、联系方式
-    // ⚠️ 故意不匹配识别码 hash —— 那是密码，不能成为搜索目标
+    // 搜索匹配标题、描述、自定义标签
+    // 不再匹配 contactValue —— 联系方式现在隐藏，搜索它会反推泄露
     where.OR = [
       { title:        { contains: q } },
       { description:  { contains: q } },
       { customTag:    { contains: q } },
-      { contactValue: { contains: q } },
     ];
   }
   if (minPrice !== undefined || maxPrice !== undefined) {
@@ -76,7 +75,10 @@ export async function GET(req: NextRequest) {
   const serialized = items.map(it => ({
     ...it,
     photoUrls: parsePhotoUrls(it.photoUrls),
-    editCodeHash: undefined, // 别返回 hash
+    editCodeHash: undefined,         // 别返回 hash
+    contactValue: '',                 // 隐私：默认隐藏，前端点"查看联系方式"才调 reveal API 拿
+    customContactLabel: null,         // 同上：可能含敏感个人信息
+    // contactType 保留：UI 用它显示"微信"/"手机"等标签，类型本身不敏感
   }));
 
   return NextResponse.json({ items: serialized });

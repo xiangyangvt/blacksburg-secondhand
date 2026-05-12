@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import NextImage from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, X, Flag, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, X, Flag, Trash2, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { CopyButton } from './CopyButton';
 import { ShareButton } from './ShareButton';
 import { InquirySection } from './InquirySection';
@@ -34,6 +34,9 @@ export function ItemDetailView({ item }: { item: Item }) {
   const [mainIdx, setMainIdx] = useState(0);
   const [codePrompt, setCodePrompt] = useState<'delete' | { kind: 'sellerDelInq'; inquiryId: string } | null>(null);
   const [origin, setOrigin] = useState('');
+  // 联系方式 reveal 状态：detail 页跟 ItemCard 一致 —— 默认隐藏，点按钮才显示
+  const [revealed, setRevealed] = useState<{ contactType: string; contactValue: string; customContactLabel: string | null } | null>(null);
+  const [revealing, setRevealing] = useState(false);
 
   useEffect(() => {
     setOrigin(clientOrigin());
@@ -195,16 +198,45 @@ export function ItemDetailView({ item }: { item: Item }) {
               </p>
             )}
 
-            {/* 联系方式 */}
+            {/* 联系方式 —— 默认隐藏，点按钮才显示 */}
             <div className="bg-stone-50 border border-stone-200 rounded p-3 mb-4">
               <div className="text-xs text-stone-500 mb-1">{t('card.copyContact')}</div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm md:text-base">
-                  {contactTypeLabel(item.contactType, item.customContactLabel, locale)}：
-                  <span className="font-mono text-stone-900 select-all ml-1">{item.contactValue}</span>
-                </span>
-                <CopyButton text={item.contactValue} />
-              </div>
+              {!revealed ? (
+                <button
+                  onClick={async () => {
+                    if (revealing) return;
+                    setRevealing(true);
+                    try {
+                      const res = await fetch(`/api/items/${item.id}/reveal-contact`, { method: 'POST' });
+                      const data = await res.json();
+                      if (res.ok) {
+                        setRevealed({
+                          contactType: data.contactType,
+                          contactValue: data.contactValue,
+                          customContactLabel: data.customContactLabel,
+                        });
+                      } else {
+                        alert(data.error || '查看失败');
+                      }
+                    } finally {
+                      setRevealing(false);
+                    }
+                  }}
+                  disabled={revealing}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-chip bg-brand text-white text-sm font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card disabled:opacity-50"
+                >
+                  <Eye size={14} />
+                  {revealing ? '加载中…' : '查看联系方式'}
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm md:text-base">
+                    {contactTypeLabel(revealed.contactType, revealed.customContactLabel, locale)}：
+                    <span className="font-mono text-stone-900 select-all ml-1">{revealed.contactValue}</span>
+                  </span>
+                  <CopyButton text={revealed.contactValue} />
+                </div>
+              )}
             </div>
 
             {/* 操作按钮：复制/分享（含链接）+ 举报 + 卖家删除 */}

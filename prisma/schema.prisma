@@ -31,6 +31,7 @@ model Item {
   bumpedAt            DateTime @default(now())
   ipAddress           String?  // 用于隐式限速
   utmSource           String?  // 用户首次访问时的 ?utm_source=xxx 或 ?from=xxx；用于渠道分析
+  contactRevealCount  Int      @default(0)  // 联系方式被点击展示的累计次数（同 IP 24h 内去重）
 
   inquiries Inquiry[]
   reports   Report[]  @relation("ItemReports")
