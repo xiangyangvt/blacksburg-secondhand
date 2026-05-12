@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { prisma } from '@/lib/prisma';
 import { parsePhotoUrls } from '@/lib/utils';
+import { toCloudinaryThumb } from '@/lib/cloudinary';
 import { ItemDetailView } from '@/components/ItemDetailView';
 
 export const dynamic = 'force-dynamic'; // 商品状态变化频繁，不缓存
@@ -36,6 +37,13 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   const priceText = item.price === null ? '面议' : `$${item.price}`;
   const title = `${item.title} — ${priceText} · 黑堡二手买卖`;
   const description = item.description?.slice(0, 140) || `${item.title}，黑堡本地华人/学生二手交易`;
+
+  // 微信兼容性优化：
+  // 1. 用 Cloudinary 转成 1200×1200 JPG —— 强制 jpg 而不是 webp，微信/QQ 的图片渲染对 webp 仍偶发不稳
+  // 2. 显式 width / height 让微信知道图片尺寸（部分版本要求）
+  // 3. 同时输出 Twitter Card（其他平台 + 个别国内 scraper 也读 twitter:image）
+  const cover = photos.length > 0 ? toCloudinaryThumb(photos[0], 1200, 'jpg') : null;
+
   return {
     title,
     description,
@@ -44,13 +52,26 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       description,
       type: 'website',
       locale: 'zh_CN',
-      images: photos.length > 0 ? [{ url: photos[0] }] : undefined,
+      images: cover
+        ? [{
+            url: cover,
+            width: 1200,
+            height: 1200,
+            type: 'image/jpeg',
+            alt: item.title,
+          }]
+        : undefined,
     },
     twitter: {
-      card: photos.length > 0 ? 'summary_large_image' : 'summary',
+      card: cover ? 'summary_large_image' : 'summary',
       title,
       description,
+      images: cover ? [cover] : undefined,
     },
+    // 给微信"description"传统 meta 兜底（个别老版本不读 og:description）
+    other: cover ? {
+      'image': cover,
+    } : undefined,
   };
 }
 

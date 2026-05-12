@@ -15,21 +15,7 @@ const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL
   || 'https://blacksburg-secondhand-production.up.railway.app';
 
-/**
- * Cloudinary URL 内联 transformation：在 /upload/ 后插入缩略图参数。
- * c_fill,w_400,h_400 = 裁剪填充 400×400；q_auto:eco = 最优积极压缩；f_auto = 自动 webp/avif
- * 这样 Cloudinary 直接返回小图，OG 生成时单张从 ~200KB 降到 ~30KB（80%+ 节省）。
- * 非 Cloudinary URL（本地 /uploads/、外站）原样返回。
- */
-function toCloudinaryThumb(url: string, size = 400): string {
-  if (typeof url !== 'string' || !url) return url;
-  if (!url.includes('res.cloudinary.com') || !url.includes('/upload/')) return url;
-  if (url.includes(`c_fill,w_${size}`)) return url; // 防重复插入
-  return url.replace(
-    '/upload/',
-    `/upload/c_fill,w_${size},h_${size},q_auto:eco,f_auto/`,
-  );
-}
+import { toCloudinaryThumb } from '@/lib/cloudinary';
 
 async function getRecentPhotos(): Promise<string[]> {
   try {
@@ -41,8 +27,8 @@ async function getRecentPhotos(): Promise<string[]> {
     const photos: string[] = [];
     for (const it of (data.items ?? [])) {
       if (Array.isArray(it.photoUrls) && it.photoUrls.length > 0) {
-        // 每条商品取封面 + 转成 400x400 缩略图
-        photos.push(toCloudinaryThumb(it.photoUrls[0], 400));
+        // 每条商品取封面 + 转成 400x400 JPG（微信兼容最稳；OG 卡里用，体积也小）
+        photos.push(toCloudinaryThumb(it.photoUrls[0], 400, 'jpg'));
       }
       if (photos.length >= 4) break;
     }

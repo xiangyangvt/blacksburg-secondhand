@@ -41,9 +41,10 @@ export const metadata: Metadata = {
     locale: 'zh_CN',
     alternateLocale: 'en_US',
     url: SITE_URL,
+    siteName: '黑堡二手买卖',
   },
   twitter: {
-    card: 'summary',
+    card: 'summary_large_image', // 主页 OG 是 1200×630 大图，对应 summary_large_image
     title: SITE_NAME,
     description: SITE_DESC,
   },
