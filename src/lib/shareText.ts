@@ -31,6 +31,32 @@ export function buildSiteShareText(opts: {
   return `黑堡二手买卖 · 本地华人/学生免登录二手平台\n${url}`;
 }
 
+/** 给单条 listing 生成可分享文本（类型 · 标题 · 预算 · 区域 + 链接） */
+export function buildListingShareText(opts: {
+  title: string;
+  listingType: string;     // 'find_roommate' | 'co_rent' | 'sublet' | 'summer'
+  typeLabel: string;       // 中文 label，例 "有房找室友"
+  budgetMin: number | null;
+  budgetMax: number | null;
+  areas: string[];
+  origin: string;
+  listingId: string;
+  source?: string;
+}): string {
+  const source = opts.source ?? 'share';
+  const budgetStr =
+    opts.budgetMin === null && opts.budgetMax === null ? '面议'
+    : opts.budgetMin !== null && opts.budgetMax !== null && opts.budgetMin === opts.budgetMax ? `$${opts.budgetMin}/月`
+    : opts.budgetMin !== null && opts.budgetMax !== null ? `$${opts.budgetMin}–${opts.budgetMax}/月`
+    : opts.budgetMin !== null ? `$${opts.budgetMin}+/月`
+    : `≤$${opts.budgetMax}/月`;
+
+  const areaStr = opts.areas.length > 0 ? ' · ' + opts.areas.slice(0, 2).join('/') : '';
+  const headline = `【${opts.typeLabel}】${opts.title} · ${budgetStr}${areaStr}`;
+  const url = `${opts.origin}/roommates?listing=${opts.listingId}&utm_source=${encodeURIComponent(source)}`;
+  return `${headline}\n${url}`;
+}
+
 /** 从浏览器环境拿 origin；服务端兜底空字符串（生成时调用方需自己补 origin） */
 export function clientOrigin(): string {
   if (typeof window === 'undefined') return '';

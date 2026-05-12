@@ -8,7 +8,7 @@
 // - A 特有：现住几人（"你将加入 N 人"）
 // - C/D 特有：是否带家具（D 默认勾选）
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import {
@@ -141,52 +141,108 @@ const LIFESTYLE_DIMS_UI = [
   ]},
 ] as const;
 
+/** 用于编辑模式预填的最小字段集（GET /api/listings 返回的公开字段不含 contactValue） */
+export type ListingEditInitial = {
+  id: string;
+  type: string;
+  posterGender: string;
+  ageRange: string | null;
+  lookingForGender: string;
+  title: string;
+  description: string;
+  photoUrls: string[];
+  housingLayout: string | null;
+  moveInStart: string | null;
+  moveInEnd: string | null;
+  moveInFuzzy?: string | null;
+  budgetMin: number | null;
+  budgetMax: number | null;
+  areas: string[];
+  currentResidents?: number | null;
+  furnished?: boolean | null;
+  sleepSchedule: string | null;
+  cleanliness: string | null;
+  social: string | null;
+  smoking: string | null;
+  drinking: string | null;
+  pets: string | null;
+  guests: string | null;
+  contactType: string;
+  contactValue?: string;
+  customContactLabel?: string | null;
+};
+
 export function ListingPostModal({
   onClose,
   onSaved,
+  mode = 'create',
+  initialListing,
+  initialEditCode,
 }: {
   onClose: () => void;
   onSaved: () => void;
+  mode?: 'create' | 'edit';
+  initialListing?: ListingEditInitial;
+  initialEditCode?: string;
 }) {
-  const [type, setType] = useState<TypeId>('find_roommate');
+  const isEdit = mode === 'edit' && !!initialListing;
+  const [type, setType] = useState<TypeId>((initialListing?.type as TypeId) ?? 'find_roommate');
 
   // 自我表达
-  const [posterGender, setPosterGender] = useState<string>('');  // 强制选择
-  const [ageRange, setAgeRange] = useState<string>('');
-  const [lookingForGender, setLookingForGender] = useState<string>('any');
+  const [posterGender, setPosterGender] = useState<string>(
+    initialListing?.posterGender && initialListing.posterGender !== 'unspecified' && initialListing.posterGender !== 'nb'
+      ? initialListing.posterGender
+      : ''
+  );
+  const [ageRange, setAgeRange] = useState<string>(initialListing?.ageRange ?? '');
+  const [lookingForGender, setLookingForGender] = useState<string>(initialListing?.lookingForGender ?? 'any');
 
   // 内容
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [title, setTitle] = useState(initialListing?.title ?? '');
+  const [description, setDescription] = useState(initialListing?.description ?? '');
+  const [photoUrls, setPhotoUrls] = useState<string[]>(initialListing?.photoUrls ?? []);
 
   // 房屋（通用）
-  const [housingLayout, setHousingLayout] = useState('');
-  const [moveInStart, setMoveInStart] = useState('');
-  const [moveInEnd, setMoveInEnd] = useState('');
-  const [moveInFuzzy, setMoveInFuzzy] = useState('');
-  const [budgetMin, setBudgetMin] = useState('');
-  const [budgetMax, setBudgetMax] = useState('');
-  const [areas, setAreas] = useState<string[]>([]);
+  const dateStr = (d: string | null | undefined) => d ? d.slice(0, 10) : '';
+  const [housingLayout, setHousingLayout] = useState(initialListing?.housingLayout ?? '');
+  const [moveInStart, setMoveInStart] = useState(dateStr(initialListing?.moveInStart));
+  const [moveInEnd, setMoveInEnd] = useState(dateStr(initialListing?.moveInEnd));
+  const [moveInFuzzy, setMoveInFuzzy] = useState(initialListing?.moveInFuzzy ?? '');
+  const [budgetMin, setBudgetMin] = useState(initialListing?.budgetMin?.toString() ?? '');
+  const [budgetMax, setBudgetMax] = useState(initialListing?.budgetMax?.toString() ?? '');
+  const [areas, setAreas] = useState<string[]>(initialListing?.areas ?? []);
 
   // 类型特有
-  const [currentResidents, setCurrentResidents] = useState('');
-  const [furnished, setFurnished] = useState(false);
+  const [currentResidents, setCurrentResidents] = useState(initialListing?.currentResidents?.toString() ?? '');
+  const [furnished, setFurnished] = useState(!!initialListing?.furnished);
 
   // 生活方式
   const [showLifestyle, setShowLifestyle] = useState(false);
-  const [lifestyle, setLifestyle] = useState<Record<string, string>>({});
+  const [lifestyle, setLifestyle] = useState<Record<string, string>>(() => {
+    if (!initialListing) return {};
+    return {
+      sleepSchedule: initialListing.sleepSchedule ?? '',
+      cleanliness:   initialListing.cleanliness ?? '',
+      social:        initialListing.social ?? '',
+      smoking:       initialListing.smoking ?? '',
+      drinking:      initialListing.drinking ?? '',
+      pets:          initialListing.pets ?? '',
+      guests:        initialListing.guests ?? '',
+    };
+  });
 
   // 联系方式
-  const [contactType, setContactType] = useState<string>('wechat');
-  const [contactValue, setContactValue] = useState('');
-  const [customLabel, setCustomLabel] = useState('');
+  const [contactType, setContactType] = useState<string>(initialListing?.contactType ?? 'wechat');
+  const [contactValue, setContactValue] = useState(initialListing?.contactValue ?? '');
+  const [customLabel, setCustomLabel] = useState(initialListing?.customContactLabel ?? '');
 
-  const [editCode, setEditCode] = useState('');
+  const [editCode, setEditCode] = useState(initialEditCode ?? '');
   const [submitting, setSubmitting] = useState(false);
 
-  // localStorage 预填
+  // 创建模式：从 localStorage 预填联系方式 + 识别码
+  // 编辑模式：上面已经从 initialListing/initialEditCode 取了，不覆盖
   useEffect(() => {
+    if (isEdit) return;
     try {
       const tp = localStorage.getItem(LS_LAST_CONTACT_T);
       const v  = localStorage.getItem(LS_LAST_CONTACT_V);
@@ -195,12 +251,18 @@ export function ListingPostModal({
       if (v) setContactValue(v);
       if (c) setEditCode(c);
     } catch {}
-  }, []);
+  }, [isEdit]);
 
   const meta = TYPE_META[type];
 
   // 类型切换时：清理不属于当前类型的字段 + 应用默认值（特别是 D 的 furnished=true）
+  // 注意：编辑模式下初次挂载不能跑（否则会用 type 默认值覆盖 initialListing 的真实值）
+  const skipTypeEffect = useRef(isEdit);
   useEffect(() => {
+    if (skipTypeEffect.current) {
+      skipTypeEffect.current = false;
+      return;
+    }
     if (!meta.showMoveInFuzzy) setMoveInFuzzy('');
     if (!meta.showCurrentResidents) setCurrentResidents('');
     if (meta.showFurnished) {
@@ -208,7 +270,6 @@ export function ListingPostModal({
     } else {
       setFurnished(false);
     }
-    // 切到租赁场景：清空发布人性别 + 年龄（不需要这些信息）
     if (!meta.showSelfInfo) {
       setPosterGender('');
       setAgeRange('');
@@ -264,13 +325,15 @@ export function ListingPostModal({
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/listings', {
-        method: 'POST',
+      const url    = isEdit ? `/api/listings/${initialListing!.id}` : '/api/listings';
+      const method = isEdit ? 'PATCH' : 'POST';
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) { alert(data.error || '发布失败'); return; }
+      if (!res.ok) { alert(data.error || (isEdit ? '保存失败' : '发布失败')); return; }
       try {
         localStorage.setItem(LS_LAST_CODE, editCode);
         localStorage.setItem(LS_LAST_CONTACT_T, contactType);
@@ -288,36 +351,43 @@ export function ListingPostModal({
       <div className="bg-white w-full max-w-2xl sm:rounded-lg min-h-screen sm:min-h-0 my-0 sm:my-4">
 
         <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between rounded-t-lg">
-          <h2 className="text-lg font-semibold text-stone-900">发布 listing</h2>
+          <h2 className="text-lg font-semibold text-stone-900">{isEdit ? '编辑 listing' : '发布 listing'}</h2>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-100" aria-label="关闭"><X size={22} /></button>
         </div>
 
         <div className="p-5 space-y-5">
-          {/* 1. 类型 */}
+          {/* 1. 类型 —— 编辑模式只显示当前类型，禁止切换（切换会乱字段语义） */}
           <section>
             <Label required>这是哪种？</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {LISTING_TYPES.map(t => {
-                const m = TYPE_META[t.id];
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setType(t.id)}
-                    className={`p-3 rounded-lg border text-left transition-all ${
-                      type === t.id
-                        ? 'border-brand bg-brand/5 ring-2 ring-brand'
-                        : 'border-stone-300 bg-white hover:bg-stone-100'
-                    }`}
-                  >
-                    <div className="text-sm font-semibold text-stone-900">
-                      {m.emoji} {m.label}
-                    </div>
-                    <div className="text-xs text-stone-500 mt-0.5">{m.desc}</div>
-                  </button>
-                );
-              })}
-            </div>
+            {isEdit ? (
+              <div className="p-3 rounded-lg border border-stone-300 bg-stone-50 text-sm">
+                <span className="font-semibold">{meta.emoji} {meta.label}</span>
+                <span className="text-xs text-stone-500 ml-2">（编辑时无法更改类型）</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {LISTING_TYPES.map(t => {
+                  const m = TYPE_META[t.id];
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setType(t.id)}
+                      className={`p-3 rounded-lg border text-left transition-all ${
+                        type === t.id
+                          ? 'border-brand bg-brand/5 ring-2 ring-brand'
+                          : 'border-stone-300 bg-white hover:bg-stone-100'
+                      }`}
+                    >
+                      <div className="text-sm font-semibold text-stone-900">
+                        {m.emoji} {m.label}
+                      </div>
+                      <div className="text-xs text-stone-500 mt-0.5">{m.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           {/* 2. 自我表达（仅合租场景显示；租赁场景房东个人信息无关） */}
@@ -635,7 +705,7 @@ export function ListingPostModal({
             disabled={submitting}
             className="px-5 py-2 bg-brand text-white rounded hover:bg-brand-dark disabled:opacity-50 font-medium"
           >
-            {submitting ? '发布中…' : '发布'}
+            {submitting ? (isEdit ? '保存中…' : '发布中…') : (isEdit ? '保存' : '发布')}
           </button>
         </div>
       </div>

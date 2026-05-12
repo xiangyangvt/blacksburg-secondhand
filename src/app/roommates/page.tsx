@@ -10,8 +10,9 @@ import { ListingCard, type Listing } from '@/components/ListingCard';
 import { RecentListingStrip } from '@/components/RecentListingStrip';
 import { PlatformSwitcher } from '@/components/PlatformSwitcher';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
-import { ListingPostModal } from '@/components/ListingPostModal';
+import { ListingPostModal, type ListingEditInitial } from '@/components/ListingPostModal';
 import { ListingApplyModal } from '@/components/ListingApplyModal';
+import { EditCodePrompt } from '@/components/EditCodePrompt';
 import {
   ListingFilterBar,
   LISTING_FILTERS_DEFAULT,
@@ -68,6 +69,14 @@ function RoommatesContent() {
   const [postModalOpen, setPostModalOpen] = useState(false);
   const [applyTarget, setApplyTarget] = useState<Listing | null>(null);
 
+  // 编辑 / 删除 / 举报 三种动作都要识别码先验证
+  const [codePrompt, setCodePrompt] = useState<
+    | { kind: 'edit';   listing: Listing }
+    | { kind: 'delete'; listing: Listing }
+    | null
+  >(null);
+  const [editTarget, setEditTarget] = useState<{ listing: ListingEditInitial; editCode: string } | null>(null);
+
   const [filters, setFilters] = useState<ListingFilters>(LISTING_FILTERS_DEFAULT);
 
   useEffect(() => { captureUtmFromUrl(); }, []);
@@ -103,6 +112,48 @@ function RoommatesContent() {
 
   const onApply = (l: Listing) => setApplyTarget(l);
   const onPost = () => setPostModalOpen(true);
+
+  // === 编辑：先识别码验证 → 打开 ListingPostModal edit mode ===
+  const onEditListing = (l: Listing) => setCodePrompt({ kind: 'edit', listing: l });
+
+  const handleEditConfirm = async (code: string) => {
+    if (!codePrompt || codePrompt.kind !== 'edit') return;
+    // 用 GET 不能拿 contactValue（公开 API 把它擦了）；最稳是从 localStorage 取（卖家本人会有）
+    let contactValue = '';
+    try { contactValue = localStorage.getItem('hb_my_contact_value') ?? ''; } catch {}
+    setEditTarget({
+      listing: { ...codePrompt.listing, contactValue } as ListingEditInitial,
+      editCode: code,
+    });
+    setCodePrompt(null);
+  };
+
+  // === 删除：先识别码验证 → DELETE 调用 ===
+  const onDeleteListing = (l: Listing) => setCodePrompt({ kind: 'delete', listing: l });
+
+  const handleDeleteConfirm = async (code: string) => {
+    if (!codePrompt || codePrompt.kind !== 'delete') return;
+    if (!confirm('删除后无法恢复，确定？')) return;
+    const id = codePrompt.listing.id;
+    const res = await fetch(`/api/listings/${id}?editCode=${encodeURIComponent(code)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || '删除失败'); return; }
+    setCodePrompt(null);
+    fetchListings(filters);
+  };
+
+  // === 举报：弹出 reason 输入 → POST /api/reports ===
+  const onReportListing = async (l: Listing) => {
+    const reason = prompt('举报理由（可空，会汇总到管理后台；累计 3 个不同 IP 自动隐藏）');
+    if (reason === null) return;
+    const res = await fetch('/api/reports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetType: 'listing', targetId: l.id, reason }),
+    });
+    if (res.ok) alert('已收到举报，谢谢');
+    else alert('举报失败，请稍后再试');
+  };
 
   return (
     <main className="min-h-screen">
@@ -160,7 +211,14 @@ function RoommatesContent() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
             {listings.map(l => (
-              <ListingCard key={l.id} listing={l} onApply={onApply} />
+              <ListingCard
+                key={l.id}
+                listing={l}
+                onApply={onApply}
+                onEdit={onEditListing}
+                onDelete={onDeleteListing}
+                onReport={onReportListing}
+              />
             ))}
           </div>
         )}
@@ -182,6 +240,28 @@ function RoommatesContent() {
           listing={applyTarget}
           onClose={() => setApplyTarget(null)}
           onSent={() => fetchListings(filters)}
+        />
+      )}
+
+      {/* 编辑 / 删除：识别码验证 */}
+      {codePrompt && (
+        <EditCodePrompt
+          itemId={codePrompt.listing.id}
+          title={codePrompt.listing.title}
+          action={codePrompt.kind === 'edit' ? '编辑' : '删除'}
+          onCancel={() => setCodePrompt(null)}
+          onConfirm={codePrompt.kind === 'edit' ? handleEditConfirm : handleDeleteConfirm}
+        />
+      )}
+
+      {/* 编辑模态：识别码通过后打开 */}
+      {editTarget && (
+        <ListingPostModal
+          mode="edit"
+          initialListing={editTarget.listing}
+          initialEditCode={editTarget.editCode}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => { setEditTarget(null); fetchListings(filters); }}
         />
       )}
 
