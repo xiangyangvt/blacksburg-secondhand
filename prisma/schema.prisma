@@ -76,19 +76,111 @@ model PendingCloudinaryDeletion {
   @@index([scheduledFor])
 }
 
-// 举报
-model Report {
-  id          String   @id @default(cuid())
-  targetType  String   // "item" | "inquiry"
-  itemId      String?
-  inquiryId   String?
-  reason      String
-  reporterIp  String?
-  createdAt   DateTime @default(now())
+// ====== 室友&转租 平台 (Sprint 4) ======
 
-  item    Item?    @relation("ItemReports",    fields: [itemId],    references: [id], onDelete: Cascade)
-  inquiry Inquiry? @relation("InquiryReports", fields: [inquiryId], references: [id], onDelete: Cascade)
+// 室友 listing：自我介绍 + 房屋信息 + 7 个生活方式维度
+model Listing {
+  id                  String   @id @default(cuid())
+  type                String   // "find_roommate" (A) | "co_rent" (B) | "sublet" (C) | "summer" (D)
+
+  // 自我表达
+  posterGender        String   @default("unspecified") // "F" | "M" | "nb" | "unspecified"
+  ageRange            String?  // "<22" | "22-25" | "25-30" | "30+"
+  lookingForGender    String   @default("any")         // "F-only" | "M-only" | "any"
+
+  // 内容
+  title               String
+  description         String
+  photoUrls           String   // JSON 字符串，同 Item
+
+  // 房屋信息
+  hasPlace            Boolean  @default(false)
+  housingLayout       String?  // "1B1B" 等
+  moveInStart         DateTime?
+  moveInEnd           DateTime?
+  budgetMin           Int?
+  budgetMax           Int?
+  areas               String   @default("[]") // JSON 字符串数组：["Foxridge", "Downtown"]
+
+  // 7 个生活方式 chips
+  sleepSchedule       String?  // "early" | "late" | "flexible"
+  cleanliness         String?  // "neat" | "average" | "casual"
+  social              String?  // "quiet" | "occasional" | "frequent"
+  smoking             String?  // "no" | "ok" | "yes"
+  drinking            String?  // "no" | "occasional" | "frequent"
+  pets                String?  // "none" | "cat" | "dog" | "other"
+  guests              String?  // "no" | "occasional" | "ok"
+
+  // 联系方式（默认隐藏，approved 后双向可见）
+  contactType         String
+  contactValue        String
+  customContactLabel  String?
+
+  // 元信息
+  editCodeHash        String
+  status              String   @default("active")  // "active" | "matched" | "deleted" | "hidden" | "draft"
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  bumpedAt            DateTime @default(now())
+  ipAddress           String?
+  utmSource           String?
+  migratedFromItem    Boolean  @default(false)  // 旧 housing item 迁移标识
+
+  applications        Application[]
+  attachedTo          Application[] @relation("AttachedListing")
+  reports             Report[]      @relation("ListingReports")
+
+  @@index([status, bumpedAt])
+  @@index([type])
+  @@index([contactValue])
+}
+
+// 申请-同意：B 申请联系 A 的 listing；A 决定后双方互相看到联系方式
+model Application {
+  id                  String   @id @default(cuid())
+  listingId           String
+  applicantGender     String   // "F" | "M" | "nb" | "unspecified"
+  ageRange            String?
+  contactType         String
+  contactValue        String
+  customContactLabel  String?
+  message             String
+  editCodeHash        String   // 申请人自己的识别码（用于查看/撤回自己的申请）
+  attachedListingId   String?  // 申请人选择附上自己的 listing
+  status              String   @default("pending")  // "pending" | "approved" | "rejected" | "cancelled"
+  rejectReason        String?  // A 婉拒时可选填
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  ipAddress           String?
+  utmSource           String?
+
+  listing             Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  attachedListing     Listing? @relation("AttachedListing", fields: [attachedListingId], references: [id])
+  reports             Report[] @relation("ApplicationReports")
+
+  @@index([listingId, status])
+  @@index([contactValue])
+}
+
+// 举报（扩展原 Report 加 listing / application）
+model Report {
+  id            String   @id @default(cuid())
+  targetType    String   // "item" | "inquiry" | "listing" | "application"
+  itemId        String?
+  inquiryId     String?
+  listingId     String?
+  applicationId String?
+  reason        String
+  reporterIp    String?
+  createdAt     DateTime @default(now())
+
+  item        Item?        @relation("ItemReports",        fields: [itemId],        references: [id], onDelete: Cascade)
+  inquiry     Inquiry?     @relation("InquiryReports",     fields: [inquiryId],     references: [id], onDelete: Cascade)
+  listing     Listing?     @relation("ListingReports",     fields: [listingId],     references: [id], onDelete: Cascade)
+  application Application? @relation("ApplicationReports", fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([itemId])
   @@index([inquiryId])
+  @@index([listingId])
+  @@index([applicationId])
 }

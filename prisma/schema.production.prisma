@@ -73,18 +73,102 @@ model PendingCloudinaryDeletion {
   @@index([scheduledFor])
 }
 
-model Report {
-  id          String   @id @default(cuid())
-  targetType  String
-  itemId      String?
-  inquiryId   String?
-  reason      String
-  reporterIp  String?
-  createdAt   DateTime @default(now())
+// ====== 室友&转租 平台 (Sprint 4) ======
 
-  item    Item?    @relation("ItemReports",    fields: [itemId],    references: [id], onDelete: Cascade)
-  inquiry Inquiry? @relation("InquiryReports", fields: [inquiryId], references: [id], onDelete: Cascade)
+model Listing {
+  id                  String   @id @default(cuid())
+  type                String
+
+  posterGender        String   @default("unspecified")
+  ageRange            String?
+  lookingForGender    String   @default("any")
+
+  title               String
+  description         String
+  photoUrls           String
+
+  hasPlace            Boolean  @default(false)
+  housingLayout       String?
+  moveInStart         DateTime?
+  moveInEnd           DateTime?
+  budgetMin           Int?
+  budgetMax           Int?
+  areas               String   @default("[]")
+
+  sleepSchedule       String?
+  cleanliness         String?
+  social              String?
+  smoking             String?
+  drinking            String?
+  pets                String?
+  guests              String?
+
+  contactType         String
+  contactValue        String
+  customContactLabel  String?
+
+  editCodeHash        String
+  status              String   @default("active")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  bumpedAt            DateTime @default(now())
+  ipAddress           String?
+  utmSource           String?
+  migratedFromItem    Boolean  @default(false)
+
+  applications        Application[]
+  attachedTo          Application[] @relation("AttachedListing")
+  reports             Report[]      @relation("ListingReports")
+
+  @@index([status, bumpedAt])
+  @@index([type])
+  @@index([contactValue])
+}
+
+model Application {
+  id                  String   @id @default(cuid())
+  listingId           String
+  applicantGender     String
+  ageRange            String?
+  contactType         String
+  contactValue        String
+  customContactLabel  String?
+  message             String
+  editCodeHash        String
+  attachedListingId   String?
+  status              String   @default("pending")
+  rejectReason        String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  ipAddress           String?
+  utmSource           String?
+
+  listing             Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  attachedListing     Listing? @relation("AttachedListing", fields: [attachedListingId], references: [id])
+  reports             Report[] @relation("ApplicationReports")
+
+  @@index([listingId, status])
+  @@index([contactValue])
+}
+
+model Report {
+  id            String   @id @default(cuid())
+  targetType    String
+  itemId        String?
+  inquiryId     String?
+  listingId     String?
+  applicationId String?
+  reason        String
+  reporterIp    String?
+  createdAt     DateTime @default(now())
+
+  item        Item?        @relation("ItemReports",        fields: [itemId],        references: [id], onDelete: Cascade)
+  inquiry     Inquiry?     @relation("InquiryReports",     fields: [inquiryId],     references: [id], onDelete: Cascade)
+  listing     Listing?     @relation("ListingReports",     fields: [listingId],     references: [id], onDelete: Cascade)
+  application Application? @relation("ApplicationReports", fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([itemId])
   @@index([inquiryId])
+  @@index([listingId])
+  @@index([applicationId])
 }

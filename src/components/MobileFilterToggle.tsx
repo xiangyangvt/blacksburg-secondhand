@@ -26,11 +26,12 @@ export function MobileFilterToggle({
     { value: 'all',          label: t('filter.all') },
     ...CATEGORIES.map(c => ({ value: c.id, label: t(c.i18nKey) })),
   ];
+  // 排序在 chip 上显示的短标签，避免"价格低 → 高"撑爆 chip 行
   const sortOptions = [
-    { value: 'newest',    label: t('sort.newest')    },
-    { value: 'oldest',    label: t('sort.oldest')    },
-    { value: 'priceAsc',  label: t('sort.priceAsc')  },
-    { value: 'priceDesc', label: t('sort.priceDesc') },
+    { value: 'newest',    label: t('sort.newest'),    chipLabel: '最新'     },
+    { value: 'oldest',    label: t('sort.oldest'),    chipLabel: '最旧'     },
+    { value: 'priceAsc',  label: t('sort.priceAsc'),  chipLabel: '价格 ↑'   },
+    { value: 'priceDesc', label: t('sort.priceDesc'), chipLabel: '价格 ↓'   },
   ];
 
   const hasAnyFilter =
@@ -48,7 +49,8 @@ export function MobileFilterToggle({
 
   return (
     <div className="md:hidden">
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+      {/* flex-wrap 替代 horizontal scroll：4 个 chip 放不下时自动换行而非藏在右侧 */}
+      <div className="flex flex-wrap items-center gap-1.5 py-0.5">
         <ChipDropdown
           label="类目"
           value={filters.category}
@@ -105,7 +107,8 @@ function ChipDropdown<T extends string>({
 }: {
   label: string;
   value: T;
-  options: Array<{ value: T; label: string }>;
+  /** label = 弹出菜单里的全长名（如"价格低 → 高"）；chipLabel = chip 上显示的短名（"价格 ↑"），不传则用 label */
+  options: Array<{ value: T; label: string; chipLabel?: string }>;
   defaultValue: T;
   onChange: (v: T) => void;
 }) {
@@ -118,7 +121,11 @@ function ChipDropdown<T extends string>({
   useEffect(() => { setMounted(true); }, []);
 
   const active = value !== defaultValue;
-  const currentLabel = options.find(o => o.value === value)?.label ?? '';
+  const selected = options.find(o => o.value === value);
+  // chip 上：active 时只显示值（不带"类目:"前缀，省空间）；default 时显示维度标签
+  const chipText = active
+    ? (selected?.chipLabel ?? selected?.label ?? '')
+    : label;
 
   const openMenu = () => {
     const rect = btnRef.current?.getBoundingClientRect();
@@ -159,7 +166,7 @@ function ChipDropdown<T extends string>({
             : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-100'
         }`}
       >
-        <span className="whitespace-nowrap">{active ? `${label}: ${currentLabel}` : label}</span>
+        <span className="whitespace-nowrap">{chipText}</span>
         <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
@@ -350,10 +357,10 @@ function MoreSheet({
                 <button
                   key={typ}
                   onClick={() => onChange({ type: typ })}
-                  className={`px-4 py-2 text-sm rounded-full border min-w-[64px] ${
+                  className={`px-4 py-2 text-sm rounded-full border min-w-[64px] transition-colors ${
                     filters.type === typ
-                      ? 'bg-brand text-white border-brand'
-                      : 'bg-white text-stone-700 border-stone-300'
+                      ? 'bg-brand/10 border-brand text-brand font-medium'
+                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-100'
                   }`}
                 >
                   {typ === 'all' ? t('filter.all') : typ === 'sell' ? t('type.sell') : t('type.buy')}
@@ -370,10 +377,10 @@ function MoreSheet({
                 <button
                   key={d}
                   onClick={() => onChange({ since: d })}
-                  className={`px-4 py-2 text-sm rounded-full border ${
+                  className={`px-4 py-2 text-sm rounded-full border transition-colors ${
                     filters.since === d
-                      ? 'bg-brand text-white border-brand'
-                      : 'bg-white text-stone-700 border-stone-300'
+                      ? 'bg-brand/10 border-brand text-brand font-medium'
+                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-100'
                   }`}
                 >
                   {t(`date.${d}` as any)}
