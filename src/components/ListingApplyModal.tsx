@@ -143,21 +143,32 @@ export function ListingApplyModal({
 
         <div className="p-5 space-y-4">
           {/* listing 简介 */}
-          <div className="bg-stone-50 border border-stone-200 rounded-lg p-3">
-            <div className="text-sm font-semibold text-stone-900 truncate">{listing.title}</div>
-            <div className="text-xs text-stone-500 mt-1">
-              对方：{listing.posterGender === 'F' ? '女生' : listing.posterGender === 'M' ? '男生' : listing.posterGender === 'nb' ? '非二元' : '未透露'}
-              {listing.ageRange && ` · ${listing.ageRange}`}
-              {' · 找：'}
-              <span className={`font-medium ${
-                listing.lookingForGender === 'any' ? 'text-stone-700' : 'text-brand'
-              }`}>
-                {listing.lookingForGender === 'F-only' ? '仅女生'
-                  : listing.lookingForGender === 'M-only' ? '仅男生'
-                  : '不限性别'}
-              </span>
-            </div>
-          </div>
+          {(() => {
+            const isRental = listing.type === 'sublet' || listing.type === 'summer';
+            return (
+              <div className="bg-stone-50 border border-stone-200 rounded-lg p-3">
+                <div className="text-sm font-semibold text-stone-900 truncate">{listing.title}</div>
+                <div className="text-xs text-stone-500 mt-1">
+                  {/* 合租场景显示发布人性别/年龄；租赁场景隐藏 */}
+                  {!isRental && (
+                    <>
+                      对方：{listing.posterGender === 'F' ? '女生' : listing.posterGender === 'M' ? '男生' : listing.posterGender === 'nb' ? '非二元' : '未透露'}
+                      {listing.ageRange && ` · ${listing.ageRange}`}
+                      {' · '}
+                    </>
+                  )}
+                  {isRental ? '房东要求：' : '找：'}
+                  <span className={`font-medium ${
+                    listing.lookingForGender === 'any' ? 'text-stone-700' : 'text-brand'
+                  }`}>
+                    {listing.lookingForGender === 'F-only' ? (isRental ? '仅女生租客' : '仅女生')
+                      : listing.lookingForGender === 'M-only' ? (isRental ? '仅男生租客' : '仅男生')
+                      : '不限性别'}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 性别 */}
           <div>

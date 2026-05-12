@@ -98,6 +98,8 @@ export function ListingCard({
   const typeMeta = LISTING_TYPES.find(t => t.id === listing.type);
   const typeColor = TYPE_COLOR[listing.type] ?? TYPE_COLOR.find_roommate;
   const fresh = freshnessBadge(listing.bumpedAt ?? listing.createdAt, 'zh');
+  // C (sublet) 和 D (summer) 是租赁场景：不暴露发布人性别/年龄
+  const isRental = listing.type === 'sublet' || listing.type === 'summer';
 
   // 收集 active 生活方式 chips
   const lifestyleChips: string[] = [];
@@ -182,16 +184,30 @@ export function ListingCard({
       )}
 
       <div className="p-3 md:p-4">
-        {/* 头部：类型 chip 始终显示；性别 / 新鲜度 紧凑手机端隐藏（桌面始终显示） */}
+        {/* 头部：类型 chip 始终显示；性别 / 新鲜度 紧凑手机端隐藏（桌面始终显示）
+            - A/B（合租）：显示发布人性别·年龄
+            - C/D（租赁）：不显示发布人个人信息；如果限制租客性别，把"仅 X 租客"放头部突出 */}
         <div className="flex items-center gap-1.5 text-xs mb-2 flex-wrap">
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border font-medium ${typeColor.chip}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${typeColor.dot}`} />
             {typeMeta?.label ?? listing.type}
           </span>
-          <span className={`px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 ${expanded ? 'inline' : 'hidden md:inline'}`}>
-            {GENDER_LABEL[listing.posterGender] ?? listing.posterGender}
-            {listing.ageRange && ` · ${listing.ageRange}`}
-          </span>
+
+          {/* A/B：发布人性别 + 年龄 */}
+          {!isRental && (
+            <span className={`px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 ${expanded ? 'inline' : 'hidden md:inline'}`}>
+              {GENDER_LABEL[listing.posterGender] ?? listing.posterGender}
+              {listing.ageRange && ` · ${listing.ageRange}`}
+            </span>
+          )}
+
+          {/* C/D：仅在房东限制租客性别时显示 */}
+          {isRental && listing.lookingForGender !== 'any' && (
+            <span className="px-2 py-0.5 rounded-full bg-brand/10 text-brand border border-brand/30 font-medium">
+              {listing.lookingForGender === 'F-only' ? '仅女生租客' : '仅男生租客'}
+            </span>
+          )}
+
           <span className={`ml-auto whitespace-nowrap ${fresh.className} ${expanded ? 'inline' : 'hidden md:inline'}`}>
             {fresh.label}
           </span>
@@ -250,13 +266,19 @@ export function ListingCard({
           </div>
         )}
 
-        {/* 找谁 + 申请联系：紧凑手机端隐藏；展开 / 桌面显示 */}
+        {/* 找谁 + 申请联系：紧凑手机端隐藏；展开 / 桌面显示
+            A/B（合租）：左侧显示"仅找女生/男生/不限性别"；
+            C/D（租赁）：左侧不重复显示性别限制（已在头部 chip 突出） */}
         <div className={`items-center justify-between pt-2 border-t border-stone-100 ${expanded ? 'flex' : 'hidden md:flex'}`}>
-          <div className="text-xs text-stone-500">
-            {listing.lookingForGender === 'F-only' ? '仅找女生'
-              : listing.lookingForGender === 'M-only' ? '仅找男生'
-              : '不限性别'}
-          </div>
+          {!isRental ? (
+            <div className="text-xs text-stone-500">
+              {listing.lookingForGender === 'F-only' ? '仅找女生'
+                : listing.lookingForGender === 'M-only' ? '仅找男生'
+                : '不限性别'}
+            </div>
+          ) : (
+            <div /> /* 占位，让按钮 justify-between 靠右 */
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); handleApply(); }}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand text-white rounded-chip text-sm font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card"

@@ -51,6 +51,8 @@ const TYPE_META: Record<TypeId, {
   showCurrentResidents: boolean;
   showFurnished: boolean;
   defaultFurnished: boolean;
+  showSelfInfo: boolean;   // 是否显示"关于我（性别/年龄）" — 合租场景 true，租赁场景 false
+  lookingForLabel: string; // "找谁" 字段在表单上的措辞
   photoHint: string;
   areaHint: string;
 }> = {
@@ -60,6 +62,8 @@ const TYPE_META: Record<TypeId, {
     layoutLabel: '户型', dateLabel: '可入住时间', dateRequiredBoth: false,
     showMoveInFuzzy: true, showCurrentResidents: true, showFurnished: false,
     defaultFurnished: false,
+    showSelfInfo: true,
+    lookingForLabel: '找谁（性别筛选基于双方自我表达）',
     photoHint: '展现品味/性格的照片：房间、宠物、爱好都行，不需要正脸',
     areaHint: '你现住的位置',
   },
@@ -69,6 +73,8 @@ const TYPE_META: Record<TypeId, {
     layoutLabel: '期望户型', dateLabel: '期望入住时间', dateRequiredBoth: false,
     showMoveInFuzzy: true, showCurrentResidents: false, showFurnished: false,
     defaultFurnished: false,
+    showSelfInfo: true,
+    lookingForLabel: '找谁（性别筛选基于双方自我表达）',
     photoHint: '展现品味/性格的照片：宠物、书架、爱好都行，不需要正脸',
     areaHint: '期望区域',
   },
@@ -78,6 +84,8 @@ const TYPE_META: Record<TypeId, {
     layoutLabel: '户型', dateLabel: 'Lease 起止日期', dateRequiredBoth: true,
     showMoveInFuzzy: false, showCurrentResidents: false, showFurnished: true,
     defaultFurnished: false,
+    showSelfInfo: false,  // 转租是租赁，房东个人信息无关
+    lookingForLabel: '对租客的性别要求',
     photoHint: '出租房间的实景图（客厅、卧室、厨房等）',
     areaHint: '房子位置',
   },
@@ -86,7 +94,9 @@ const TYPE_META: Record<TypeId, {
     hasPlace: true,
     layoutLabel: '户型', dateLabel: '暑期日期', dateRequiredBoth: true,
     showMoveInFuzzy: false, showCurrentResidents: false, showFurnished: true,
-    defaultFurnished: true,  // 暑期短租默认带家具
+    defaultFurnished: true,
+    showSelfInfo: false,  // 暑期短租也是租赁
+    lookingForLabel: '对租客的性别要求',
     photoHint: '出租房间的实景图（客厅、卧室、厨房等）',
     areaHint: '房子位置',
   },
@@ -198,6 +208,11 @@ export function ListingPostModal({
     } else {
       setFurnished(false);
     }
+    // 切到租赁场景：清空发布人性别 + 年龄（不需要这些信息）
+    if (!meta.showSelfInfo) {
+      setPosterGender('');
+      setAgeRange('');
+    }
   }, [type]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleArea = (a: string) => {
@@ -205,7 +220,8 @@ export function ListingPostModal({
   };
 
   const submit = async () => {
-    if (!posterGender) return alert('请选择你的性别');
+    // 合租场景必选性别；租赁场景房东性别无关，不强制
+    if (meta.showSelfInfo && !posterGender) return alert('请选择你的性别');
     if (!title.trim()) return alert('标题不能为空');
     if (!contactValue.trim()) return alert('联系方式不能为空');
     if (editCode.length < 6) return alert('识别码至少 6 位');
@@ -219,8 +235,9 @@ export function ListingPostModal({
 
     const payload = {
       type,
-      posterGender,
-      ageRange: ageRange || null,
+      // 租赁场景房东性别/年龄不发表，统一打 unspecified（DB 仍接受历史值）
+      posterGender: meta.showSelfInfo ? posterGender : 'unspecified',
+      ageRange: meta.showSelfInfo ? (ageRange || null) : null,
       lookingForGender,
       title: title.trim(),
       description: description.trim(),
@@ -303,32 +320,36 @@ export function ListingPostModal({
             </div>
           </section>
 
-          {/* 2. 自我表达 */}
+          {/* 2. 自我表达（仅合租场景显示；租赁场景房东个人信息无关） */}
           <section className="space-y-3">
-            <Label>关于我（公开展示，方便对方了解你）</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <Sub>我是 <span className="text-brand">*</span></Sub>
-                <Pills
-                  value={posterGender}
-                  onChange={setPosterGender}
-                  options={LISTING_GENDERS_UI.map(g => ({ v: g.v, l: g.l }))}
-                />
-              </div>
-              <div>
-                <Sub>年龄段</Sub>
-                <Pills value={ageRange} onChange={setAgeRange} options={[
-                  { v: '', l: '不填' },
-                  ...LISTING_AGE_RANGES.map(r => ({ v: r, l: r })),
-                ]} />
-              </div>
-            </div>
+            {meta.showSelfInfo && (
+              <>
+                <Label>关于我（公开展示，方便对方了解你）</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Sub>我是 <span className="text-brand">*</span></Sub>
+                    <Pills
+                      value={posterGender}
+                      onChange={setPosterGender}
+                      options={LISTING_GENDERS_UI.map(g => ({ v: g.v, l: g.l }))}
+                    />
+                  </div>
+                  <div>
+                    <Sub>年龄段</Sub>
+                    <Pills value={ageRange} onChange={setAgeRange} options={[
+                      { v: '', l: '不填' },
+                      ...LISTING_AGE_RANGES.map(r => ({ v: r, l: r })),
+                    ]} />
+                  </div>
+                </div>
+              </>
+            )}
             <div>
-              <Sub>找谁（性别筛选基于双方自我表达）</Sub>
+              <Sub>{meta.lookingForLabel}</Sub>
               <Pills value={lookingForGender} onChange={setLookingForGender} options={[
                 { v: 'any',    l: '不限性别' },
-                { v: 'F-only', l: '仅女生' },
-                { v: 'M-only', l: '仅男生' },
+                { v: 'F-only', l: meta.showSelfInfo ? '仅女生' : '仅女生租客' },
+                { v: 'M-only', l: meta.showSelfInfo ? '仅男生' : '仅男生租客' },
               ]} />
             </div>
           </section>
