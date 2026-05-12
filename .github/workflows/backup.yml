@@ -1,0 +1,67 @@
+name: Weekly DB Backup
+
+# 每周日 06:00 UTC = EST 周六晚 1:00 / EDT 周六晚 2:00 自动跑
+# 也支持 GitHub Actions 页面手动触发（workflow_dispatch）
+on:
+  schedule:
+    - cron: '0 6 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Verify DATABASE_URL secret exists
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret 未配置"
+            echo "去仓库 Settings → Secrets and variables → Actions → New secret"
+            echo "key = DATABASE_URL，value = Railway PG 的完整连接字符串（postgresql://...）"
+            exit 1
+          fi
+          echo "✓ DATABASE_URL secret 已配置"
+
+      - name: Install postgresql-client 16
+        # GitHub-hosted runner 自带的 pg_dump 是 14；Railway PG 是 16，版本不匹配会 dump 失败。
+        # 装官方 16 客户端以匹配
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16
+          pg_dump --version
+
+      - name: Run pg_dump
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          mkdir -p backups
+          TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
+          OUTFILE="backups/bbsh-dump-${TIMESTAMP}.sql.gz"
+          echo "▶ dumping to $OUTFILE..."
+          # --no-owner / --no-acl：恢复时不要求与原 owner / 角色匹配
+          # --clean / --if-exists：恢复时先 DROP 旧表，便于干净重建
+          # gzip：压缩，10-20× 缩小
+          pg_dump "$DATABASE_URL" \
+            --no-owner --no-acl --clean --if-exists \
+            | gzip -9 > "$OUTFILE"
+          SIZE=$(du -h "$OUTFILE" | cut -f1)
+          echo "✓ 备份完成: $OUTFILE ($SIZE)"
+          ls -lh backups/
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bbsh-db-backup-${{ github.run_id }}
+          path: backups/*.sql.gz
+          retention-days: 90
+          if-no-files-found: error

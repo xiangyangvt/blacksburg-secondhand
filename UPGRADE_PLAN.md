@@ -332,5 +332,7 @@ npm run build
 ## 十、下一步
 
 - Sprint 2 测试 → 部署 → 在微信群 / 小红书启动新一轮推广（详细渠道建议在第八章）
-- Sprint 3 候选：A1 分页 / A5 PWA / B1 全文检索 / E5 Sentry / E6 备份 → R2 photoUrls 数组
+- **Sprint 3**：设计系统 DS-B + DS-C + DS-D（12-18h）—— P0+P1 视觉重构、类目色系、新鲜度、最近浏览
+- **Sprint 4**：室友&转租新平台（21-30h）—— 详见 [ROOMMATES_PLAN.md](./ROOMMATES_PLAN.md)
+- Sprint 5+ 候选（按需）：A1 分页 / A5 PWA / B1 全文检索 / E5 Sentry / E6 备份 → R2 photoUrls 数组 / 邮件通知（看 Sprint 4 retention 情况）
 
