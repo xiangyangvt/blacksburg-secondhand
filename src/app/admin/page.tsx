@@ -80,6 +80,27 @@ async function unhideInquiryAction(formData: FormData) {
   revalidatePath('/admin');
 }
 
+async function deleteListingAction(formData: FormData) {
+  'use server';
+  if (!isAdmin()) return;
+  const id = String(formData.get('id'));
+  const listing = await prisma.listing.findUnique({ where: { id }, select: { photoUrls: true } });
+  await prisma.listing.update({ where: { id }, data: { status: 'deleted' } });
+  if (listing) {
+    schedulePendingCloudinaryDeletion(parsePhotoUrls(listing.photoUrls)).catch(() => {});
+  }
+  revalidatePath('/admin');
+}
+
+async function unhideListingAction(formData: FormData) {
+  'use server';
+  if (!isAdmin()) return;
+  const id = String(formData.get('id'));
+  await prisma.report.deleteMany({ where: { listingId: id } });
+  await prisma.listing.update({ where: { id }, data: { status: 'active' } });
+  revalidatePath('/admin');
+}
+
 /** 取消待删 — 删队列记录但不 destroy（图保留） */
 async function cancelPendingDeletionAction(formData: FormData) {
   'use server';
@@ -113,13 +134,18 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     return <LoginScreen error={searchParams.error} />;
   }
 
-  const [reports, hiddenItems, hiddenInquiries, activeCount, inquiryCount, reportCount] = await Promise.all([
+  const [
+    reports, hiddenItems, hiddenInquiries, hiddenListings,
+    activeCount, inquiryCount, reportCount,
+    activeListingCount, applicationCount, pendingApplicationCount,
+  ] = await Promise.all([
     prisma.report.findMany({
       orderBy: { createdAt: 'desc' },
       take: 200,
       include: {
         item:    true,
         inquiry: { include: { item: true } },
+        listing: true,
       },
     }),
     prisma.item.findMany({
@@ -131,9 +157,16 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
       orderBy: { updatedAt: 'desc' },
       include: { item: true },
     }),
+    prisma.listing.findMany({
+      where: { status: 'hidden' },
+      orderBy: { updatedAt: 'desc' },
+    }),
     prisma.item.count({ where: { status: 'active' } }),
     prisma.inquiry.count(),
     prisma.report.count(),
+    prisma.listing.count({ where: { status: 'active' } }),
+    prisma.application.count(),
+    prisma.application.count({ where: { status: 'pending' } }),
   ]);
 
   // 来源渠道分布：近 30 天 item 按 utmSource 聚合（单独一次查询，方便类型 cast）
@@ -184,7 +217,7 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
   const totalUniqueVisitors = allVisitorIds.size;
 
   return (
-    <main className="max-w-4xl mx-auto p-4 md:p-6 bg-stone-50 min-h-screen">
+    <main className="max-w-5xl mx-auto p-4 md:p-6 bg-stone-50 min-h-screen">
       <header className="flex items-center justify-between mb-6 pb-4 border-b border-stone-200">
         <div>
           <h1 className="text-2xl font-bold text-brand">🔧 管理后台</h1>
@@ -195,11 +228,24 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
         </form>
       </header>
 
-      {/* 统计 */}
-      <section className="mb-6 grid grid-cols-3 gap-3">
-        <StatCard label="活跃商品" value={activeCount} />
-        <StatCard label="留言总数" value={inquiryCount} />
-        <StatCard label="累计举报" value={reportCount} />
+      {/* 统计 —— 桌面端两个平台并排 */}
+      <section className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="bg-white rounded-lg border border-stone-200 p-3">
+          <div className="text-xs font-semibold text-stone-500 uppercase mb-2 px-1">🛒 二手</div>
+          <div className="grid grid-cols-3 gap-2">
+            <MiniStat label="活跃商品" value={activeCount} />
+            <MiniStat label="留言总数" value={inquiryCount} />
+            <MiniStat label="累计举报" value={reportCount} />
+          </div>
+        </div>
+        <div className="bg-white rounded-lg border border-stone-200 p-3">
+          <div className="text-xs font-semibold text-stone-500 uppercase mb-2 px-1">🏠 室友 & 租房</div>
+          <div className="grid grid-cols-3 gap-2">
+            <MiniStat label="活跃 listing" value={activeListingCount} />
+            <MiniStat label="申请总数" value={applicationCount} />
+            <MiniStat label="待处理申请" value={pendingApplicationCount} />
+          </div>
+        </div>
       </section>
 
       {/* 访问统计柱状图 —— 自建埋点，跟用户内容计数分开展示 */}
@@ -212,7 +258,7 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
         />
       </section>
 
-      {/* 举报队列 */}
+      {/* 举报队列 —— 二手 + 室友混合，targetType chip 区分 */}
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">📨 举报队列 ({reports.length})</h2>
         {reports.length === 0 ? (
@@ -225,6 +271,7 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
                 report={r}
                 onDeleteItem={deleteItemAction}
                 onDeleteInquiry={deleteInquiryAction}
+                onDeleteListing={deleteListingAction}
                 onDismiss={dismissReportAction}
               />
             ))}
@@ -328,7 +375,7 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
       )}
 
       {/* 自动隐藏的留言 */}
-      <section>
+      <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">🙊 自动隐藏的留言 ({hiddenInquiries.length})</h2>
         {hiddenInquiries.length === 0 ? (
           <EmptyBox text="无" />
@@ -340,6 +387,25 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
                 inquiry={inq}
                 onUnhide={unhideInquiryAction}
                 onDelete={deleteInquiryAction}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* 自动隐藏的 listing（被 3+ IP 举报） */}
+      <section>
+        <h2 className="text-lg font-semibold mb-3">🚪 自动隐藏的 listing ({hiddenListings.length})</h2>
+        {hiddenListings.length === 0 ? (
+          <EmptyBox text="无" />
+        ) : (
+          <div className="space-y-3">
+            {hiddenListings.map(listing => (
+              <HiddenListingCard
+                key={listing.id}
+                listing={listing}
+                onUnhide={unhideListingAction}
+                onDelete={deleteListingAction}
               />
             ))}
           </div>
@@ -384,6 +450,16 @@ function StatCard({ label, value }: { label: string; value: number }) {
     <div className="bg-white rounded-lg border border-stone-200 p-3 text-center">
       <div className="text-2xl font-bold text-brand">{value}</div>
       <div className="text-xs text-stone-500 mt-1">{label}</div>
+    </div>
+  );
+}
+
+/** 紧凑版统计 —— 用于平台分组的统计卡内 */
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="bg-stone-50 rounded p-2 text-center">
+      <div className="text-xl font-bold text-stone-900 tabular-nums">{value}</div>
+      <div className="text-[10px] text-stone-500 mt-0.5">{label}</div>
     </div>
   );
 }
@@ -546,17 +622,28 @@ function ReportCard({
   report,
   onDeleteItem,
   onDeleteInquiry,
+  onDeleteListing,
   onDismiss,
 }: {
   report: any;
   onDeleteItem: (fd: FormData) => Promise<void>;
   onDeleteInquiry: (fd: FormData) => Promise<void>;
+  onDeleteListing: (fd: FormData) => Promise<void>;
   onDismiss: (fd: FormData) => Promise<void>;
 }) {
-  const isItem = !!report.itemId;
-  const target = isItem ? report.item : report.inquiry;
+  // 按 targetType 区分（item / inquiry / listing / application）
+  const kind: 'item' | 'inquiry' | 'listing' | 'application' =
+    report.itemId ? 'item'
+    : report.inquiryId ? 'inquiry'
+    : report.listingId ? 'listing'
+    : 'application';
+  const target =
+    kind === 'item' ? report.item
+    : kind === 'inquiry' ? report.inquiry
+    : kind === 'listing' ? report.listing
+    : null;
+
   if (!target) {
-    // 目标已被删除，给个 dismiss 按钮清理这条孤儿举报
     return (
       <div className="bg-stone-100 rounded-lg p-3 text-sm flex items-center justify-between">
         <span className="text-stone-500">举报对象已被删除（孤儿记录）· {timeAgo(report.createdAt)}</span>
@@ -568,12 +655,13 @@ function ReportCard({
     );
   }
 
+  const kindLabel = kind === 'item' ? '商品举报' : kind === 'inquiry' ? '留言举报' : kind === 'listing' ? 'Listing 举报' : '申请举报';
+  const kindAccent = kind === 'listing' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700';
+
   return (
     <div className="bg-white rounded-lg border border-stone-200 p-4">
       <div className="flex items-center gap-2 text-xs text-stone-500 mb-2 flex-wrap">
-        <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
-          {isItem ? '商品举报' : '留言举报'}
-        </span>
+        <span className={`px-2 py-0.5 rounded-full font-medium ${kindAccent}`}>{kindLabel}</span>
         <span>· {timeAgo(report.createdAt)}</span>
         <span>· IP: <code className="bg-stone-100 px-1 rounded">{report.reporterIp ?? 'unknown'}</code></span>
       </div>
@@ -585,7 +673,7 @@ function ReportCard({
       )}
 
       <div className="bg-stone-50 rounded p-3 mb-3 text-sm border border-stone-100">
-        {isItem ? (
+        {kind === 'item' && (
           <>
             <div className="font-semibold text-stone-900">
               {target.title} — {formatPrice(target.price, 'zh', target.type, target.category)}
@@ -597,7 +685,8 @@ function ReportCard({
               <div className="text-xs text-stone-700 whitespace-pre-wrap mt-1">{target.description}</div>
             )}
           </>
-        ) : (
+        )}
+        {kind === 'inquiry' && (
           <>
             <div className="text-xs text-stone-500 mb-1">
               {target.contactType}: <code>{target.contactValue}</code> 在 <strong>{target.item?.title}</strong> 留言
@@ -605,15 +694,28 @@ function ReportCard({
             <div className="text-stone-700 whitespace-pre-wrap mt-1">{target.message}</div>
           </>
         )}
+        {kind === 'listing' && (
+          <>
+            <div className="font-semibold text-stone-900">{target.title}</div>
+            <div className="text-xs text-stone-500 mb-1">
+              {target.type} · {target.posterGender ?? '—'} · {target.contactType}: <code>{target.contactValue}</code>
+            </div>
+            {target.description && (
+              <div className="text-xs text-stone-700 whitespace-pre-wrap mt-1 line-clamp-3">{target.description}</div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="flex gap-2">
-        <form action={isItem ? onDeleteItem : onDeleteInquiry}>
-          <input type="hidden" name="id" value={isItem ? report.itemId : report.inquiryId} />
-          <button className="px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700">
-            删除{isItem ? '商品' : '留言'}
-          </button>
-        </form>
+        {kind !== 'application' && (
+          <form action={kind === 'item' ? onDeleteItem : kind === 'inquiry' ? onDeleteInquiry : onDeleteListing}>
+            <input type="hidden" name="id" value={kind === 'item' ? report.itemId : kind === 'inquiry' ? report.inquiryId : report.listingId} />
+            <button className="px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+              删除{kind === 'item' ? '商品' : kind === 'inquiry' ? '留言' : 'listing'}
+            </button>
+          </form>
+        )}
         <form action={onDismiss}>
           <input type="hidden" name="id" value={report.id} />
           <button className="px-3 py-1.5 border border-stone-300 rounded text-sm text-stone-700 hover:bg-stone-100">
@@ -659,6 +761,49 @@ function HiddenItemCard({
           <input type="hidden" name="id" value={item.id} />
           <button className="px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700">
             永久删除
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function HiddenListingCard({
+  listing,
+  onUnhide,
+  onDelete,
+}: {
+  listing: any;
+  onUnhide: (fd: FormData) => Promise<void>;
+  onDelete: (fd: FormData) => Promise<void>;
+}) {
+  return (
+    <div className="bg-white rounded-lg border border-amber-200 p-4">
+      <div className="text-xs text-amber-700 mb-1">
+        ⚠️ 被 3+ IP 举报后自动隐藏 · 隐藏于 {timeAgo(listing.updatedAt)}
+      </div>
+      <div className="font-semibold text-stone-900 mb-1">{listing.title}</div>
+      <div className="text-xs text-stone-500 mb-2">
+        类型: <code className="bg-stone-100 px-1 rounded">{listing.type}</code> ·
+        性别: {listing.posterGender} ·
+        {listing.contactType}: <code>{listing.contactValue}</code>
+      </div>
+      {listing.description && (
+        <div className="text-sm text-stone-700 whitespace-pre-wrap mb-3 bg-stone-50 rounded p-2 border border-stone-100 line-clamp-4">
+          {listing.description}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <form action={onUnhide}>
+          <input type="hidden" name="id" value={listing.id} />
+          <button className="px-3 py-1.5 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+            恢复显示
+          </button>
+        </form>
+        <form action={onDelete}>
+          <input type="hidden" name="id" value={listing.id} />
+          <button className="px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+            软删 listing
           </button>
         </form>
       </div>
