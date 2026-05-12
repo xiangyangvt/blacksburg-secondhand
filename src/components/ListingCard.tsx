@@ -12,7 +12,7 @@
 import { useState, useRef, useEffect } from 'react';
 import NextImage from 'next/image';
 import {
-  Mail, Calendar, MapPin, X,
+  Mail, MapPin, X,
   ChevronLeft, ChevronRight,
   Pencil, Trash2, Flag,
 } from 'lucide-react';
@@ -39,6 +39,9 @@ export type Listing = {
   housingLayout: string | null;
   moveInStart: string | null;
   moveInEnd: string | null;
+  moveInFuzzy?: string | null;       // 立即/1月内/春/暑/秋/灵活
+  currentResidents?: number | null;  // A 类型：现住几人（含你将加入的）
+  furnished?: boolean | null;        // C/D 类型：是否带家具
   budgetMin: number | null;
   budgetMax: number | null;
   areas: string[];
@@ -52,6 +55,15 @@ export type Listing = {
   contactType: string;
   createdAt: string;
   bumpedAt?: string;
+};
+
+const MOVEIN_FUZZY_LABEL: Record<string, string> = {
+  immediate:    '立即可入住',
+  within_month: '1 个月内可入住',
+  spring_term:  '春季学期入住',
+  summer:       '暑期入住',
+  fall_term:    '秋季学期入住',
+  flexible:     '入住时间灵活',
 };
 
 const TYPE_COLOR: Record<string, { chip: string; dot: string }> = {
@@ -75,15 +87,31 @@ const LIFESTYLE_LABEL: Record<string, Record<string, string>> = {
   guests:        { no: '不接受过夜', occasional: '偶尔过夜 OK', ok: '过夜 OK' },
 };
 
+/**
+ * 转租 / 暑期日期格式化 —— 必须带年份避免歧义（"7/11 – 6/11" 看不出是跨年还是反了）
+ * 同一年时简写：`2026/7/11 – 6/11`
+ * 跨年时完整：`2026/7/11 – 2027/6/11`
+ */
 function formatDateRange(s: string | null, e: string | null): string {
   if (!s && !e) return '';
-  const fmt = (iso: string) => {
+  const fmtFull = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+  };
+  const fmtMD = (iso: string) => {
     const d = new Date(iso);
     return `${d.getMonth() + 1}/${d.getDate()}`;
   };
-  if (s && e) return `${fmt(s)} – ${fmt(e)}`;
-  if (s) return `${fmt(s)} 起`;
-  return `至 ${fmt(e!)}`;
+  if (s && e) {
+    const ds = new Date(s);
+    const de = new Date(e);
+    if (ds.getFullYear() === de.getFullYear()) {
+      return `${fmtFull(s)} – ${fmtMD(e)}`;
+    }
+    return `${fmtFull(s)} – ${fmtFull(e)}`;
+  }
+  if (s) return `${fmtFull(s)} 起`;
+  return `至 ${fmtFull(e!)}`;
 }
 
 function formatBudget(min: number | null, max: number | null): string {
@@ -311,6 +339,10 @@ export function ListingCard({
             )}
           </div>
 
+          {/* 关键信息条：标题之上，醒目显示日期/户型/室友数/家具
+              对租客来说这几个字段比"标题"和"描述"更关键，所以提到这里 */}
+          <KeyInfoStrip listing={listing} />
+
           {/* 标题 */}
           <h3 className={`text-base md:text-lg font-semibold text-stone-900 leading-tight mb-1 ${expanded ? '' : 'line-clamp-2'}`}>
             {listing.title}
@@ -328,18 +360,9 @@ export function ListingCard({
             </p>
           )}
 
-          {/* 元信息行：紧凑只显示区域；展开 / 桌面显示完整 */}
-          <div className="flex items-center gap-3 text-xs text-stone-500 mb-2 flex-wrap">
-            {(listing.moveInStart || listing.moveInEnd) && (
-              <span className={`items-center gap-1 ${expanded ? 'inline-flex' : 'hidden md:inline-flex'}`}>
-                <Calendar size={12} />
-                {formatDateRange(listing.moveInStart, listing.moveInEnd)}
-              </span>
-            )}
-            {listing.housingLayout && (
-              <span className={expanded ? 'inline' : 'hidden md:inline'}>{listing.housingLayout}</span>
-            )}
-            {listing.areas.length > 0 && (
+          {/* 元信息行：只剩区域（日期/户型已上移到 KeyInfoStrip）*/}
+          {listing.areas.length > 0 && (
+            <div className="flex items-center gap-3 text-xs text-stone-500 mb-2 flex-wrap">
               <span className="inline-flex items-center gap-1 truncate max-w-full">
                 <MapPin size={12} className="flex-shrink-0" />
                 <span className="truncate">
@@ -347,8 +370,8 @@ export function ListingCard({
                   {!expanded && listing.areas.length > 2 && ` +${listing.areas.length - 2}`}
                 </span>
               </span>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* 生活方式 chips：紧凑手机端隐藏 */}
           {lifestyleChips.length > 0 && (
@@ -471,5 +494,46 @@ export function ListingCard({
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * 关键信息条：放在标题之上，醒目展示对租客/找室友最重要的信息
+ * - 日期（带年份，避免"7/11 – 6/11"看着像反了的歧义）
+ * - 户型（1B1B 等）
+ * - 现住人数（A 类型，"你将加入 N 人"）
+ * - 是否带家具（C/D）
+ * - 模糊入住时间（A/B 的 chip 文本，moveInStart/End 不填时显示）
+ */
+function KeyInfoStrip({ listing }: { listing: Listing }) {
+  const isRental = listing.type === 'sublet' || listing.type === 'summer';
+  const hasDate = !!(listing.moveInStart || listing.moveInEnd);
+  const dateText = hasDate ? formatDateRange(listing.moveInStart, listing.moveInEnd) : null;
+  const fuzzyText = !hasDate && listing.moveInFuzzy
+    ? (MOVEIN_FUZZY_LABEL[listing.moveInFuzzy] ?? listing.moveInFuzzy)
+    : null;
+
+  const items: Array<{ icon: string; text: string; emph?: boolean }> = [];
+  if (dateText) items.push({ icon: '📅', text: dateText, emph: true });
+  if (fuzzyText) items.push({ icon: '📅', text: fuzzyText });
+  if (listing.housingLayout) items.push({ icon: '🏠', text: listing.housingLayout, emph: true });
+  if (typeof listing.currentResidents === 'number' && listing.currentResidents >= 0) {
+    items.push({ icon: '👥', text: `加入 ${listing.currentResidents} 人` });
+  }
+  if (isRental && typeof listing.furnished === 'boolean') {
+    items.push({ icon: '🪑', text: listing.furnished ? '带家具' : '无家具' });
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-sm text-stone-800 mb-2">
+      {items.map((it, i) => (
+        <span key={i} className={`inline-flex items-center gap-1 ${it.emph ? 'font-semibold' : ''}`}>
+          <span aria-hidden>{it.icon}</span>
+          {it.text}
+        </span>
+      ))}
+    </div>
   );
 }
