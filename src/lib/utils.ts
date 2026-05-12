@@ -64,12 +64,13 @@ export const LIFESTYLE_DIMS = {
   guests:        ['no', 'occasional', 'ok'],
 } as const;
 
+// 'housing' 类目已迁移到独立的 /roommates 平台（Sprint 4），不再出现在二手类目里
+// 但 DB 里历史 housing 数据仍存在；展示侧（typeLabel/formatPrice/categoryColor）保留 'housing' 分支兜底
 export const CATEGORIES = [
   { id: 'home',        i18nKey: 'cat.home'        as const },
   { id: 'electronics', i18nKey: 'cat.electronics' as const },
   { id: 'transport',   i18nKey: 'cat.transport'   as const },
   { id: 'books',       i18nKey: 'cat.books'       as const },
-  { id: 'housing',     i18nKey: 'cat.housing'     as const },
   { id: 'other',       i18nKey: 'cat.other'       as const },
 ] as const;
 

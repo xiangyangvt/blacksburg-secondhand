@@ -47,8 +47,8 @@ const CATEGORY_ALIASES: Record<string, CategoryId> = {
   '车': 'transport',      'bike': 'transport',     'car': 'transport',
   '书': 'books',          '书本': 'books',         '书本教材': 'books',
   '教材': 'books',        'books': 'books',        'textbook': 'books',
-  '房': 'housing',        '房屋': 'housing',       '房屋租赁': 'housing',
-  '租房': 'housing',      'housing': 'housing',    'rental': 'housing',
+  // 房屋/租房关键词不再归入二手类目 —— 引导用户到 /roommates 单独平台
+  // 因此映射到 'other'，让用户感觉到"二手页不接受租房贴"
   '其他': 'other',        'other': 'other',        'misc': 'other',
 };
 

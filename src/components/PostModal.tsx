@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Home, Search } from 'lucide-react';
+import { X } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { BatchImportPanel } from './BatchImportPanel';
 import { CATEGORIES, CONTACT_TYPES } from '@/lib/utils';
@@ -169,17 +169,8 @@ export function PostModal({
           <div>
             <Label>{t('post.fieldType')}</Label>
             <div className="flex gap-2">
-              {category === 'housing' ? (
-                <>
-                  <Pill active={type === 'sell'} onClick={() => setType('sell')}><Home size={14} className="mr-1" /> {t('type.sublet')}</Pill>
-                  <Pill active={type === 'buy'}  onClick={() => setType('buy')}><Search size={14} className="mr-1" /> {t('type.rentwanted')}</Pill>
-                </>
-              ) : (
-                <>
-                  <Pill active={type === 'sell'} onClick={() => setType('sell')}>{t('post.typeSell')}</Pill>
-                  <Pill active={type === 'buy'}  onClick={() => setType('buy')}>{t('post.typeBuy')}</Pill>
-                </>
-              )}
+              <Pill active={type === 'sell'} onClick={() => setType('sell')}>{t('post.typeSell')}</Pill>
+              <Pill active={type === 'buy'}  onClick={() => setType('buy')}>{t('post.typeBuy')}</Pill>
             </div>
           </div>
 
@@ -189,11 +180,7 @@ export function PostModal({
               value={title}
               onChange={e => setTitle(e.target.value)}
               maxLength={100}
-              placeholder={
-                category === 'housing'
-                  ? (type === 'sell' ? t('post.titlePhSublet') : t('post.titlePhRentwanted'))
-                  : (type === 'sell' ? t('post.titlePhSell')   : t('post.titlePhBuy'))
-              }
+              placeholder={type === 'sell' ? t('post.titlePhSell') : t('post.titlePhBuy')}
               className="w-full border border-stone-300 rounded px-3 py-2"
             />
           </div>
@@ -247,7 +234,7 @@ export function PostModal({
               onChange={e => setDescription(e.target.value)}
               rows={4}
               maxLength={2000}
-              placeholder={category === 'housing' ? t('post.descPhHousing') : t('post.descPh')}
+              placeholder={t('post.descPh')}
               className="w-full border border-stone-300 rounded px-3 py-2"
             />
           </div>
