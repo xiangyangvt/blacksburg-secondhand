@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Noto_Sans_SC } from 'next/font/google';
 import { Providers } from './Providers';
+import { PageViewBeacon } from '@/components/PageViewBeacon';
 import './globals.css';
 
 // 变量字体 —— Inter Latin + Noto Sans SC 中文
@@ -79,6 +80,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="zh-CN" className={`${inter.variable} ${notoSC.variable}`}>
       <body className="font-sans">
         <Providers>{children}</Providers>
+        {/* 客户端访问埋点（admin 路由会自动跳过）*/}
+        <PageViewBeacon />
       </body>
     </html>
   );

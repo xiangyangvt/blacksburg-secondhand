@@ -152,6 +152,37 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     take: 100,
   });
 
+  // 访问统计 —— 近 14 天每日浏览量 / 独立访客（JS 端聚合，避免 SQL 方言差异）
+  const since14 = new Date(Date.now() - 14 * 86400e3);
+  const views = await prisma.pageView.findMany({
+    where: { createdAt: { gte: since14 } },
+    select: { createdAt: true, visitorId: true },
+    take: 50000, // 上限兜底
+  });
+  const buckets = new Map<string, { pageviews: number; visitors: Set<string> }>();
+  // 预填充 14 天的空桶（保证 chart 连续）
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400e3);
+    const day = d.toISOString().slice(0, 10);
+    buckets.set(day, { pageviews: 0, visitors: new Set() });
+  }
+  for (const v of views) {
+    const day = v.createdAt.toISOString().slice(0, 10);
+    const b = buckets.get(day);
+    if (b) {
+      b.pageviews += 1;
+      b.visitors.add(v.visitorId);
+    }
+  }
+  const trafficSeries = Array.from(buckets.entries()).map(([day, b]) => ({
+    day,
+    pageviews: b.pageviews,
+    visitors: b.visitors.size,
+  }));
+  const totalPageviews = trafficSeries.reduce((s, d) => s + d.pageviews, 0);
+  const allVisitorIds = new Set(views.map(v => v.visitorId));
+  const totalUniqueVisitors = allVisitorIds.size;
+
   return (
     <main className="max-w-4xl mx-auto p-4 md:p-6 bg-stone-50 min-h-screen">
       <header className="flex items-center justify-between mb-6 pb-4 border-b border-stone-200">
@@ -169,6 +200,16 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
         <StatCard label="活跃商品" value={activeCount} />
         <StatCard label="留言总数" value={inquiryCount} />
         <StatCard label="累计举报" value={reportCount} />
+      </section>
+
+      {/* 访问统计柱状图 —— 自建埋点，跟用户内容计数分开展示 */}
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-3">📈 访问统计 · 近 14 天</h2>
+        <TrafficChart
+          series={trafficSeries}
+          totalPageviews={totalPageviews}
+          totalVisitors={totalUniqueVisitors}
+        />
       </section>
 
       {/* 举报队列 */}
@@ -345,6 +386,152 @@ function StatCard({ label, value }: { label: string; value: number }) {
       <div className="text-xs text-stone-500 mt-1">{label}</div>
     </div>
   );
+}
+
+/**
+ * 访问统计柱状图 —— Railway 风格深色背景 + 渐变 bar
+ * 设计：方便截图分享，单图自带 totals + 14 天分布
+ */
+function TrafficChart({
+  series,
+  totalPageviews,
+  totalVisitors,
+}: {
+  series: Array<{ day: string; pageviews: number; visitors: number }>;
+  totalPageviews: number;
+  totalVisitors: number;
+}) {
+  const W = 700;
+  const H = 220;
+  const PAD_LEFT = 28;
+  const PAD_RIGHT = 12;
+  const PAD_TOP = 12;
+  const PAD_BOTTOM = 24;
+  const chartW = W - PAD_LEFT - PAD_RIGHT;
+  const chartH = H - PAD_TOP - PAD_BOTTOM;
+
+  const max = Math.max(1, ...series.map(d => d.pageviews));
+  // 把 y 轴 max 上取整到漂亮的数（10, 20, 50, 100, ...）
+  const niceMax = niceCeiling(max);
+
+  const bw = chartW / series.length;
+  const barW = Math.max(4, bw * 0.6);
+
+  // x 轴只标第一天 + 最后一天（中间太挤）
+  const firstDay = series[0]?.day ?? '';
+  const lastDay = series[series.length - 1]?.day ?? '';
+  const fmtDay = (iso: string) => {
+    if (!iso) return '';
+    const [, m, d] = iso.split('-');
+    return `${parseInt(m, 10)}/${parseInt(d, 10)}`;
+  };
+
+  return (
+    <div className="bg-stone-950 rounded-card p-4 md:p-5 shadow-overlay">
+      {/* 顶部 totals */}
+      <div className="flex items-baseline gap-6 mb-3 flex-wrap">
+        <div>
+          <div className="text-xs text-stone-400 uppercase tracking-wide">浏览量</div>
+          <div className="text-3xl font-bold text-white tabular-nums">{totalPageviews.toLocaleString()}</div>
+        </div>
+        <div>
+          <div className="text-xs text-stone-400 uppercase tracking-wide">独立访客</div>
+          <div className="text-3xl font-bold text-white tabular-nums">{totalVisitors.toLocaleString()}</div>
+        </div>
+        <div className="ml-auto text-xs text-stone-500">近 14 天 · 黑堡二手 & 室友</div>
+      </div>
+
+      {/* SVG 柱状图 */}
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full h-auto"
+        role="img"
+        aria-label={`近 14 天访问柱状图，总浏览量 ${totalPageviews}，独立访客 ${totalVisitors}`}
+      >
+        <defs>
+          <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#a78bfa" />
+            <stop offset="100%" stopColor="#5b21b6" />
+          </linearGradient>
+          <linearGradient id="visitGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#7dd3fc" />
+            <stop offset="100%" stopColor="#0369a1" />
+          </linearGradient>
+        </defs>
+
+        {/* y 轴网格线 + 标签（0 / 1/2 / max）*/}
+        {[0, 0.5, 1].map((frac, i) => {
+          const y = PAD_TOP + chartH * (1 - frac);
+          const val = Math.round(niceMax * frac);
+          return (
+            <g key={i}>
+              <line x1={PAD_LEFT} y1={y} x2={W - PAD_RIGHT} y2={y} stroke="#27272a" strokeWidth={1} />
+              <text x={PAD_LEFT - 4} y={y + 3} fontSize={10} fill="#71717a" textAnchor="end">
+                {val}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* 柱子 */}
+        {series.map((d, i) => {
+          const x = PAD_LEFT + i * bw + (bw - barW) / 2;
+          const pvH = (d.pageviews / niceMax) * chartH;
+          const vH  = (d.visitors  / niceMax) * chartH;
+          return (
+            <g key={d.day}>
+              {/* 浏览量（背景，紫色）*/}
+              <rect
+                x={x}
+                y={PAD_TOP + chartH - pvH}
+                width={barW}
+                height={pvH}
+                fill="url(#barGrad)"
+                rx={2}
+              >
+                <title>{`${d.day}: ${d.pageviews} 浏览 · ${d.visitors} 访客`}</title>
+              </rect>
+              {/* 独立访客（前景，蓝色叠加，宽度更窄）*/}
+              <rect
+                x={x + barW * 0.25}
+                y={PAD_TOP + chartH - vH}
+                width={barW * 0.5}
+                height={vH}
+                fill="url(#visitGrad)"
+                rx={1.5}
+                opacity={0.85}
+              />
+            </g>
+          );
+        })}
+
+        {/* x 轴日期标签：首尾 */}
+        <text x={PAD_LEFT} y={H - 6} fontSize={10} fill="#71717a">{fmtDay(firstDay)}</text>
+        <text x={W - PAD_RIGHT} y={H - 6} fontSize={10} fill="#71717a" textAnchor="end">{fmtDay(lastDay)}</text>
+      </svg>
+
+      {/* 图例 */}
+      <div className="flex items-center gap-4 mt-2 text-xs text-stone-400">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: 'linear-gradient(180deg, #a78bfa, #5b21b6)' }} />
+          浏览量 (PV)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: 'linear-gradient(180deg, #7dd3fc, #0369a1)' }} />
+          独立访客 (UV)
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function niceCeiling(n: number): number {
+  if (n <= 10) return 10;
+  const mag = Math.pow(10, Math.floor(Math.log10(n)));
+  const head = Math.ceil(n / mag);
+  // 取 1/2/5/10 这类漂亮数
+  const nice = head <= 1 ? 1 : head <= 2 ? 2 : head <= 5 ? 5 : 10;
+  return nice * mag;
 }
 
 function EmptyBox({ text }: { text: string }) {

@@ -66,6 +66,23 @@ model Inquiry {
   @@index([contactValue])
 }
 
+// 页面访问统计 —— 用于 admin 后台自建轻量埋点
+// 客户端 PageViewBeacon 在 pathname 变化时 fire-and-forget POST /api/pageview
+// 服务端用 cookie 跟踪 visitorId（HttpOnly，1 年）；同一 visitorId 多次访问 = 同一 unique visitor
+// 不做指纹，不存 IP（reporterIp 已经用于反垃圾，pageview 走 visitorId）
+model PageView {
+  id         String   @id @default(cuid())
+  visitorId  String   // 来自 cookie 的匿名 id（crypto.randomUUID）
+  path       String   // /, /item/[id], /roommates ...
+  utmSource  String?  // 用户首次进站带的 ?utm_source=
+  referer    String?  // document.referrer（如有）
+  userAgent  String?  // truncated UA，用于粗粒度区分手机/桌面
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([visitorId])
+}
+
 // Cloudinary 待删队列：软删/换图时不立即 destroy，而是延迟 24h 给用户后悔时间
 // 触发：每次 GET /api/items 时机会式扫一遍过期记录
 model PendingCloudinaryDeletion {

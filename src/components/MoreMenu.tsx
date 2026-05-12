@@ -20,14 +20,28 @@ export function MoreMenu({ items, className = '' }: { items: MoreMenuItem[]; cla
 
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent | TouchEvent) => {
+
+    // 外部点击 → 关闭菜单
+    const onDocPointer = (e: MouseEvent | TouchEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('touchstart', onDoc);
+
+    // 关键：在 capture 阶段拦截 click，stopPropagation
+    // 这样外部 click 只关菜单，不会冒泡到 ItemCard / ListingCard 的 onCardClick（防止"误触收卡片"）
+    // 用户需要再点一次才会触发卡片本身的逻辑（Apple/Mac 菜单标准行为）
+    const onDocClickCapture = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        e.stopPropagation();
+      }
+    };
+
+    document.addEventListener('mousedown', onDocPointer);
+    document.addEventListener('touchstart', onDocPointer);
+    document.addEventListener('click', onDocClickCapture, true);
     return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('touchstart', onDoc);
+      document.removeEventListener('mousedown', onDocPointer);
+      document.removeEventListener('touchstart', onDocPointer);
+      document.removeEventListener('click', onDocClickCapture, true);
     };
   }, [open]);
 

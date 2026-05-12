@@ -65,6 +65,19 @@ model Inquiry {
   @@index([contactValue])
 }
 
+model PageView {
+  id         String   @id @default(cuid())
+  visitorId  String
+  path       String
+  utmSource  String?
+  referer    String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([visitorId])
+}
+
 model PendingCloudinaryDeletion {
   id           String   @id @default(cuid())
   publicId     String
