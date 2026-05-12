@@ -6,10 +6,13 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { prisma } from '@/lib/prisma';
 import { parsePhotoUrls } from '@/lib/utils';
-import { toCloudinaryThumb } from '@/lib/cloudinary';
 import { ItemDetailView } from '@/components/ItemDetailView';
 
 export const dynamic = 'force-dynamic'; // 商品状态变化频繁，不缓存
+
+// og:image 用同源代理（/api/og/[id]）—— 微信抓 Cloudinary 不稳，换成 Railway 自己域
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL
+  || 'https://blacksburg-secondhand-production.up.railway.app';
 
 async function loadItem(id: string) {
   const item = await prisma.item.findUnique({
