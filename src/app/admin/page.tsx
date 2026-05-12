@@ -185,36 +185,56 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     take: 100,
   });
 
-  // 访问统计 —— 近 14 天每日浏览量 / 独立访客（JS 端聚合，避免 SQL 方言差异）
+  // 访问统计 —— 近 14 天每日浏览量 / 独立访客，按平台分桶（二手 vs 室友）
+  // 二手：/、/item/[id]；室友：/roommates；其它（/my、/admin 等）忽略
   const since14 = new Date(Date.now() - 14 * 86400e3);
   const views = await prisma.pageView.findMany({
     where: { createdAt: { gte: since14 } },
-    select: { createdAt: true, visitorId: true },
-    take: 50000, // 上限兜底
+    select: { createdAt: true, visitorId: true, path: true },
+    take: 50000,
   });
-  const buckets = new Map<string, { pageviews: number; visitors: Set<string> }>();
-  // 预填充 14 天的空桶（保证 chart 连续）
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86400e3);
-    const day = d.toISOString().slice(0, 10);
-    buckets.set(day, { pageviews: 0, visitors: new Set() });
-  }
+  const classifyPath = (p: string): 'item' | 'listing' | null => {
+    if (p === '/' || p.startsWith('/item/')) return 'item';
+    if (p === '/roommates' || p.startsWith('/roommates')) return 'listing';
+    return null;
+  };
+  // 每个平台单独建桶
+  const buildBuckets = () => {
+    const m = new Map<string, { pageviews: number; visitors: Set<string> }>();
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400e3);
+      m.set(d.toISOString().slice(0, 10), { pageviews: 0, visitors: new Set() });
+    }
+    return m;
+  };
+  const itemBuckets    = buildBuckets();
+  const listingBuckets = buildBuckets();
+  const itemVisitors    = new Set<string>();
+  const listingVisitors = new Set<string>();
+
   for (const v of views) {
+    const kind = classifyPath(v.path);
+    if (!kind) continue;
     const day = v.createdAt.toISOString().slice(0, 10);
-    const b = buckets.get(day);
+    const m = kind === 'item' ? itemBuckets : listingBuckets;
+    const vset = kind === 'item' ? itemVisitors : listingVisitors;
+    const b = m.get(day);
     if (b) {
       b.pageviews += 1;
       b.visitors.add(v.visitorId);
+      vset.add(v.visitorId);
     }
   }
-  const trafficSeries = Array.from(buckets.entries()).map(([day, b]) => ({
-    day,
-    pageviews: b.pageviews,
-    visitors: b.visitors.size,
-  }));
-  const totalPageviews = trafficSeries.reduce((s, d) => s + d.pageviews, 0);
-  const allVisitorIds = new Set(views.map(v => v.visitorId));
-  const totalUniqueVisitors = allVisitorIds.size;
+  const toSeries = (m: Map<string, { pageviews: number; visitors: Set<string> }>) =>
+    Array.from(m.entries()).map(([day, b]) => ({
+      day,
+      pageviews: b.pageviews,
+      visitors: b.visitors.size,
+    }));
+  const itemSeries    = toSeries(itemBuckets);
+  const listingSeries = toSeries(listingBuckets);
+  const itemTotalPV    = itemSeries.reduce((s, d) => s + d.pageviews, 0);
+  const listingTotalPV = listingSeries.reduce((s, d) => s + d.pageviews, 0);
 
   return (
     <main className="max-w-5xl mx-auto p-4 md:p-6 bg-stone-50 min-h-screen">
@@ -248,13 +268,24 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
         </div>
       </section>
 
-      {/* 访问统计柱状图 —— 自建埋点，跟用户内容计数分开展示 */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-3">📈 访问统计 · 近 14 天</h2>
+      {/* 访问统计柱状图 —— 二手 / 室友 分开（独立截图分享） */}
+      <section className="mb-8 space-y-4">
+        <h2 className="text-lg font-semibold">📈 访问统计 · 近 14 天</h2>
         <TrafficChart
-          series={trafficSeries}
-          totalPageviews={totalPageviews}
-          totalVisitors={totalUniqueVisitors}
+          title="🛒 二手"
+          subtitle="/、/item/[id]"
+          series={itemSeries}
+          totalPageviews={itemTotalPV}
+          totalVisitors={itemVisitors.size}
+          barColors={{ pv: ['#a78bfa', '#5b21b6'], uv: ['#7dd3fc', '#0369a1'] }}
+        />
+        <TrafficChart
+          title="🏠 室友 & 租房"
+          subtitle="/roommates"
+          series={listingSeries}
+          totalPageviews={listingTotalPV}
+          totalVisitors={listingVisitors.size}
+          barColors={{ pv: ['#fda4af', '#9f1239'], uv: ['#fcd34d', '#b45309'] }}
         />
       </section>
 
@@ -466,17 +497,25 @@ function MiniStat({ label, value }: { label: string; value: number }) {
 
 /**
  * 访问统计柱状图 —— Railway 风格深色背景 + 渐变 bar
- * 设计：方便截图分享，单图自带 totals + 14 天分布
+ * 单图自带 totals + 14 天分布，方便分平台单独截图
  */
 function TrafficChart({
+  title,
+  subtitle,
   series,
   totalPageviews,
   totalVisitors,
+  barColors = { pv: ['#a78bfa', '#5b21b6'], uv: ['#7dd3fc', '#0369a1'] },
 }: {
+  title?: string;
+  subtitle?: string;
   series: Array<{ day: string; pageviews: number; visitors: number }>;
   totalPageviews: number;
   totalVisitors: number;
+  barColors?: { pv: [string, string]; uv: [string, string] };
 }) {
+  const gradId = `barGrad-${title?.replace(/\s+/g, '') ?? 'def'}`;
+  const visitGradId = `visitGrad-${title?.replace(/\s+/g, '') ?? 'def'}`;
   const W = 700;
   const H = 220;
   const PAD_LEFT = 28;
@@ -504,7 +543,16 @@ function TrafficChart({
 
   return (
     <div className="bg-stone-950 rounded-card p-4 md:p-5 shadow-overlay">
-      {/* 顶部 totals */}
+      {/* 标题 + totals */}
+      {title && (
+        <div className="flex items-baseline justify-between gap-3 mb-3">
+          <div>
+            <div className="text-base font-semibold text-white">{title}</div>
+            {subtitle && <div className="text-[11px] text-stone-500 mt-0.5 font-mono">{subtitle}</div>}
+          </div>
+          <div className="text-xs text-stone-500">近 14 天</div>
+        </div>
+      )}
       <div className="flex items-baseline gap-6 mb-3 flex-wrap">
         <div>
           <div className="text-xs text-stone-400 uppercase tracking-wide">浏览量</div>
@@ -514,7 +562,6 @@ function TrafficChart({
           <div className="text-xs text-stone-400 uppercase tracking-wide">独立访客</div>
           <div className="text-3xl font-bold text-white tabular-nums">{totalVisitors.toLocaleString()}</div>
         </div>
-        <div className="ml-auto text-xs text-stone-500">近 14 天 · 黑堡二手 & 室友</div>
       </div>
 
       {/* SVG 柱状图 */}
@@ -525,13 +572,13 @@ function TrafficChart({
         aria-label={`近 14 天访问柱状图，总浏览量 ${totalPageviews}，独立访客 ${totalVisitors}`}
       >
         <defs>
-          <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="#a78bfa" />
-            <stop offset="100%" stopColor="#5b21b6" />
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor={barColors.pv[0]} />
+            <stop offset="100%" stopColor={barColors.pv[1]} />
           </linearGradient>
-          <linearGradient id="visitGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="#7dd3fc" />
-            <stop offset="100%" stopColor="#0369a1" />
+          <linearGradient id={visitGradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor={barColors.uv[0]} />
+            <stop offset="100%" stopColor={barColors.uv[1]} />
           </linearGradient>
         </defs>
 
@@ -562,7 +609,7 @@ function TrafficChart({
                 y={PAD_TOP + chartH - pvH}
                 width={barW}
                 height={pvH}
-                fill="url(#barGrad)"
+                fill={`url(#${gradId})`}
                 rx={2}
               >
                 <title>{`${d.day}: ${d.pageviews} 浏览 · ${d.visitors} 访客`}</title>
@@ -573,7 +620,7 @@ function TrafficChart({
                 y={PAD_TOP + chartH - vH}
                 width={barW * 0.5}
                 height={vH}
-                fill="url(#visitGrad)"
+                fill={`url(#${visitGradId})`}
                 rx={1.5}
                 opacity={0.85}
               />
@@ -589,11 +636,11 @@ function TrafficChart({
       {/* 图例 */}
       <div className="flex items-center gap-4 mt-2 text-xs text-stone-400">
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: 'linear-gradient(180deg, #a78bfa, #5b21b6)' }} />
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: `linear-gradient(180deg, ${barColors.pv[0]}, ${barColors.pv[1]})` }} />
           浏览量 (PV)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: 'linear-gradient(180deg, #7dd3fc, #0369a1)' }} />
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: `linear-gradient(180deg, ${barColors.uv[0]}, ${barColors.uv[1]})` }} />
           独立访客 (UV)
         </span>
       </div>

@@ -44,15 +44,14 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     ? rawDesc.slice(0, 140)
     : `黑堡二手买卖 · ${item.type === 'sell' ? '出售' : '求购'} · ${priceText}`;
 
-  // 微信兼容性优化：
-  // 1. 用 Cloudinary 转成 1200×1200 JPG —— 强制 jpg 而不是 webp，微信/QQ 的图片渲染对 webp 仍偶发不稳
-  // 2. 显式 width / height 让微信知道图片尺寸（部分版本要求）
-  // 3. 同时输出 Twitter Card（其他平台 + 个别国内 scraper 也读 twitter:image）
-  // 4. og:image URL 末尾追加 ?ogv=4 cache buster：微信对图片 URL 也独立缓存，必须改 URL 字符串才能让它重抓
-  //    （Cloudinary 忽略未知 query，图片内容不变；只是让 URL 字符串跟旧的不一样）
-  const OG_IMG_VERSION = '4';
-  const coverRaw = photos.length > 0 ? toCloudinaryThumb(photos[0], 1200, 'jpg') : null;
-  const cover = coverRaw ? `${coverRaw}?ogv=${OG_IMG_VERSION}` : null;
+  // 微信兼容性优化 v5：用我们自己的同源代理端点 /api/og/[id]
+  // 之前指 Cloudinary 微信内置 scraper 抓不到（推测墙内/被强缓存），换成 Railway 同源 URL
+  // 微信对同源 URL 没历史缓存 → 必然重新抓 → 拿到我们代理的真图
+  // OG_IMG_VERSION 用于"图换了想强制 bust 缓存"时 bump（写在 URL 末尾 ?v=N）
+  const OG_IMG_VERSION = '5';
+  const cover = photos.length > 0
+    ? `${SITE_URL}/api/og/${item.id}?v=${OG_IMG_VERSION}`
+    : null;
 
   return {
     title,
