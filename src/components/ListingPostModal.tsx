@@ -52,7 +52,9 @@ const TYPE_META: Record<TypeId, {
   showFurnished: boolean;
   defaultFurnished: boolean;
   showSelfInfo: boolean;   // 是否显示"关于我（性别/年龄）" — 合租场景 true，租赁场景 false
-  lookingForLabel: string; // "找谁" 字段在表单上的措辞
+  singleRent: boolean;     // 价格是单个金额（C/D 转租租金确定）还是区间（A/B 合租有商量空间）
+  rentLabel: string;       // 价格字段的措辞
+  lookingForLabel: string;
   photoHint: string;
   areaHint: string;
 }> = {
@@ -63,6 +65,7 @@ const TYPE_META: Record<TypeId, {
     showMoveInFuzzy: true, showCurrentResidents: true, showFurnished: false,
     defaultFurnished: false,
     showSelfInfo: true,
+    singleRent: false, rentLabel: '月租预算 (USD)',
     lookingForLabel: '找谁（性别筛选基于双方自我表达）',
     photoHint: '展现品味/性格的照片：房间、宠物、爱好都行，不需要正脸',
     areaHint: '你现住的位置',
@@ -74,6 +77,7 @@ const TYPE_META: Record<TypeId, {
     showMoveInFuzzy: true, showCurrentResidents: false, showFurnished: false,
     defaultFurnished: false,
     showSelfInfo: true,
+    singleRent: false, rentLabel: '月租预算 (USD)',
     lookingForLabel: '找谁（性别筛选基于双方自我表达）',
     photoHint: '展现品味/性格的照片：宠物、书架、爱好都行，不需要正脸',
     areaHint: '期望区域',
@@ -84,7 +88,8 @@ const TYPE_META: Record<TypeId, {
     layoutLabel: '户型', dateLabel: 'Lease 起止日期', dateRequiredBoth: true,
     showMoveInFuzzy: false, showCurrentResidents: false, showFurnished: true,
     defaultFurnished: false,
-    showSelfInfo: false,  // 转租是租赁，房东个人信息无关
+    showSelfInfo: false,
+    singleRent: true, rentLabel: '月租金 (USD)',
     lookingForLabel: '对租客的性别要求',
     photoHint: '出租房间的实景图（客厅、卧室、厨房等）',
     areaHint: '房子位置',
@@ -95,7 +100,8 @@ const TYPE_META: Record<TypeId, {
     layoutLabel: '户型', dateLabel: '暑期日期', dateRequiredBoth: true,
     showMoveInFuzzy: false, showCurrentResidents: false, showFurnished: true,
     defaultFurnished: true,
-    showSelfInfo: false,  // 暑期短租也是租赁
+    showSelfInfo: false,
+    singleRent: true, rentLabel: '月租金 (USD)',
     lookingForLabel: '对租客的性别要求',
     photoHint: '出租房间的实景图（客厅、卧室、厨房等）',
     areaHint: '房子位置',
@@ -567,27 +573,46 @@ export function ListingPostModal({
             )}
 
             <div>
-              <Sub>月租预算 (USD)</Sub>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-stone-500">$</span>
-                <input
-                  type="number" inputMode="numeric" min={0}
-                  value={budgetMin}
-                  onChange={e => setBudgetMin(e.target.value)}
-                  placeholder="下限"
-                  className="w-24 border border-stone-300 rounded px-2 py-2"
-                />
-                <span className="text-stone-400">—</span>
-                <span className="text-stone-500">$</span>
-                <input
-                  type="number" inputMode="numeric" min={0}
-                  value={budgetMax}
-                  onChange={e => setBudgetMax(e.target.value)}
-                  placeholder="上限"
-                  className="w-24 border border-stone-300 rounded px-2 py-2"
-                />
-                <span className="text-stone-500 text-sm">/月</span>
-              </div>
+              <Sub>{meta.rentLabel}</Sub>
+              {meta.singleRent ? (
+                // C/D 转租 + 暑期：单个金额输入，submit 时把同样的值塞 budgetMin/Max
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-stone-500">$</span>
+                  <input
+                    type="number" inputMode="numeric" min={0}
+                    value={budgetMin}
+                    onChange={e => {
+                      setBudgetMin(e.target.value);
+                      setBudgetMax(e.target.value);
+                    }}
+                    placeholder="例：800"
+                    className="w-28 border border-stone-300 rounded px-2 py-2"
+                  />
+                  <span className="text-stone-500 text-sm">/月</span>
+                </div>
+              ) : (
+                // A/B 合租：区间，有商量空间
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-stone-500">$</span>
+                  <input
+                    type="number" inputMode="numeric" min={0}
+                    value={budgetMin}
+                    onChange={e => setBudgetMin(e.target.value)}
+                    placeholder="下限"
+                    className="w-24 border border-stone-300 rounded px-2 py-2"
+                  />
+                  <span className="text-stone-400">—</span>
+                  <span className="text-stone-500">$</span>
+                  <input
+                    type="number" inputMode="numeric" min={0}
+                    value={budgetMax}
+                    onChange={e => setBudgetMax(e.target.value)}
+                    placeholder="上限"
+                    className="w-24 border border-stone-300 rounded px-2 py-2"
+                  />
+                  <span className="text-stone-500 text-sm">/月</span>
+                </div>
+              )}
             </div>
 
             <div>
