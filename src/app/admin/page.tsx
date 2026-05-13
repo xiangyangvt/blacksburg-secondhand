@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formatPrice, timeAgo, categoryLabel, parsePhotoUrls } from '@/lib/utils';
-import { schedulePendingCloudinaryDeletion } from '@/lib/uploader';
+import { schedulePendingCloudinaryDeletion, getCloudinaryUsage } from '@/lib/uploader';
 
 export const dynamic = 'force-dynamic'; // 永远拿最新
 
@@ -269,6 +269,9 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     take: 100,
   });
 
+  // Cloudinary 用量（5 分钟内存缓存；未配置 / 拉取失败返回 null）
+  const cloudinaryUsage = await getCloudinaryUsage();
+
   // 访问统计 —— 按选定时间跨度（小时/天/周/月）和平台分桶
   // 二手：/、/item/[id]；室友：/roommates；其它（/my、/admin 等）忽略
   const period: Period = (['hour', 'day', 'week', 'month'].includes(searchParams.period ?? '')
@@ -456,6 +459,54 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
         )}
       </section>
 
+      {/* Cloudinary 用量监控 */}
+      {cloudinaryUsage && (
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold mb-3">
+            ☁️ Cloudinary 用量
+            <span className="ml-2 text-xs text-stone-400 font-normal">
+              plan: {cloudinaryUsage.plan} · 数据更新于 {new Date(cloudinaryUsage.lastUpdated).toLocaleString('zh-CN')}
+            </span>
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            <UsageBar
+              label="Credits（综合配额）"
+              percent={cloudinaryUsage.credits.usedPercent}
+              detail={`${cloudinaryUsage.credits.usage.toFixed(2)} / ${cloudinaryUsage.credits.limit} credits`}
+            />
+            <UsageBar
+              label="存储 Storage"
+              percent={cloudinaryUsage.storage.usedPercent}
+              detail={`${formatBytes(cloudinaryUsage.storage.usage)} / ${formatBytes(cloudinaryUsage.storage.limit)}`}
+            />
+            <UsageBar
+              label="流量 Bandwidth（月度）"
+              percent={cloudinaryUsage.bandwidth.usedPercent}
+              detail={`${formatBytes(cloudinaryUsage.bandwidth.usage)} / ${formatBytes(cloudinaryUsage.bandwidth.limit)}`}
+            />
+            <UsageBar
+              label="变换 Transformations（月度）"
+              percent={cloudinaryUsage.transformations.usedPercent}
+              detail={`${cloudinaryUsage.transformations.usage.toLocaleString()} / ${cloudinaryUsage.transformations.limit.toLocaleString()}`}
+            />
+          </div>
+          <div className="text-xs text-stone-500 grid grid-cols-3 gap-3">
+            <div>资源数：<span className="font-mono text-stone-700">{cloudinaryUsage.resources.toLocaleString()}</span></div>
+            <div>派生资源：<span className="font-mono text-stone-700">{cloudinaryUsage.derivedResources.toLocaleString()}</span></div>
+            <div>本月 API 调用：<span className="font-mono text-stone-700">{cloudinaryUsage.requests.toLocaleString()}</span></div>
+          </div>
+          {(cloudinaryUsage.credits.usedPercent >= 80 ||
+            cloudinaryUsage.bandwidth.usedPercent >= 80 ||
+            cloudinaryUsage.storage.usedPercent >= 80 ||
+            cloudinaryUsage.transformations.usedPercent >= 80) && (
+            <div className="mt-3 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded px-3 py-2">
+              ⚠️ 有指标超过 80%。Cloudinary 免费 plan 超额会限速或强制升级。
+              建议：批量"已售出"清理图床、或开启更激进的 transformation 缩图、或考虑升级到 Plus plan。
+            </div>
+          )}
+        </section>
+      )}
+
       {/* 自动隐藏的商品 */}
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">🙈 自动隐藏的商品 ({hiddenItems.length})</h2>
@@ -603,6 +654,40 @@ function MiniStat({ label, value }: { label: string; value: number }) {
       <div className="text-[10px] text-stone-500 mt-0.5">{label}</div>
     </div>
   );
+}
+
+/** 用量进度条 —— 颜色随 percent 切档（绿→琥珀→红） */
+function UsageBar({ label, percent, detail }: { label: string; percent: number; detail: string }) {
+  const tier =
+    percent >= 90 ? { bar: 'bg-rose-500',   text: 'text-rose-600'   }
+    : percent >= 80 ? { bar: 'bg-amber-500', text: 'text-amber-600' }
+    : percent >= 60 ? { bar: 'bg-yellow-500', text: 'text-yellow-700' }
+    : { bar: 'bg-emerald-500', text: 'text-emerald-600' };
+  return (
+    <div className="bg-white rounded-lg border border-stone-200 p-3">
+      <div className="text-[11px] text-stone-500 mb-1">{label}</div>
+      <div className="flex items-baseline gap-1">
+        <span className={`text-xl font-bold tabular-nums ${tier.text}`}>{percent}%</span>
+      </div>
+      <div className="mt-2 h-1.5 bg-stone-100 rounded-full overflow-hidden">
+        <div
+          className={`h-full ${tier.bar} transition-all`}
+          style={{ width: `${Math.min(100, percent)}%` }}
+        />
+      </div>
+      <div className="text-[10px] text-stone-400 mt-1.5 tabular-nums">{detail}</div>
+    </div>
+  );
+}
+
+/** Bytes 人类化（KB/MB/GB） */
+function formatBytes(n: number): string {
+  if (!n || n < 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v >= 100 || i === 0 ? 0 : v >= 10 ? 1 : 2)} ${units[i]}`;
 }
 
 /**

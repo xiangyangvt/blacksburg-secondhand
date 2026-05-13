@@ -62,8 +62,9 @@ export function buildListingShareText(opts: {
 
   const areaStr = opts.areas.length > 0 ? ' · ' + opts.areas.slice(0, 2).join('/') : '';
   const headline = `【${opts.typeLabel}】${opts.title} · ${budgetStr}${areaStr}`;
-  // 扁平化分享：URL 指向 /roommates + ?focus=ID（统一术语用 focus，跟二手对齐）
-  const url = `${opts.origin}/roommates?focus=${opts.listingId}&utm_source=${encodeURIComponent(source)}&og=v${OG_VERSION}`;
+  // 分享链接走 /listing/[id]：该路由 generateMetadata 含同源 og:image（微信卡有图）；
+  // 用户实际打开后 server-side redirect 到 /roommates?focus=ID，保持扁平化体验
+  const url = `${opts.origin}/listing/${opts.listingId}?utm_source=${encodeURIComponent(source)}&og=v${OG_VERSION}`;
   return `${headline}\n${url}`;
 }
 

@@ -76,6 +76,10 @@ export async function GET(req: NextRequest) {
     where,
     orderBy,
     take: 200,
+    include: {
+      // 只暴露 active 留言；留言内 contactValue 同样 reveal 隐藏（与 item inquiries 一致）
+      inquiries: { where: { status: 'active' }, orderBy: { createdAt: 'asc' } },
+    },
   });
 
   // JS 端 areas 过滤（SQLite/PG 跨方言兼容）
@@ -91,16 +95,22 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const serialized = listings.map(l => ({
+  const serialized = listings.map((l: any) => ({
     ...l,
     photoUrls: parseJsonArray(l.photoUrls),
     areas:     parseJsonArray(l.areas),
     // 不返回这些敏感字段
     editCodeHash:  undefined,
-    contactValue:  '',  // 直到 application approved 才能看到，列表里隐藏
-    contactType:   l.contactType, // 类型本身不敏感，可以露
+    contactValue:  '',
+    contactType:   l.contactType,
     customContactLabel: null,
     ipAddress: undefined,
+    // 留言里的联系方式也脱敏（reveal 机制：用户点"查看联系方式"才显示）
+    inquiries: (l.inquiries ?? []).map((inq: any) => ({
+      ...inq,
+      contactValue: '',
+      customContactLabel: null,
+    })),
   }));
 
   return NextResponse.json({ items: serialized });

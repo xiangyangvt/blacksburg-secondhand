@@ -157,6 +157,77 @@ export async function schedulePendingCloudinaryDeletion(
 }
 
 /**
+ * Cloudinary 用量快照。免费 plan 给 25 credits/月，超了 Cloudinary 会限速 / 多收费。
+ * 调一次 admin API（计入 admin request quota，所以页面缓存 5 分钟）。
+ *
+ * 返回 null 表示 Cloudinary 未配置或拉取失败（admin 页直接隐藏 widget）。
+ */
+export type CloudinaryUsage = {
+  plan: string;
+  credits: {
+    usage: number;       // 已用 credit 数
+    limit: number;       // 月度上限
+    usedPercent: number; // 0-100，向上取整
+  };
+  storage:    { usage: number; limit: number; usedPercent: number }; // bytes
+  bandwidth:  { usage: number; limit: number; usedPercent: number }; // bytes
+  transformations: { usage: number; limit: number; usedPercent: number };
+  requests:   number;     // 当月 API 调用次数
+  resources:  number;     // 当前存的资源数
+  derivedResources: number;
+  lastUpdated: string;    // ISO from Cloudinary
+};
+
+// 简单进程内缓存：admin 自动重新进 page 多次也不会狂调
+let _usageCache: { at: number; data: CloudinaryUsage } | null = null;
+const USAGE_CACHE_MS = 5 * 60 * 1000;
+
+export async function getCloudinaryUsage(opts: { force?: boolean } = {}): Promise<CloudinaryUsage | null> {
+  if (!isCloudinaryAvailable()) return null;
+  if (!opts.force && _usageCache && Date.now() - _usageCache.at < USAGE_CACHE_MS) {
+    return _usageCache.data;
+  }
+  try {
+    // Cloudinary admin API: GET /usage
+    const raw: any = await cloudinary.api.usage();
+    const pct = (used: number, limit: number) =>
+      limit > 0 ? Math.min(100, Math.ceil((used / limit) * 100)) : 0;
+
+    const data: CloudinaryUsage = {
+      plan: String(raw.plan ?? 'unknown'),
+      credits: {
+        usage: Number(raw.credits?.usage ?? 0),
+        limit: Number(raw.credits?.limit ?? 0),
+        usedPercent: pct(Number(raw.credits?.usage ?? 0), Number(raw.credits?.limit ?? 0)),
+      },
+      storage: {
+        usage: Number(raw.storage?.usage ?? 0),
+        limit: Number(raw.storage?.limit ?? 0),
+        usedPercent: pct(Number(raw.storage?.usage ?? 0), Number(raw.storage?.limit ?? 0)),
+      },
+      bandwidth: {
+        usage: Number(raw.bandwidth?.usage ?? 0),
+        limit: Number(raw.bandwidth?.limit ?? 0),
+        usedPercent: pct(Number(raw.bandwidth?.usage ?? 0), Number(raw.bandwidth?.limit ?? 0)),
+      },
+      transformations: {
+        usage: Number(raw.transformations?.usage ?? 0),
+        limit: Number(raw.transformations?.limit ?? 0),
+        usedPercent: pct(Number(raw.transformations?.usage ?? 0), Number(raw.transformations?.limit ?? 0)),
+      },
+      requests: Number(raw.requests ?? 0),
+      resources: Number(raw.resources ?? 0),
+      derivedResources: Number(raw.derived_resources ?? 0),
+      lastUpdated: String(raw.last_updated ?? new Date().toISOString()),
+    };
+    _usageCache = { at: Date.now(), data };
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 扫一遍过期待删队列，destroy 掉，然后删队列记录。
  * 机会式触发：每次 GET /api/items 时调一次，带 limit 防长尾。
  * 失败不抛错。

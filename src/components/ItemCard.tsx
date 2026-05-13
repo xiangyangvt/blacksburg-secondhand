@@ -37,8 +37,8 @@ export type Item = {
   createdAt: string;
   /** 最近活跃时间（编辑 / 新询价 / 卖家回复都会刷新）；用于新鲜度可视化 */
   bumpedAt?: string;
-  /** 被点击查看联系方式的累计次数（卖家可见） */
-  contactRevealCount?: number;
+  /** 卖家可见：当前在 N 个独立访客的购物清单里（来自 CartEntry 表 visitor 去重） */
+  cartCount?: number;
   inquiries: any[];
 };
 

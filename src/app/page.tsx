@@ -12,6 +12,7 @@ import { FabPostButton } from '@/components/FabPostButton';
 import { ShareButton } from '@/components/ShareButton';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
 import { getRecentViewIds } from '@/lib/recentViews';
+import { useUnreadCount, markSeen } from '@/lib/notifications';
 import { PlatformSwitcher } from '@/components/PlatformSwitcher';
 import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
@@ -85,6 +86,7 @@ function HomePageInner() {
   const [postModal, setPostModal] = useState<{ mode: 'create' | 'edit'; item?: Item } | null>(null);
   const [codePrompt, setCodePrompt] = useState<CodeAction | null>(null);
   const [myPanelOpen, setMyPanelOpen] = useState(false);
+  const unreadItems = useUnreadCount('item');
 
   // 分享链接 /?focus=ID：mount 时一次性读 URL，不放进 state（filter 改动不会丢这个）
   const [focusId] = useState<string | null>(() => searchParams.get('focus'));
@@ -253,10 +255,13 @@ function HomePageInner() {
             />
           </div>
 
-          {/* 右：我的发布（toggle，open 时填充亮起） */}
+          {/* 右：我的发布（toggle + 新消息红点徽章） */}
           <button
-            onClick={() => setMyPanelOpen(o => !o)}
-            className={`px-3 sm:px-4 py-2 rounded-chip text-sm font-medium whitespace-nowrap transition-colors ${
+            onClick={() => {
+              setMyPanelOpen(o => !o);
+              if (!myPanelOpen) markSeen('item');  // 打开时标记已读
+            }}
+            className={`relative px-3 sm:px-4 py-2 rounded-chip text-sm font-medium whitespace-nowrap transition-colors ${
               myPanelOpen
                 ? 'bg-brand text-white border border-brand shadow-card'
                 : 'bg-white border border-stone-300 hover:border-stone-400 text-stone-700'
@@ -264,6 +269,11 @@ function HomePageInner() {
             aria-expanded={myPanelOpen}
           >
             {t('my.headerLink')}
+            {unreadItems > 0 && !myPanelOpen && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow">
+                {unreadItems > 9 ? '9+' : unreadItems}
+              </span>
+            )}
           </button>
 
           {/* 右：分享本站（仅桌面） */}

@@ -31,7 +31,8 @@ model Item {
   bumpedAt            DateTime @default(now())
   ipAddress           String?  // 用于隐式限速
   utmSource           String?  // 用户首次访问时的 ?utm_source=xxx 或 ?from=xxx；用于渠道分析
-  contactRevealCount  Int      @default(0)  // 联系方式被点击展示的累计次数（同 IP 24h 内去重）
+  // contactRevealCount 字段已废弃 —— cartCount (CartEntry 表 visitor 去重计数) 完全取代
+  // 之前的注释保留：联系方式被点击展示累计次数。Schema 字段已通过 migration 删除
 
   inquiries   Inquiry[]
   reports     Report[]     @relation("ItemReports")
@@ -43,27 +44,31 @@ model Item {
   @@index([utmSource])
 }
 
-// 询价 / 留言
+// 询价 / 留言 —— 通用：二手 item 上的询价，或室友 listing 上的公开 Q&A
+// itemId 和 listingId 二选一（exactly one），CHECK 在应用层保证
 model Inquiry {
   id                  String   @id @default(cuid())
-  itemId              String
+  itemId              String?  // 二手 inquiry（询价）
+  listingId           String?  // 室友 listing 公开 Q&A
   contactType         String
   contactValue        String
   customContactLabel  String?
   message             String
-  // 卖家回复（用商品 editCode 鉴权后才能写）
+  // 发布人回复（卖家 / 房东，用对应 editCode 鉴权后才能写）
   sellerReply         String?
   sellerRepliedAt     DateTime?
-  status              String   @default("active") // "active" | "hidden"（3 个不同 IP 举报后自动 hidden，仅 admin 可见）
+  status              String   @default("active")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   ipAddress           String?
   utmSource           String?
 
-  item    Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  item    Item?    @relation(fields: [itemId],    references: [id], onDelete: Cascade)
+  listing Listing? @relation("ListingInquiries", fields: [listingId], references: [id], onDelete: Cascade)
   reports Report[] @relation("InquiryReports")
 
   @@index([itemId, createdAt])
+  @@index([listingId, createdAt])
   @@index([contactValue])
 }
 
@@ -166,6 +171,7 @@ model Listing {
   applications        Application[]
   attachedTo          Application[] @relation("AttachedListing")
   reports             Report[]      @relation("ListingReports")
+  inquiries           Inquiry[]     @relation("ListingInquiries")
 
   @@index([status, bumpedAt])
   @@index([type])

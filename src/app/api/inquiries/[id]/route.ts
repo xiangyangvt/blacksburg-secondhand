@@ -1,11 +1,10 @@
+// PATCH / DELETE inquiry —— 同时支持 item 来源 + listing 来源
+// 鉴权：发布人用 itemEditCode 或 listingEditCode；留言人用 contactValue
+
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 
-// PATCH /api/inquiries/[id]
-// 两种用法：
-//   1. 卖家回复 / 改回复：body { itemEditCode, sellerReply }（sellerReply 空字符串 = 撤回回复）
-//   2. 买家改自己留言：body { contactValue, message }
 export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
   const { id } = ctx.params;
   let body: any;
@@ -14,13 +13,17 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
 
   const inquiry = await prisma.inquiry.findUnique({
     where: { id },
-    include: { item: true },
+    include: { item: true, listing: true },
   });
   if (!inquiry) return err('留言不存在', 404);
 
-  // ===== 模式 1：卖家回复 =====
-  if (typeof body.itemEditCode === 'string' && typeof body.sellerReply === 'string') {
-    const ok = await bcrypt.compare(body.itemEditCode, inquiry.item.editCodeHash);
+  // ===== 模式 1：发布人回复 =====
+  // 两个字段名：itemEditCode（item 来源）或 listingEditCode（listing 来源）
+  const replyCode = body.itemEditCode ?? body.listingEditCode;
+  if (typeof replyCode === 'string' && typeof body.sellerReply === 'string') {
+    const targetHash = inquiry.item?.editCodeHash ?? inquiry.listing?.editCodeHash;
+    if (!targetHash) return err('父对象不存在', 404);
+    const ok = await bcrypt.compare(replyCode, targetHash);
     if (!ok) return err('识别码错误', 401);
 
     const reply = body.sellerReply.trim();
@@ -34,16 +37,17 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
       },
     });
 
-    // 卖家回复 = 商品活跃，bump 父商品到列表前面（撤回回复 reply='' 也算活跃）
-    await prisma.item.update({
-      where: { id: inquiry.itemId },
-      data: { bumpedAt: new Date() },
-    });
+    // 回复 = 父对象活跃，bump
+    if (inquiry.itemId) {
+      await prisma.item.update({ where: { id: inquiry.itemId }, data: { bumpedAt: new Date() } });
+    } else if (inquiry.listingId) {
+      await prisma.listing.update({ where: { id: inquiry.listingId }, data: { bumpedAt: new Date() } });
+    }
 
     return NextResponse.json({ success: true });
   }
 
-  // ===== 模式 2：买家改自己留言 =====
+  // ===== 模式 2：留言人改自己留言（contactValue 匹配）=====
   if (typeof body.message === 'string' && typeof body.contactValue === 'string') {
     const message = body.message.trim();
     if (!message) return err('留言不能为空');
@@ -51,36 +55,34 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
     if (inquiry.contactValue.toLowerCase() !== body.contactValue.trim().toLowerCase()) {
       return err('联系方式不匹配，无法编辑他人留言', 401);
     }
-    await prisma.inquiry.update({
-      where: { id },
-      data: { message },
-    });
+    await prisma.inquiry.update({ where: { id }, data: { message } });
     return NextResponse.json({ success: true });
   }
 
-  return err('参数不正确：需要 (itemEditCode + sellerReply) 或 (contactValue + message)');
+  return err('参数不正确：需要 (itemEditCode/listingEditCode + sellerReply) 或 (contactValue + message)');
 }
 
-// DELETE /api/inquiries/[id]
-//   方式 1：买家自删（提供 contactValue）
-//   方式 2：卖家清理（提供 itemEditCode）
 export async function DELETE(req: NextRequest, ctx: { params: { id: string } }) {
   const { id } = ctx.params;
   const sp = req.nextUrl.searchParams;
   const contactValue = sp.get('contactValue');
   const itemEditCode = sp.get('itemEditCode');
+  const listingEditCode = sp.get('listingEditCode');
 
   const inquiry = await prisma.inquiry.findUnique({
     where: { id },
-    include: { item: true },
+    include: { item: true, listing: true },
   });
   if (!inquiry) return err('留言不存在', 404);
 
   let allowed = false;
   if (contactValue && inquiry.contactValue.toLowerCase() === contactValue.trim().toLowerCase()) {
     allowed = true;
-  } else if (itemEditCode) {
+  } else if (itemEditCode && inquiry.item) {
     const ok = await bcrypt.compare(itemEditCode, inquiry.item.editCodeHash);
+    if (ok) allowed = true;
+  } else if (listingEditCode && inquiry.listing) {
+    const ok = await bcrypt.compare(listingEditCode, inquiry.listing.editCodeHash);
     if (ok) allowed = true;
   }
 

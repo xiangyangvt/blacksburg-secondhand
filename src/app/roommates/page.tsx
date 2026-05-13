@@ -21,6 +21,7 @@ import {
 import { FabPostButton } from '@/components/FabPostButton';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { captureUtmFromUrl } from '@/lib/utm';
+import { useUnreadCount, markSeen } from '@/lib/notifications';
 
 function parseFiltersFromQuery(sp: URLSearchParams): ListingFilters {
   return {
@@ -78,6 +79,9 @@ function RoommatesContent() {
   const [editTarget, setEditTarget] = useState<{ listing: ListingEditInitial; editCode: string } | null>(null);
 
   const [filters, setFilters] = useState<ListingFilters>(LISTING_FILTERS_DEFAULT);
+
+  // 通知 badge：未读 application / 状态变化
+  const unreadListings = useUnreadCount('listing');
 
   // 分享链接 /roommates?focus=ID：mount 时一次性读 URL
   const [focusId] = useState<string | null>(() => searchParams?.get('focus') ?? null);
@@ -189,10 +193,18 @@ function RoommatesContent() {
           <PlatformSwitcher />
           <div className="flex-1" />
           <button
-            onClick={() => setMyPanelOpen(true)}
-            className="px-3 sm:px-4 py-2 rounded-chip text-sm font-medium whitespace-nowrap bg-white border border-stone-300 text-stone-700 hover:bg-stone-100 transition-colors"
+            onClick={() => {
+              setMyPanelOpen(true);
+              markSeen('listing');
+            }}
+            className="relative px-3 sm:px-4 py-2 rounded-chip text-sm font-medium whitespace-nowrap bg-white border border-stone-300 text-stone-700 hover:bg-stone-100 transition-colors"
           >
             我的发布
+            {unreadListings > 0 && !myPanelOpen && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow">
+                {unreadListings > 9 ? '9+' : unreadListings}
+              </span>
+            )}
           </button>
           <button
             onClick={onPost}

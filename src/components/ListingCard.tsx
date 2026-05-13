@@ -24,6 +24,7 @@ import {
 import { markRecentView } from '@/lib/recentViews';
 import { MoreMenu } from './MoreMenu';
 import { ShareButton } from './ShareButton';
+import { InquirySection } from './InquirySection';
 import { buildListingShareText, clientOrigin } from '@/lib/shareText';
 
 export type Listing = {
@@ -418,6 +419,24 @@ export function ListingCard({
               </button>
             </div>
           </div>
+
+          {/* 公开 Q&A 留言区 —— 候选者问户型/邻居/位置等不敏感问题
+              展开模式才显示（紧凑模式 hide）；跟二手 ItemCard 留言区一个组件 */}
+          {expanded && (
+            <div className="mt-3" data-no-toggle>
+              <InquirySection
+                itemId={listing.id}
+                parentType="listing"
+                inquiries={(listing as any).inquiries ?? []}
+                open={true}
+                onToggle={() => {}}
+                onInquiryAdded={() => { /* 父组件 refresh 自动同步 */ }}
+                onInquiryDeleted={() => {}}
+                onInquiryUpdated={() => {}}
+                onRequestSellerDelete={() => { /* 房东删留言走 EditCodePrompt 流程，沿用 /api/inquiries/[id] DELETE */ }}
+              />
+            </div>
+          )}
 
           {/* 紧凑手机端"点开看详情"提示 */}
           {!expanded && (

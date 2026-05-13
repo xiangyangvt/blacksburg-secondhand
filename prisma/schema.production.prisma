@@ -32,7 +32,7 @@ model Item {
   bumpedAt            DateTime @default(now())
   ipAddress           String?
   utmSource           String?
-  contactRevealCount  Int      @default(0)
+  // contactRevealCount 字段已废弃，由 cartCount (CartEntry 表) 取代
 
   inquiries   Inquiry[]
   reports     Report[]     @relation("ItemReports")
@@ -46,23 +46,26 @@ model Item {
 
 model Inquiry {
   id                  String   @id @default(cuid())
-  itemId              String
+  itemId              String?
+  listingId           String?
   contactType         String
   contactValue        String
   customContactLabel  String?
   message             String
   sellerReply         String?
   sellerRepliedAt     DateTime?
-  status              String   @default("active") // "active" | "hidden"
+  status              String   @default("active")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   ipAddress           String?
   utmSource           String?
 
-  item    Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  item    Item?    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  listing Listing? @relation("ListingInquiries", fields: [listingId], references: [id], onDelete: Cascade)
   reports Report[] @relation("InquiryReports")
 
   @@index([itemId, createdAt])
+  @@index([listingId, createdAt])
   @@index([contactValue])
 }
 
@@ -149,6 +152,7 @@ model Listing {
   applications        Application[]
   attachedTo          Application[] @relation("AttachedListing")
   reports             Report[]      @relation("ListingReports")
+  inquiries           Inquiry[]     @relation("ListingInquiries")
 
   @@index([status, bumpedAt])
   @@index([type])

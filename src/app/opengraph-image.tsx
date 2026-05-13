@@ -53,38 +53,51 @@ export default async function MainOg() {
           fontFamily: 'system-ui, -apple-system, sans-serif',
         }}
       >
-        {/* 左侧：2×2 商品照片网格（或回退） */}
+        {/* 左侧：2×2 商品照片网格（或回退）
+            Satori（next/og 底层）只支持 flex / block / none，**不支持 grid**。
+            所以用两层 flex 嵌套：外层 column 分两行，每行内部 row 分两列。 */}
         {hasFeed ? (
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gridTemplateRows: '1fr 1fr',
+              display: 'flex',
+              flexDirection: 'column',
               width: 660,
               height: '100%',
-              gap: 4,
               background: '#fff',
+              gap: 4,
             }}
           >
-            {photos.slice(0, 4).map((url, i) => (
+            {[0, 2].map(rowStart => (
               <div
-                key={i}
+                key={rowStart}
                 style={{
                   display: 'flex',
+                  flex: 1,
                   width: '100%',
-                  height: '100%',
-                  overflow: 'hidden',
-                  background: '#E7E5E4',
+                  gap: 4,
                 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={url}
-                  width={328}
-                  height={313}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  alt=""
-                />
+                {photos.slice(rowStart, rowStart + 2).map((url, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: 'flex',
+                      flex: 1,
+                      height: '100%',
+                      overflow: 'hidden',
+                      background: '#E7E5E4',
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url}
+                      width={328}
+                      height={313}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      alt=""
+                    />
+                  </div>
+                ))}
               </div>
             ))}
           </div>

@@ -25,6 +25,7 @@ type Inquiry = {
  */
 export function InquirySection({
   itemId,
+  parentType = 'item',
   inquiries,
   open,
   onToggle,
@@ -33,7 +34,10 @@ export function InquirySection({
   onInquiryUpdated,
   onRequestSellerDelete,
 }: {
+  /** parent id（item.id 或 listing.id），变量名沿用 itemId 兼容旧用法 */
   itemId: string;
+  /** 父对象类型，决定 POST 端点是 /api/items/[id]/inquiries 还是 /api/listings/[id]/inquiries */
+  parentType?: 'item' | 'listing';
   inquiries: Inquiry[];
   open: boolean;
   onToggle: () => void;
@@ -42,6 +46,9 @@ export function InquirySection({
   onInquiryUpdated: () => void;
   onRequestSellerDelete: (inquiryId: string) => void;
 }) {
+  const postUrl = parentType === 'listing'
+    ? `/api/listings/${itemId}/inquiries`
+    : `/api/items/${itemId}/inquiries`;
   const t = useT();
   const locale = useLocale();
   const [showForm, setShowForm] = useState(false);
@@ -88,7 +95,7 @@ export function InquirySection({
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/items/${itemId}/inquiries`, {
+      const res = await fetch(postUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
