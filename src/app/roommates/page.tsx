@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, PackageOpen, Construction } from 'lucide-react';
 import { ListingCard, type Listing } from '@/components/ListingCard';
 import { RecentListingStrip } from '@/components/RecentListingStrip';
-import { PlatformSwitcher } from '@/components/PlatformSwitcher';
+import { PlatformTabs } from '@/components/PlatformTabs';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
 import { ListingPostModal, type ListingEditInitial } from '@/components/ListingPostModal';
 import { ListingApplyModal } from '@/components/ListingApplyModal';
@@ -191,8 +191,12 @@ function RoommatesContent() {
   return (
     <main className="min-h-screen">
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <PlatformSwitcher />
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
+          {/* 黑堡 wordmark + 平台 tab(跟 / 主页同款) */}
+          <span className="font-bold text-stone-900 whitespace-nowrap text-base sm:text-lg tracking-tight flex-shrink-0">
+            黑堡
+          </span>
+          <PlatformTabs />
           <div className="flex-1" />
           <button
             onClick={() => {
