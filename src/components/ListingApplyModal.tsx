@@ -13,6 +13,8 @@ import {
   LISTING_GENDERS_UI,
 } from '@/lib/utils';
 import { getStoredUtmSource } from '@/lib/utm';
+import { showError, showSuccess, showInfo, showWarning } from '@/lib/toast';
+import { validateContact, contactPlaceholder } from '@/lib/contactValidation';
 import type { Listing } from './ListingCard';
 
 const LS_LAST_CODE      = 'hb_last_edit_code';
@@ -87,9 +89,9 @@ export function ListingApplyModal({
 
   const submit = async () => {
     if (genderBlocked) return;
-    if (!contactValue.trim()) return alert('联系方式不能为空');
-    if (editCode.length < 6) return alert('识别码至少 6 位');
-    if (!message.trim()) return alert('消息不能为空');
+    if (!contactValue.trim()) return showError('联系方式不能为空');
+    if (editCode.length < 6) return showError('识别码至少 6 位');
+    if (!message.trim()) return showError('消息不能为空');
 
     const payload = {
       applicantGender,
@@ -113,9 +115,9 @@ export function ListingApplyModal({
       const data = await res.json();
       if (!res.ok) {
         if (data.existingStatus) {
-          alert(`你已申请过这条 listing（当前状态：${data.existingStatus}）`);
+          showInfo(`你已申请过这条 listing（当前状态：${data.existingStatus}）`);
         } else {
-          alert(data.error || '申请失败');
+          showError(data.error || '申请失败');
         }
         return;
       }
@@ -124,7 +126,10 @@ export function ListingApplyModal({
         localStorage.setItem(LS_LAST_CONTACT_T, contactType);
         localStorage.setItem(LS_LAST_CONTACT_V, contactValue.trim());
       } catch {}
-      alert('✓ 申请已发送\n\n对方决定后你能在「我的发布 → 我发的申请」看到结果。');
+      showSuccess('申请已发送', {
+        description: '对方决定后你能在「我发的 → 申请收件」看到结果',
+        duration: 6000,
+      });
       onSent();
       onClose();
     } finally {
@@ -220,7 +225,11 @@ export function ListingApplyModal({
               <input
                 value={contactValue}
                 onChange={e => setContactValue(e.target.value)}
-                placeholder={CONTACT_TYPES.find(c => c.id === contactType)?.placeholder ?? ''}
+                onBlur={() => {
+                  const r = validateContact(contactType, contactValue);
+                  if (!r.ok && r.warning) showWarning(r.warning);
+                }}
+                placeholder={contactPlaceholder(contactType)}
                 className="flex-1 border border-stone-300 rounded px-3 py-2"
               />
               {contactType === 'other' && (

@@ -7,6 +7,9 @@ import { BatchImportPanel } from './BatchImportPanel';
 import { CATEGORIES, CONTACT_TYPES } from '@/lib/utils';
 import { getStoredUtmSource } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
+import { showError, showWarning } from '@/lib/toast';
+import { validateContact, contactPlaceholder, validatePriceSoft } from '@/lib/contactValidation';
+import { HelpHint } from './HelpHint';
 import type { Item } from './ItemCard';
 
 const LS_LAST_CODE        = 'hb_last_edit_code';
@@ -78,10 +81,10 @@ export function PostModal({
   }, [mode, initialItem]);
 
   const submit = async () => {
-    if (!title.trim()) return alert(t('post.errTitle'));
-    if (!negotiable && (priceText === '' || isNaN(Number(priceText)))) return alert(t('post.errPrice'));
-    if (!contactValue.trim()) return alert(t('post.errContact'));
-    if (editCode.length < 6) return alert(t('post.errEditCode'));
+    if (!title.trim()) return showError(t('post.errTitle'));
+    if (!negotiable && (priceText === '' || isNaN(Number(priceText)))) return showError(t('post.errPrice'));
+    if (!contactValue.trim()) return showError(t('post.errContact'));
+    if (editCode.length < 6) return showError(t('post.errEditCode'));
 
     const payload = {
       type,
@@ -108,7 +111,7 @@ export function PostModal({
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) { alert(data.error || t('post.errOpFailed')); return; }
+      if (!res.ok) { showError(data.error || t('post.errOpFailed')); return; }
 
       try {
         localStorage.setItem(LS_LAST_CODE, editCode);
@@ -193,8 +196,15 @@ export function PostModal({
                 <input
                   type="number" inputMode="numeric"
                   min={0}
+                  max={99999}
                   value={priceText}
                   onChange={e => setPriceText(e.target.value)}
+                  onBlur={() => {
+                    const n = Number(priceText);
+                    if (!Number.isFinite(n)) return;
+                    const r = validatePriceSoft(n);
+                    if (!r.ok && r.warning) showWarning(r.warning);
+                  }}
                   disabled={negotiable}
                   placeholder="30"
                   className="w-32 border border-stone-300 rounded-r px-3 py-2 disabled:bg-stone-50 text-base"
@@ -268,14 +278,25 @@ export function PostModal({
               <input
                 value={contactValue}
                 onChange={e => setContactValue(e.target.value)}
-                placeholder={CONTACT_TYPES.find(c => c.id === contactType)?.placeholder}
+                onBlur={() => {
+                  const r = validateContact(contactType, contactValue);
+                  if (!r.ok && r.warning) showWarning(r.warning);
+                }}
+                placeholder={contactPlaceholder(contactType)}
                 className="border border-stone-300 rounded px-3 py-2 flex-1 min-w-[180px]"
               />
             </div>
           </div>
 
           <div className="border-t border-stone-200 pt-4">
-            <Label>{t('post.fieldEditCode')}</Label>
+            <div className="flex items-center gap-1.5 mb-1">
+              <Label>{t('post.fieldEditCode')}</Label>
+              <HelpHint label="什么是识别码?">
+                <p><strong>识别码 = 这个帖子的钥匙</strong>。改 / 删 / 标已售时要输入。</p>
+                <p>我们用加密保存,我们自己也看不到 —— 丢了无法找回,但只要联系方式还能用,你可以申请找回未售出的帖子。</p>
+                <p className="text-stone-500">✓ 这台设备会自动记住,下次发布预填。换设备或清浏览器缓存就要重新设。</p>
+              </HelpHint>
+            </div>
             <input
               value={editCode}
               onChange={e => setEditCode(e.target.value)}
@@ -285,8 +306,8 @@ export function PostModal({
               placeholder={t('post.editCodePh')}
               className="w-full border border-stone-300 rounded px-3 py-2 font-mono"
             />
-            <div className="text-xs text-stone-600 mt-2 bg-amber-50 border border-amber-200 rounded p-2 leading-relaxed">
-              {t('post.editCodeHelp')}
+            <div className="text-xs text-stone-600 mt-1.5">
+              ⚠️ 改 / 删 / 标已售时要用,记住它
             </div>
           </div>
         </div>

@@ -227,3 +227,23 @@ model Report {
   @@index([listingId])
   @@index([applicationId])
 }
+
+// 识别码找回回路 (Sprint 6 UX-5):用户丢识别码后,提交申请,Sean admin 人工处理
+// 心理学依据:H9 Error Recovery + Negativity Bias —— 失败体验的兜底路径
+model RecoveryRequest {
+  id                 String   @id @default(cuid())
+  targetType         String   // "item" | "listing"
+  targetId           String?  // 原帖 id(用户可能记不住,可空)
+  targetContactValue String   // 申请人记得的联系方式,Sean 用来匹配 + 验证
+  applicantWechat    String   // 申请人微信号(Sean 加好友用)
+  applicantNote      String?  // 申请人描述帖子细节,用于身份验证
+  ipAddress          String?
+  status             String   @default("pending") // pending | contacted | resolved | rejected | abuse
+  adminNotes         String?
+  resolvedEditCode   String?  // resolved 时记录新生成的 editCode 明文,Sean 微信发
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([targetId])
+}

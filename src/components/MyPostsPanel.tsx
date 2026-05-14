@@ -24,6 +24,8 @@ import {
   typeLabel,
   LISTING_TYPES,
   CONTACT_TYPES,
+  categoryBgClass,
+  listingTypeBgClass,
 } from '@/lib/utils';
 import { buildItemShareText, clientOrigin } from '@/lib/shareText';
 import { ShareButton } from './ShareButton';
@@ -31,6 +33,7 @@ import { CopyButton } from './CopyButton';
 import { PostModal } from './PostModal';
 import { ListingPostModal, type ListingEditInitial } from './ListingPostModal';
 import { EditCodePrompt } from './EditCodePrompt';
+import { showError } from '@/lib/toast';
 import type { Item } from './ItemCard';
 import type { Listing } from './ListingCard';
 
@@ -169,7 +172,7 @@ function MyPostsBody({ onClose }: { onClose?: () => void }) {
       const sentData     = await sentRes.json();
 
       if (!itemsRes.ok) {
-        alert(itemsData.error || t('my.errLookup'));
+        showError(itemsData.error || t('my.errLookup'));
         return;
       }
 
@@ -212,41 +215,41 @@ function MyPostsBody({ onClose }: { onClose?: () => void }) {
   }, [contactValue, editCode, t]);
 
   const handlePublishItem = async (item: Item) => {
-    if (editCode.length < 6) { alert('需要识别码'); return; }
+    if (editCode.length < 6) { showError('需要识别码'); return; }
     const res = await fetch(`/api/items/${item.id}/publish`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ editCode }),
     });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || '发布失败'); return; }
+    if (!res.ok) { showError(data.error || '发布失败'); return; }
     await lookup();
   };
 
   const handleDeleteItem = async (code: string, item: Item) => {
     const res = await fetch(`/api/items/${item.id}?editCode=${encodeURIComponent(code)}`, { method: 'DELETE' });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || '删除失败'); return; }
+    if (!res.ok) { showError(data.error || '删除失败'); return; }
     setDeleteItem(null);
     await lookup();
   };
 
   const handlePublishListing = async (listing: ListingWithStatus) => {
-    if (editCode.length < 6) { alert('需要识别码'); return; }
+    if (editCode.length < 6) { showError('需要识别码'); return; }
     const res = await fetch(`/api/listings/${listing.id}/publish`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ editCode }),
     });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || '发布失败'); return; }
+    if (!res.ok) { showError(data.error || '发布失败'); return; }
     await lookup();
   };
 
   const handleDeleteListing = async (code: string, listing: ListingWithStatus) => {
     const res = await fetch(`/api/listings/${listing.id}?editCode=${encodeURIComponent(code)}`, { method: 'DELETE' });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || '删除失败'); return; }
+    if (!res.ok) { showError(data.error || '删除失败'); return; }
     setDeleteListing(null);
     await lookup();
   };
@@ -256,7 +259,7 @@ function MyPostsBody({ onClose }: { onClose?: () => void }) {
     action: 'approve' | 'reject' | 'cancel',
     rejectReason?: string,
   ) => {
-    if (editCode.length < 6) { alert('需要识别码'); return; }
+    if (editCode.length < 6) { showError('需要识别码'); return; }
     const body: any = { action };
     if (action === 'approve' || action === 'reject') {
       body.listingEditCode = editCode;
@@ -270,7 +273,7 @@ function MyPostsBody({ onClose }: { onClose?: () => void }) {
       body: JSON.stringify(body),
     });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || '操作失败'); return; }
+    if (!res.ok) { showError(data.error || '操作失败'); return; }
     await lookup();
   };
 
@@ -534,6 +537,7 @@ function MyPostsBody({ onClose }: { onClose?: () => void }) {
           itemId={deleteListing.id}
           title={deleteListing.title}
           action="删除"
+          targetType="listing"
           onCancel={() => setDeleteListing(null)}
           onConfirm={async (code) => {
             if (!confirm('删除后无法恢复，确定？')) return;
@@ -598,7 +602,7 @@ export function MyPostsPanel({ onClose }: { onClose: () => void }) {
           <button
             onClick={onClose}
             className="inline-flex items-center gap-1.5 px-6 py-2 bg-white border border-stone-300 text-stone-700 rounded-chip hover:bg-stone-100 active:scale-95 text-sm font-medium transition-all shadow-card"
-            aria-label="收起我的发布"
+            aria-label="收起我发的"
           >
             <ChevronUp size={16} />
             收起
@@ -674,12 +678,12 @@ function MyItemRow({
           }`}>
             {typeLabel(item.type, item.category, locale)}
           </span>
-          <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
+          <span className={`px-2 py-0.5 rounded-full text-stone-700 ${categoryBgClass(item.category)}`}>
             {categoryLabel(item.category, locale)}
           </span>
           {!isDraft && typeof (item as any).cartCount === 'number' && (item as any).cartCount > 0 && (
-            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200" title="买家把这件加进购物清单的独立人数（visitor 去重）">
-              🛍 在 {(item as any).cartCount} 人的购物清单
+            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200" title="买家把这件加进心愿单的独立人数（visitor 去重）">
+              ♥ 在 {(item as any).cartCount} 人的心愿单
             </span>
           )}
           <span className="text-stone-400 ml-auto">{timeAgo(item.createdAt, locale)}</span>
@@ -774,7 +778,7 @@ function MyListingRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 text-xs mb-1 flex-wrap">
           {isDraft && <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-semibold">草稿</span>}
-          <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+          <span className={`px-2 py-0.5 rounded-full ${listingTypeBgClass(listing.type)}`}>
             {typeMeta?.label ?? listing.type}
           </span>
           {listing.housingLayout && (

@@ -20,6 +20,8 @@ import {
   CONTACT_TYPES,
 } from '@/lib/utils';
 import { getStoredUtmSource } from '@/lib/utm';
+import { showError, showWarning } from '@/lib/toast';
+import { validateContact, contactPlaceholder } from '@/lib/contactValidation';
 
 const LS_LAST_CODE      = 'hb_last_edit_code';
 const LS_LAST_CONTACT_T = 'hb_my_contact_type';
@@ -285,16 +287,16 @@ export function ListingPostModal({
 
   const submit = async () => {
     // 合租场景必选性别；租赁场景房东性别无关，不强制
-    if (meta.showSelfInfo && !posterGender) return alert('请选择你的性别');
-    if (!title.trim()) return alert('标题不能为空');
-    if (!contactValue.trim()) return alert('联系方式不能为空');
-    if (editCode.length < 6) return alert('识别码至少 6 位');
+    if (meta.showSelfInfo && !posterGender) return showError('请选择你的性别');
+    if (!title.trim()) return showError('标题不能为空');
+    if (!contactValue.trim()) return showError('联系方式不能为空');
+    if (editCode.length < 6) return showError('识别码至少 6 位');
     if (meta.dateRequiredBoth && (!moveInStart || !moveInEnd)) {
-      return alert(`${meta.dateLabel}：起止日期都必填`);
+      return showError(`${meta.dateLabel}：起止日期都必填`);
     }
     if (meta.showCurrentResidents && currentResidents !== '') {
       const n = Number(currentResidents);
-      if (!Number.isFinite(n) || n < 0 || n > 20) return alert('"现住几人"应为 0–20');
+      if (!Number.isFinite(n) || n < 0 || n > 20) return showError('"现住几人"应为 0–20');
     }
 
     const payload = {
@@ -336,7 +338,7 @@ export function ListingPostModal({
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) { alert(data.error || (isEdit ? '保存失败' : '发布失败')); return; }
+      if (!res.ok) { showError(data.error || (isEdit ? '保存失败' : '发布失败')); return; }
       try {
         localStorage.setItem(LS_LAST_CODE, editCode);
         localStorage.setItem(LS_LAST_CONTACT_T, contactType);
@@ -688,7 +690,11 @@ export function ListingPostModal({
               <input
                 value={contactValue}
                 onChange={e => setContactValue(e.target.value)}
-                placeholder={CONTACT_TYPES.find(c => c.id === contactType)?.placeholder ?? ''}
+                onBlur={() => {
+                  const r = validateContact(contactType, contactValue);
+                  if (!r.ok && r.warning) showWarning(r.warning);
+                }}
+                placeholder={contactPlaceholder(contactType)}
                 className="flex-1 border border-stone-300 rounded px-3 py-2"
               />
               {contactType === 'other' && (

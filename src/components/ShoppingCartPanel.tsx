@@ -1,6 +1,6 @@
 'use client';
 
-// 购物清单悬浮 panel —— 跟 MyPostsPanel 同款外壳：遮罩 + 居中卡片 + ESC + 底部"收起"按钮
+// 心愿单悬浮 panel —— 跟 MyPostsPanel 同款外壳：遮罩 + 居中卡片 + ESC + 底部"收起"按钮
 // 之前是 /cart 独立路由，Sean 反馈要保持扁平化网站，改成主页内 modal 浮窗
 
 import { useEffect, useMemo, useState } from 'react';
@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import NextImage from 'next/image';
 import {
-  Pencil, X, Trash2, CheckSquare, Square, ChevronDown, ChevronRight, ChevronUp, ShoppingBag,
+  Pencil, X, Trash2, CheckSquare, Square, ChevronDown, ChevronRight, ChevronUp, Heart, Package,
 } from 'lucide-react';
 import {
   getCart, removeFromCart, removeMany, syncCart, subscribeCart, type CartItem,
@@ -121,8 +121,8 @@ export function ShoppingCartPanel({ onClose }: { onClose: () => void }) {
         {/* 顶部 */}
         <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-3 rounded-t-card">
           <h2 className="text-lg font-semibold text-stone-900 flex items-center gap-2">
-            <ShoppingBag size={20} className="text-brand" />
-            购物清单
+            <Heart size={20} className="text-brand" fill="currentColor" />
+            心愿单
             {cart.length > 0 && <span className="text-stone-500 text-sm font-normal">· {cart.length} 件</span>}
           </h2>
           <div className="ml-auto flex items-center gap-2">
@@ -168,8 +168,8 @@ export function ShoppingCartPanel({ onClose }: { onClose: () => void }) {
         <div className="p-3 sm:p-4">
           {cart.length === 0 ? (
             <div className="text-center text-stone-500 py-16 bg-white rounded-lg border border-stone-200">
-              <ShoppingBag size={56} strokeWidth={1.2} className="mx-auto mb-4 text-stone-300" />
-              <div className="mb-3">购物清单是空的</div>
+              <Heart size={56} strokeWidth={1.2} className="mx-auto mb-4 text-stone-300" />
+              <div className="mb-3">心愿单是空的</div>
               <button
                 onClick={onClose}
                 className="text-brand underline hover:text-brand-dark"
@@ -257,7 +257,7 @@ export function ShoppingCartPanel({ onClose }: { onClose: () => void }) {
                               />
                             ) : (
                               <div className="h-14 w-14 rounded flex-shrink-0 bg-stone-100 flex items-center justify-center text-stone-300">
-                                <ShoppingBag size={20} strokeWidth={1.2} />
+                                <Package size={20} strokeWidth={1.2} />
                               </div>
                             )}
                             <div className="flex-1 min-w-0">
@@ -298,7 +298,7 @@ export function ShoppingCartPanel({ onClose }: { onClose: () => void }) {
           <button
             onClick={onClose}
             className="inline-flex items-center gap-1.5 px-6 py-2 bg-white border border-stone-300 text-stone-700 rounded-chip hover:bg-stone-100 active:scale-95 text-sm font-medium transition-all shadow-card"
-            aria-label="收起购物清单"
+            aria-label="收起心愿单"
           >
             <ChevronUp size={16} />
             收起

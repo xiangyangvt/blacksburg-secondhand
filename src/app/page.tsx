@@ -17,6 +17,7 @@ import { PlatformSwitcher } from '@/components/PlatformSwitcher';
 import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
+import { showError, showSuccess } from '@/lib/toast';
 import { Search, Plus, Share2, PackageOpen } from 'lucide-react';
 
 // 把 URL ?type=...&cat=... 解析回 Filters。未知/非法值都退到默认，保证健壮。
@@ -91,9 +92,10 @@ function HomePageInner() {
   // 分享链接 /?focus=ID：mount 时一次性读 URL，不放进 state（filter 改动不会丢这个）
   const [focusId] = useState<string | null>(() => searchParams.get('focus'));
 
-  // /cart 旧路由 redirect 过来时带 ?openCart=1 → mount 时触发购物车 panel 打开
+  // /cart 旧路由 redirect 过来时带 ?openWishlist=1（旧 ?openCart=1 兼容）→ mount 时触发心愿单 panel 打开
   useEffect(() => {
-    if (searchParams.get('openCart') === '1') {
+    const wantsOpen = searchParams.get('openWishlist') === '1' || searchParams.get('openCart') === '1';
+    if (wantsOpen) {
       // 等 CartButton 完成 mount 并注册 listener（一个 raf 就够，hydration 已完成）
       requestAnimationFrame(() => {
         window.dispatchEvent(new CustomEvent('hb-open-cart'));
@@ -195,7 +197,7 @@ function HomePageInner() {
     });
     const data = await res.json();
     if (!res.ok || !data.valid) {
-      alert(data.error || t('code.errWrong'));
+      showError(data.error || t('code.errWrong'));
       return;
     }
     setCodePrompt(null);
@@ -207,7 +209,7 @@ function HomePageInner() {
       method: 'DELETE',
     });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || t('inq.errDelete')); return; }
+    if (!res.ok) { showError(data.error || t('inq.errDelete')); return; }
     setCodePrompt(null);
     fetchItems();
   };
@@ -218,7 +220,7 @@ function HomePageInner() {
       { method: 'DELETE' },
     );
     const data = await res.json();
-    if (!res.ok) { alert(data.error || t('inq.errDelete')); return; }
+    if (!res.ok) { showError(data.error || t('inq.errDelete')); return; }
     setCodePrompt(null);
     fetchItems();
   };
@@ -231,8 +233,8 @@ function HomePageInner() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ targetType: 'item', targetId: item.id, reason }),
     });
-    if (res.ok) alert(t('report.thanks'));
-    else alert(t('report.failed'));
+    if (res.ok) showSuccess(t('report.thanks'));
+    else showError(t('report.failed'));
   };
 
   return (
@@ -419,7 +421,7 @@ function HomePageInner() {
 
       <footer className="text-center text-xs text-stone-500 py-8 border-t border-stone-200 mt-8 space-y-2">
         <p>
-          本站开源 · MIT 协议 ·{' '}
+          MIT 开源 · 欢迎到{' '}
           <a
             href="https://github.com/xiangyangvt/blacksburg-secondhand"
             target="_blank"
@@ -429,9 +431,9 @@ function HomePageInner() {
             <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
               <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
             </svg>
-            xiangyangvt/blacksburg-secondhand
+            GitHub
           </a>
-          {' '}· 欢迎提 issue 或 PR
+          {' '}提建议
         </p>
         <p>{t('footer.prohibited')}</p>
       </footer>

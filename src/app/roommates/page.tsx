@@ -3,7 +3,7 @@
 // /roommates 主页 — Sprint 4 L6（满）
 // L6 后半：filter chip 行（URL query 同步）+ ListingCard 双态
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, PackageOpen, Construction } from 'lucide-react';
 import { ListingCard, type Listing } from '@/components/ListingCard';
@@ -22,6 +22,8 @@ import { FabPostButton } from '@/components/FabPostButton';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { captureUtmFromUrl } from '@/lib/utm';
 import { useUnreadCount, markSeen } from '@/lib/notifications';
+import { showError, showSuccess } from '@/lib/toast';
+import { groupByMatch } from '@/lib/listingMatch';
 
 function parseFiltersFromQuery(sp: URLSearchParams): ListingFilters {
   return {
@@ -135,7 +137,7 @@ function RoommatesContent() {
     });
     const data = await res.json();
     if (!res.ok || !data.valid) {
-      alert(data.error || '识别码错误');
+      showError(data.error || '识别码错误');
       return; // 留在 EditCodePrompt，让用户重试
     }
     // 通过 → 用 GET 不能拿 contactValue（公开 API 擦了）；从 localStorage 取（卖家本人会有）
@@ -161,14 +163,14 @@ function RoommatesContent() {
     });
     const vData = await v.json();
     if (!v.ok || !vData.valid) {
-      alert(vData.error || '识别码错误');
+      showError(vData.error || '识别码错误');
       return;
     }
     if (!confirm('删除后无法恢复，确定？')) return;
     const id = codePrompt.listing.id;
     const res = await fetch(`/api/listings/${id}?editCode=${encodeURIComponent(code)}`, { method: 'DELETE' });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || '删除失败'); return; }
+    if (!res.ok) { showError(data.error || '删除失败'); return; }
     setCodePrompt(null);
     fetchListings(filters);
   };
@@ -182,8 +184,8 @@ function RoommatesContent() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ targetType: 'listing', targetId: l.id, reason }),
     });
-    if (res.ok) alert('已收到举报，谢谢');
-    else alert('举报失败，请稍后再试');
+    if (res.ok) showSuccess('已收到举报，谢谢');
+    else showError('举报失败，请稍后再试');
   };
 
   return (
@@ -199,7 +201,7 @@ function RoommatesContent() {
             }}
             className="relative px-3 sm:px-4 py-2 rounded-chip text-sm font-medium whitespace-nowrap bg-white border border-stone-300 text-stone-700 hover:bg-stone-100 transition-colors"
           >
-            我的发布
+            我发的
             {unreadListings > 0 && !myPanelOpen && (
               <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow">
                 {unreadListings > 9 ? '9+' : unreadListings}
@@ -255,19 +257,15 @@ function RoommatesContent() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
-            {listings.map(l => (
-              <ListingCard
-                key={l.id}
-                listing={l}
-                autoExpand={l.id === focusId}
-                onApply={onApply}
-                onEdit={onEditListing}
-                onDelete={onDeleteListing}
-                onReport={onReportListing}
-              />
-            ))}
-          </div>
+          <GroupedListings
+            filters={filters}
+            listings={listings}
+            focusId={focusId}
+            onApply={onApply}
+            onEditListing={onEditListing}
+            onDeleteListing={onDeleteListing}
+            onReportListing={onReportListing}
+          />
         )}
       </div>
 
@@ -296,6 +294,7 @@ function RoommatesContent() {
           itemId={codePrompt.listing.id}
           title={codePrompt.listing.title}
           action={codePrompt.kind === 'edit' ? '编辑' : '删除'}
+          targetType="listing"
           onCancel={() => setCodePrompt(null)}
           onConfirm={codePrompt.kind === 'edit' ? handleEditConfirm : handleDeleteConfirm}
         />
@@ -333,5 +332,111 @@ function SkeletonGrid() {
         </div>
       ))}
     </div>
+  );
+}
+
+// UX-10:按 matchScore 分组渲染。完全/部分 默认展开,其它默认折叠
+function GroupedListings({
+  filters,
+  listings,
+  focusId,
+  onApply,
+  onEditListing,
+  onDeleteListing,
+  onReportListing,
+}: {
+  filters: ListingFilters;
+  listings: Listing[];
+  focusId: string | null;
+  onApply: (l: Listing) => void;
+  onEditListing: (l: Listing) => void;
+  onDeleteListing: (l: Listing) => void;
+  onReportListing: (l: Listing) => Promise<void> | void;
+}) {
+  const groups = useMemo(() => groupByMatch(filters, listings), [filters, listings]);
+  const [otherOpen, setOtherOpen] = useState(false);
+
+  // 用户没选 filter → 全部 full,不显示分组 header(回到普通列表)
+  const noFilter =
+    filters.canApplyAs === 'any' &&
+    filters.areas.length === 0;
+
+  // 只渲染 full(没分组)
+  if (noFilter) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
+        {groups.full.map(r => (
+          <ListingCard
+            key={r.listing.id}
+            listing={r.listing}
+            autoExpand={r.listing.id === focusId}
+            onApply={onApply}
+            onEdit={onEditListing}
+            onDelete={onDeleteListing}
+            onReport={onReportListing}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const renderSection = (title: string, results: typeof groups.full, defaultOpen: boolean) => {
+    if (results.length === 0) return null;
+    return (
+      <section className="mb-5">
+        <h2 className="text-xs font-medium text-stone-500 mb-2 px-1">
+          {title} · <span className="text-stone-400">{results.length} 条</span>
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
+          {results.map(r => (
+            <ListingCard
+              key={r.listing.id}
+              listing={r.listing}
+              autoExpand={r.listing.id === focusId}
+              onApply={onApply}
+              onEdit={onEditListing}
+              onDelete={onDeleteListing}
+              onReport={onReportListing}
+            />
+          ))}
+        </div>
+      </section>
+    );
+  };
+
+  return (
+    <>
+      <div className="text-xs text-stone-500 mb-3 px-1">
+        💡 chip 是排序参考,差一点的也会显示,不会硬过滤
+      </div>
+      {renderSection('完全匹配', groups.full, true)}
+      {renderSection('部分匹配', groups.partial, true)}
+      {groups.other.length > 0 && (
+        <section className="mb-5">
+          <button
+            onClick={() => setOtherOpen(v => !v)}
+            className="text-xs font-medium text-stone-500 hover:text-stone-900 mb-2 px-1 flex items-center gap-1 transition-colors"
+          >
+            <span>其他(差距较大)· <span className="text-stone-400">{groups.other.length} 条</span></span>
+            <span className={`inline-block transition-transform ${otherOpen ? 'rotate-90' : ''}`}>▶</span>
+          </button>
+          {otherOpen && (
+            <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
+              {groups.other.map(r => (
+                <ListingCard
+                  key={r.listing.id}
+                  listing={r.listing}
+                  autoExpand={r.listing.id === focusId}
+                  onApply={onApply}
+                  onEdit={onEditListing}
+                  onDelete={onDeleteListing}
+                  onReport={onReportListing}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+    </>
   );
 }

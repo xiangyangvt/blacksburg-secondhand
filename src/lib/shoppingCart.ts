@@ -1,4 +1,4 @@
-// 二手购物清单 —— 纯 client-side（localStorage）
+// 二手心愿单 —— 纯 client-side（localStorage）
 // 设计：snapshot 每件物品的关键字段，加入时主动调 reveal API 把 contactValue 一起拍进来
 // 这样 /cart 页面不用每次 fetch 就能渲染；卖家也通过 reveal count 收到"被关注"信号
 

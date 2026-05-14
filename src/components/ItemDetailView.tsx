@@ -19,10 +19,12 @@ import {
   itemCopyText,
   timeAgo,
   typeLabel,
+  categoryBgClass,
 } from '@/lib/utils';
 import { buildItemShareText, clientOrigin } from '@/lib/shareText';
 import { markRecentView } from '@/lib/recentViews';
 import { useT, useLocale } from '@/i18n/I18nProvider';
+import { showError, showSuccess } from '@/lib/toast';
 import type { Item } from './ItemCard';
 
 export function ItemDetailView({ item }: { item: Item }) {
@@ -65,7 +67,7 @@ export function ItemDetailView({ item }: { item: Item }) {
   const handleDelete = async (code: string) => {
     const res = await fetch(`/api/items/${item.id}?editCode=${encodeURIComponent(code)}`, { method: 'DELETE' });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || t('inq.errDelete')); return; }
+    if (!res.ok) { showError(data.error || t('inq.errDelete')); return; }
     setCodePrompt(null);
     router.replace('/');
   };
@@ -76,7 +78,7 @@ export function ItemDetailView({ item }: { item: Item }) {
       { method: 'DELETE' },
     );
     const data = await res.json();
-    if (!res.ok) { alert(data.error || t('inq.errDelete')); return; }
+    if (!res.ok) { showError(data.error || t('inq.errDelete')); return; }
     setCodePrompt(null);
     refresh();
   };
@@ -89,8 +91,8 @@ export function ItemDetailView({ item }: { item: Item }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ targetType: 'item', targetId: item.id, reason }),
     });
-    if (res.ok) alert(t('report.thanks'));
-    else alert(t('report.failed'));
+    if (res.ok) showSuccess(t('report.thanks'));
+    else showError(t('report.failed'));
   };
 
   const shareText = origin
@@ -174,7 +176,7 @@ export function ItemDetailView({ item }: { item: Item }) {
               }`}>
                 {typeLabel(item.type, item.category, locale)}
               </span>
-              <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
+              <span className={`px-2 py-0.5 rounded-full text-stone-700 ${categoryBgClass(item.category)}`}>
                 {categoryLabel(item.category, locale)}
                 {item.customTag && ` · ${item.customTag}`}
               </span>
@@ -216,7 +218,7 @@ export function ItemDetailView({ item }: { item: Item }) {
                           customContactLabel: data.customContactLabel,
                         });
                       } else {
-                        alert(data.error || '查看失败');
+                        showError(data.error || '查看失败');
                       }
                     } finally {
                       setRevealing(false);

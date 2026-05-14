@@ -9,6 +9,8 @@ import { CATEGORIES, CONTACT_TYPES, categoryLabel, formatPrice, contactTypeLabel
 import { parseBatchText, mapPhotoIndices, type ParseRecord } from '@/lib/batchParser';
 import { getStoredUtmSource } from '@/lib/utm';
 import { useT, useLocale } from '@/i18n/I18nProvider';
+import { showError, showSuccess, showWarning } from '@/lib/toast';
+import { validateContact, contactPlaceholder } from '@/lib/contactValidation';
 
 const MAX_BATCH_PHOTOS = 60;
 const LS_LAST_CODE      = 'hb_last_edit_code';
@@ -69,7 +71,7 @@ export function BatchImportPanel({
   const uploadFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const slots = MAX_BATCH_PHOTOS - photoUrls.length;
-    if (slots <= 0) { alert(`最多 ${MAX_BATCH_PHOTOS} 张`); return; }
+    if (slots <= 0) { showWarning(`最多 ${MAX_BATCH_PHOTOS} 张`); return; }
     const list = Array.from(files).slice(0, slots);
 
     setUploading(true);
@@ -81,7 +83,7 @@ export function BatchImportPanel({
         fd.append('file', compressed);
         const res = await fetch('/api/upload', { method: 'POST', body: fd });
         const data = await res.json();
-        if (!res.ok) { alert(`上传失败：${data.error || res.statusText}`); continue; }
+        if (!res.ok) { showError(`上传失败：${data.error || res.statusText}`); continue; }
         next.push(data.url);
       }
       setPhotoUrls(next);
@@ -107,7 +109,7 @@ export function BatchImportPanel({
   };
 
   const onPreview = () => {
-    if (!text.trim()) { alert(t('batch.errEmpty')); return; }
+    if (!text.trim()) { showError(t('batch.errEmpty')); return; }
     const result = parseBatchText(text);
     setPreviewRecords(result.records);
   };
@@ -116,10 +118,10 @@ export function BatchImportPanel({
   const errorRecords = (previewRecords ?? []).filter((r): r is Extract<ParseRecord, { ok: false }> => !r.ok);
 
   const onSubmit = async () => {
-    if (validRecords.length === 0) { alert(t('batch.errNoValid')); return; }
-    if (validRecords.length > 30) { alert(t('batch.errMaxBatch')); return; }
-    if (!contactValue.trim()) { alert(t('post.errContact')); return; }
-    if (editCode.length < 6) { alert(t('post.errEditCode')); return; }
+    if (validRecords.length === 0) { showError(t('batch.errNoValid')); return; }
+    if (validRecords.length > 30) { showError(t('batch.errMaxBatch')); return; }
+    if (!contactValue.trim()) { showError(t('post.errContact')); return; }
+    if (editCode.length < 6) { showError(t('post.errEditCode')); return; }
 
     // 把每条 parsed item 补上全局联系方式 + 图片 URL 映射
     const items = validRecords.map(r => ({
@@ -146,9 +148,12 @@ export function BatchImportPanel({
       const data = await res.json();
       if (!res.ok) {
         if (data.perItem) {
-          alert(`部分条目有错：\n${data.perItem.map((e: any) => `条目 ${e.index + 1}: ${e.error}`).join('\n')}`);
+          showError('部分条目有错', {
+            description: data.perItem.map((e: any) => `条目 ${e.index + 1}: ${e.error}`).join('\n'),
+            duration: 8000,
+          });
         } else {
-          alert(data.error || '导入失败');
+          showError(data.error || '导入失败');
         }
         return;
       }
@@ -160,7 +165,7 @@ export function BatchImportPanel({
         localStorage.setItem(LS_LAST_CONTACT_V, contactValue.trim());
       } catch {}
 
-      alert(t('batch.previewSuccess', { n: data.count }));
+      showSuccess(t('batch.previewSuccess', { n: data.count }));
       onSuccess();
       onClose();
     } finally {
@@ -338,7 +343,11 @@ export function BatchImportPanel({
           <input
             value={contactValue}
             onChange={e => setContactValue(e.target.value)}
-            placeholder={CONTACT_TYPES.find(c => c.id === contactType)?.placeholder ?? ''}
+            onBlur={() => {
+              const r = validateContact(contactType, contactValue);
+              if (!r.ok && r.warning) showWarning(r.warning);
+            }}
+            placeholder={contactPlaceholder(contactType)}
             className="flex-1 border border-stone-300 rounded px-3 py-2 text-sm"
           />
           {contactType === 'other' && (

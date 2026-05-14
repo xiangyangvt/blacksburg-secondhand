@@ -210,6 +210,20 @@ export function categoryBgClass(category: string): string {
   return CAT_BG_CLASS[category] ?? 'bg-stone-100';
 }
 
+// 室友 listing 类型 → 色映射(沿用 cat tokens,跟 ROOMMATES_PLAN 一致)
+// A 找室友 蓝 / B 合租 绿 / C 转租 橙 / D 暑期 紫
+const LISTING_TYPE_BG_CLASS: Record<string, string> = {
+  find_roommate: 'bg-cat-electronics/10 text-blue-700 border border-cat-electronics/20',
+  co_rent:       'bg-cat-home/10 text-emerald-700 border border-cat-home/20',
+  sublet:        'bg-cat-transport/10 text-amber-700 border border-cat-transport/20',
+  summer:        'bg-cat-books/10 text-violet-700 border border-cat-books/20',
+};
+
+/** 室友 listing 类型对应的 chip class(含色 + 边) */
+export function listingTypeBgClass(type: string): string {
+  return LISTING_TYPE_BG_CLASS[type] ?? 'bg-stone-100 text-stone-700 border border-stone-200';
+}
+
 /**
  * 新鲜度可视化：根据 bumpedAt（最近活跃时间）返回 label + Tailwind class
  *   < 24h    → 绿色"刚刚发布"

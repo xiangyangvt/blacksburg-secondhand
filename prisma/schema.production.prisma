@@ -206,3 +206,22 @@ model Report {
   @@index([listingId])
   @@index([applicationId])
 }
+
+// 识别码找回回路 (Sprint 6 UX-5):用户丢识别码后,提交申请,Sean admin 人工处理
+model RecoveryRequest {
+  id                 String   @id @default(cuid())
+  targetType         String
+  targetId           String?
+  targetContactValue String
+  applicantWechat    String
+  applicantNote      String?
+  ipAddress          String?
+  status             String   @default("pending") // pending | contacted | resolved | rejected | abuse
+  adminNotes         String?
+  resolvedEditCode   String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([targetId])
+}

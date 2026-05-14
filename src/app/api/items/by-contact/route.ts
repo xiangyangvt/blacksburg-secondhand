@@ -1,9 +1,11 @@
-// GET  /api/items/by-contact?value=xxx
+// GET  /api/items/by-contact?value=xxx&excludeId=yyy&limit=N
 //   返回该联系方式下所有 active 商品（公开查询，任何人都能看 —— 联系方式本来就公开）
+//   - excludeId（可选）：排除某商品 id（UX-13 "同卖家其他物品曝光" 用，排除当前正加入心愿单的商品）
+//   - limit（可选，默认 200，上限 200）：cap 数量
 //
 // POST /api/items/by-contact  body { value, editCode }
 //   返回 active + 该 editCode 下的 draft（私有，需要识别码验证）
-//   用于 G4「我的发布」页查看自己的草稿
+//   用于 G4「我发的」页查看自己的草稿
 
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
@@ -15,19 +17,27 @@ function serialize(item: any) {
     ...item,
     photoUrls: parsePhotoUrls(item.photoUrls),
     editCodeHash: undefined,
-    cartCount: item._count?.cartEntries ?? 0,  // 真实"在 N 人购物清单"计数（visitor 去重）
+    cartCount: item._count?.cartEntries ?? 0,  // 真实"在 N 人心愿单"计数（visitor 去重）
     _count: undefined,
   };
 }
 
 export async function GET(req: NextRequest) {
   const value = req.nextUrl.searchParams.get('value')?.trim();
+  const excludeId = req.nextUrl.searchParams.get('excludeId')?.trim() || null;
+  const limitRaw = req.nextUrl.searchParams.get('limit');
+  const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 200, 1), 200) : 200;
+
   if (!value) return NextResponse.json({ error: 'value 不能为空' }, { status: 400 });
 
   const items = await prisma.item.findMany({
-    where: { contactValue: value, status: 'active' },
+    where: {
+      contactValue: value,
+      status: 'active',
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
     orderBy: { bumpedAt: 'desc' },
-    take: 200,
+    take: limit,
     include: {
       inquiries: { where: { status: 'active' }, orderBy: { createdAt: 'asc' } },
       _count: { select: { cartEntries: true } },

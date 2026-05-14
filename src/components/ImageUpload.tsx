@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import NextImage from 'next/image';
 import { useT } from '@/i18n/I18nProvider';
+import { showError, showWarning } from '@/lib/toast';
 
 const MAX_PHOTOS = 6;
 
@@ -25,7 +26,7 @@ export function ImageUpload({
     if (!files || files.length === 0) return;
     const slots = MAX_PHOTOS - urls.length;
     if (slots <= 0) {
-      alert(t('upload.maxReached', { max: MAX_PHOTOS }));
+      showWarning(t('upload.maxReached', { max: MAX_PHOTOS }));
       return;
     }
     const list = Array.from(files).slice(0, slots);
@@ -40,7 +41,7 @@ export function ImageUpload({
         const res = await fetch('/api/upload', { method: 'POST', body: fd });
         const data = await res.json();
         if (!res.ok) {
-          alert(`${t('upload.errFailed')}: ${data.error || res.statusText}`);
+          showError(`${t('upload.errFailed')}: ${data.error || res.statusText}`);
           continue;
         }
         next.push(data.url);

@@ -5,6 +5,8 @@ import { CopyButton } from './CopyButton';
 import { contactTypeLabel, timeAgo, CONTACT_TYPES } from '@/lib/utils';
 import { getStoredUtmSource } from '@/lib/utm';
 import { useT, useLocale } from '@/i18n/I18nProvider';
+import { showError, showWarning } from '@/lib/toast';
+import { validateContact, contactPlaceholder } from '@/lib/contactValidation';
 
 const LS_LAST_CODE = 'hb_last_edit_code';
 
@@ -81,7 +83,7 @@ export function InquirySection({
           [inquiryId]: { contactValue: data.contactValue, customContactLabel: data.customContactLabel },
         }));
       } else {
-        alert(data.error || '查看失败');
+        showError(data.error || '查看失败');
       }
     } finally {
       setRevealingId(null);
@@ -90,7 +92,7 @@ export function InquirySection({
 
   const submit = async () => {
     if (!contactValue.trim() || !message.trim()) {
-      alert(t('inq.errEmpty'));
+      showError(t('inq.errEmpty'));
       return;
     }
     setSubmitting(true);
@@ -107,7 +109,7 @@ export function InquirySection({
         }),
       });
       const data = await res.json();
-      if (!res.ok) { alert(data.error || t('inq.errSend')); return; }
+      if (!res.ok) { showError(data.error || t('inq.errSend')); return; }
       try {
         localStorage.setItem('hb_my_contact_type',  contactType);
         localStorage.setItem('hb_my_contact_value', contactValue.trim());
@@ -131,7 +133,7 @@ export function InquirySection({
     const res = await fetch(`/api/inquiries/${inq.id}?contactValue=${encodeURIComponent(cv)}`, { method: 'DELETE' });
     if (!res.ok) {
       const data = await res.json();
-      alert(data.error || t('inq.errDelete'));
+      showError(data.error || t('inq.errDelete'));
       return;
     }
     onInquiryDeleted();
@@ -149,7 +151,7 @@ export function InquirySection({
     });
     if (!res.ok) {
       const data = await res.json();
-      alert(data.error || t('inq.errEdit'));
+      showError(data.error || t('inq.errEdit'));
       return;
     }
     onInquiryUpdated();
@@ -179,8 +181,8 @@ export function InquirySection({
 
   const submitReply = async () => {
     if (!replyingId) return;
-    if (!replyText.trim()) { alert(t('inq.errEmpty')); return; }
-    if (replyCode.length < 6) { alert(t('post.errEditCode')); return; }
+    if (!replyText.trim()) { showError(t('inq.errEmpty')); return; }
+    if (replyCode.length < 6) { showError(t('post.errEditCode')); return; }
     setReplySubmitting(true);
     try {
       const res = await fetch(`/api/inquiries/${replyingId}`, {
@@ -192,7 +194,7 @@ export function InquirySection({
         }),
       });
       const data = await res.json();
-      if (!res.ok) { alert(data.error || t('reply.errSend')); return; }
+      if (!res.ok) { showError(data.error || t('reply.errSend')); return; }
       try { localStorage.setItem(LS_LAST_CODE, replyCode); } catch {}
       setReplyingId(null);
       setReplyText('');
@@ -214,7 +216,7 @@ export function InquirySection({
       body: JSON.stringify({ itemEditCode: code, sellerReply: '' }),
     });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || t('inq.errDelete')); return; }
+    if (!res.ok) { showError(data.error || t('inq.errDelete')); return; }
     onInquiryUpdated();
   };
 
@@ -363,9 +365,13 @@ export function InquirySection({
                   />
                 )}
                 <input
-                  placeholder={CONTACT_TYPES.find(c => c.id === contactType)?.placeholder}
+                  placeholder={contactPlaceholder(contactType)}
                   value={contactValue}
                   onChange={e => setContactValue(e.target.value)}
+                  onBlur={() => {
+                    const r = validateContact(contactType, contactValue);
+                    if (!r.ok && r.warning) showWarning(r.warning);
+                  }}
                   className="border border-stone-300 rounded px-2 py-1 text-sm flex-1 min-w-[160px]"
                 />
               </div>

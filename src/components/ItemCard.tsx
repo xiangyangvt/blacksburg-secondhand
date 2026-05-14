@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { Pencil, Trash2, Flag, X, ChevronLeft, ChevronRight, Eye, ShoppingBag, Check } from 'lucide-react';
+import { Pencil, Trash2, Flag, X, ChevronLeft, ChevronRight, Eye, Heart, Check } from 'lucide-react';
 import { CopyButton } from './CopyButton';
 import { ShareButton } from './ShareButton';
 import { InquirySection } from './InquirySection';
@@ -20,6 +20,8 @@ import {
   freshnessBadge,
 } from '@/lib/utils';
 import { useT, useLocale } from '@/i18n/I18nProvider';
+import { showError, showSuccess, showWarning } from '@/lib/toast';
+import { showSameSellerToast, type SameSellerItem } from './SameSellerToast';
 
 export type Item = {
   id: string;
@@ -37,7 +39,7 @@ export type Item = {
   createdAt: string;
   /** 最近活跃时间（编辑 / 新询价 / 卖家回复都会刷新）；用于新鲜度可视化 */
   bumpedAt?: string;
-  /** 卖家可见：当前在 N 个独立访客的购物清单里（来自 CartEntry 表 visitor 去重） */
+  /** 卖家可见：当前在 N 个独立访客的心愿单里（来自 CartEntry 表 visitor 去重） */
   cartCount?: number;
   inquiries: any[];
 };
@@ -66,7 +68,7 @@ export function ItemCard({
   // 联系方式 reveal 状态：null = 未点击；object = 已 reveal
   const [revealed, setRevealed] = useState<{ contactType: string; contactValue: string; customContactLabel: string | null } | null>(null);
   const [revealing, setRevealing] = useState(false);
-  // 购物清单状态：mount + subscribe 让按钮状态跨标签/同标签同步
+  // 心愿单状态：mount + subscribe 让按钮状态跨标签/同标签同步
   const [inCart, setInCart] = useState(false);
   const [cartBusy, setCartBusy] = useState(false);
   useEffect(() => {
@@ -83,10 +85,10 @@ export function ItemCard({
     }
     setCartBusy(true);
     try {
-      // 加入清单 = 用户的明确购买意向 → 顺便 reveal 联系方式拿 contactValue（同时给卖家 reveal count +1）
+      // 加入心愿单 = 用户的明确购买意向 → 顺便 reveal 联系方式拿 contactValue（同时给卖家 reveal count +1）
       const res = await fetch(`/api/items/${item.id}/reveal-contact`, { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) { alert(data.error || '加入失败'); return; }
+      if (!res.ok) { showError(data.error || '加入失败'); return; }
       const ret = addToCart({
         id: item.id,
         title: item.title,
@@ -98,7 +100,40 @@ export function ItemCard({
         contactValue: data.contactValue,
         customContactLabel: data.customContactLabel,
       });
-      if (ret === 'full') alert('购物清单满了（≤50 件），先去清单删除一些再加');
+      if (ret === 'full') {
+        showWarning('心愿单满了（≤50 件），先去清单删除一些再加');
+        return;
+      }
+      if (ret === true) {
+        // UX-13:同卖家其他物品曝光。失败静默降级为普通"已加入"toast
+        try {
+          const ssRes = await fetch(
+            `/api/items/by-contact?value=${encodeURIComponent(data.contactValue)}&excludeId=${item.id}&limit=6`,
+          );
+          if (ssRes.ok) {
+            const ssData = await ssRes.json();
+            const others = (ssData.items ?? []) as any[];
+            const mapped: SameSellerItem[] = others.map((it: any) => ({
+              id: it.id,
+              title: it.title,
+              price: it.price,
+              itemType: it.type,
+              category: it.category,
+              photoUrls: it.photoUrls ?? [],
+              contactType: it.contactType,
+              contactValue: it.contactValue,
+              customContactLabel: it.customContactLabel,
+            }));
+            if (!showSameSellerToast(mapped)) {
+              showSuccess('已加入心愿单');
+            }
+          } else {
+            showSuccess('已加入心愿单');
+          }
+        } catch {
+          showSuccess('已加入心愿单');
+        }
+      }
     } finally {
       setCartBusy(false);
     }
@@ -221,18 +256,18 @@ export function ItemCard({
                 </span>
               )}
             </button>
-            {/* 加入清单浮按钮 —— 紧凑模式买家明确"想要"的入口 */}
+            {/* 加入心愿单浮按钮 —— 紧凑模式买家明确"想要"的入口 */}
             <button
               onClick={(e) => { e.stopPropagation(); toggleCart(); }}
               disabled={cartBusy}
-              aria-label={inCart ? '从购物清单移除' : '加入购物清单'}
+              aria-label={inCart ? '从心愿单移除' : '加入心愿单'}
               className={`absolute top-1.5 right-1.5 w-8 h-8 rounded-full flex items-center justify-center shadow-card active:scale-90 transition-all disabled:opacity-60 ${
                 inCart
                   ? 'bg-emerald-500 text-white'
                   : 'bg-white/90 text-stone-700 hover:bg-white backdrop-blur-sm'
               }`}
             >
-              {inCart ? <Check size={16} strokeWidth={3} /> : <ShoppingBag size={15} strokeWidth={2.2} />}
+              {inCart ? <Check size={16} strokeWidth={3} /> : <Heart size={15} strokeWidth={2.2} />}
             </button>
           </div>
 
@@ -331,7 +366,7 @@ export function ItemCard({
                     customContactLabel: data.customContactLabel,
                   });
                 } else {
-                  alert(data.error || '查看失败');
+                  showError(data.error || '查看失败');
                 }
               } finally {
                 setRevealing(false);
@@ -352,7 +387,7 @@ export function ItemCard({
             <CopyButton text={revealed.contactValue} />
           </>
         )}
-        {/* 加入清单 / 已加入：买家批量买的入口（展开模式文字按钮） */}
+        {/* 加入心愿单 / 已加入：买家批量买的入口（展开模式文字按钮） */}
         <button
           onClick={toggleCart}
           disabled={cartBusy}
@@ -362,8 +397,8 @@ export function ItemCard({
               : 'bg-white border-stone-300 text-stone-700 hover:bg-stone-100'
           }`}
         >
-          {inCart ? <Check size={13} strokeWidth={2.5} /> : <ShoppingBag size={13} />}
-          {inCart ? '已加入清单' : '加入清单'}
+          {inCart ? <Check size={13} strokeWidth={2.5} /> : <Heart size={13} />}
+          {inCart ? '已加入心愿单' : '加入心愿单'}
         </button>
 
         {/* 分享：内容是「标题 — $价格 + 链接」，方便丢到微信里 */}

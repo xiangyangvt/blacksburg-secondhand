@@ -12,10 +12,10 @@ export const messages = {
 
   // 顶栏（emoji 都已剥离，前端用 lucide 图标）
   'header.search':         { zh: '搜索标题、描述、联系方式…',                 en: 'Search title, description, contact…' },
-  'header.post':           { zh: '我要发布',                                 en: 'Post Item' },
+  'header.post':           { zh: '发布',                                    en: 'Post' },
   'header.langZh':         { zh: '中',                                      en: '中' },
   'header.langEn':         { zh: 'EN',                                      en: 'EN' },
-  'header.statsLine':      { zh: '本月已新发布 {m} 件 · 累计在售 {t} 件',        en: '{m} new this month · {t} active total' },
+  'header.statsLine':      { zh: '本月 {m} 件 · 在售 {t} 件',                  en: '{m} this month · {t} active' },
 
   // 列表 / 空态
   'list.loading':          { zh: '加载中…',                                  en: 'Loading…' },
@@ -132,7 +132,7 @@ export const messages = {
   'reply.errSend':         { zh: '回复失败',                                en: 'Reply failed' },
 
   // 发布 / 编辑模态框
-  'post.titleCreate':      { zh: '我要发布',                                en: 'Post New Item' },
+  'post.titleCreate':      { zh: '发布新物品',                                en: 'Post New Item' },
   'post.titleEdit':        { zh: '编辑信息',                                en: 'Edit Item' },
   'post.fieldType':        { zh: '这是',                                    en: 'This is' },
   'post.typeSell':         { zh: '📦 出售',                                 en: '📦 For sale' },
@@ -154,10 +154,7 @@ export const messages = {
   'post.customLabelPh':    { zh: '联系方式名称（如 Discord）',                 en: 'Contact label (e.g., Discord)' },
   'post.fieldEditCode':    { zh: '识别码 *（≥6 位）',                         en: 'Edit code * (≥6 chars)' },
   'post.editCodePh':       { zh: '例：mychair123',                          en: 'e.g., mychair123' },
-  'post.editCodeHelp':     {
-    zh: '💡 这不是密码——只是用来证明"这条信息是你发的"，以后修改/删除要用。不会和任何账号关联，也不会发邮件。浏览器会帮你本地记住，下次发新东西自动填上同一个。丢了无法找回，换设备或清浏览器缓存就要重新设。',
-    en: '💡 This is not a password — just a tag that proves you posted this. You\'ll need it to edit/delete later. Not linked to any account, no email sent. Your browser remembers it locally and auto-fills next time. Lost = unrecoverable; new device or cleared cache means new code.',
-  },
+  // post.editCodeHelp 已废弃(Sprint 6 UX-7 改用 HelpHint popup,inline 教学一行字)
   'post.cancel':           { zh: '取消',                                    en: 'Cancel' },
   'post.saving':           { zh: '保存中…',                                 en: 'Saving…' },
   'post.submitCreate':     { zh: '发布',                                    en: 'Post' },
@@ -201,11 +198,11 @@ export const messages = {
   'report.failed':         { zh: '举报失败',                                en: 'Report failed' },
 
   // 页脚
-  'footer.opensource':     { zh: '本站开源 · MIT 协议 · 欢迎在 GitHub 提 issue / PR', en: 'Open source · MIT · Issues & PRs welcome on GitHub' },
+  'footer.opensource':     { zh: 'MIT 开源 · 欢迎在 GitHub 提建议',            en: 'MIT · Feedback welcome on GitHub' },
   'footer.prohibited':     { zh: '⚠️ 禁止发布枪支、毒品、活物、违法物品。',         en: '⚠️ No firearms, drugs, live animals, or illegal items.' },
 
   // 我的发布（G4）
-  'my.title':              { zh: '我的发布',                                en: 'My Posts' },
+  'my.title':              { zh: '我发的',                                   en: 'My Posts' },
   'my.intro':              { zh: '输入你发布时用的联系方式查看所有商品。要看草稿请加输识别码。', en: 'Enter your contact to see your posts. Add your edit code to see drafts too.' },
   'my.contactLabel':       { zh: '联系方式（如微信号 zhang3）',                en: 'Contact (e.g. wechat zhang3)' },
   'my.editCodeLabel':      { zh: '识别码（看草稿才需要）',                     en: 'Edit code (only needed for drafts)' },
@@ -219,7 +216,7 @@ export const messages = {
   'my.empty':              { zh: '这里还没有任何商品',                         en: 'Nothing here yet' },
   'my.draftEmpty':         { zh: '没有草稿。批量导入后的商品默认是草稿。',         en: 'No drafts. Items from batch import start as drafts.' },
   'my.errLookup':          { zh: '查找失败',                                  en: 'Lookup failed' },
-  'my.headerLink':         { zh: '我的发布',                                  en: 'My Posts' },
+  'my.headerLink':         { zh: '我发的',                                    en: 'My Posts' },
 
   // 批量导入
   'batch.tabSingle':       { zh: '单条发布',                                en: 'Single' },
@@ -238,7 +235,7 @@ export const messages = {
   'batch.previewErrors':   { zh: '有 {n} 条解析失败',                          en: '{n} failed' },
   'batch.previewSubmit':   { zh: '✅ 全部入库为草稿（共 {n} 条）',                en: '✅ Import {n} as drafts' },
   'batch.previewSubmitting': { zh: '入库中…',                                  en: 'Importing…' },
-  'batch.previewSuccess':  { zh: '✓ 已成功入库 {n} 条草稿，去「我的发布」一条条发布即可', en: '✓ {n} drafts created, go to My Posts to publish' },
+  'batch.previewSuccess':  { zh: '✓ 已成功入库 {n} 条草稿，去「我发的」一条条发布即可', en: '✓ {n} drafts created, go to My Posts to publish' },
   'batch.errEmpty':        { zh: '请先粘贴商品文本',                            en: 'Paste item text first' },
   'batch.errNoValid':      { zh: '没有可入库的有效条目（请先修复错误）',           en: 'No valid items (fix errors first)' },
   'batch.errAllErrors':    { zh: '所有条目都有错，请检查格式',                    en: 'All items have errors' },
