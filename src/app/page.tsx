@@ -19,7 +19,7 @@ import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
 import { showError, showSuccess } from '@/lib/toast';
-import { Search, Plus, Share2, PackageOpen } from 'lucide-react';
+import { Plus, Share2, PackageOpen } from 'lucide-react';
 
 // 把 URL ?type=...&cat=... 解析回 Filters。未知/非法值都退到默认，保证健壮。
 function parseFiltersFromSearchParams(sp: ReadonlyURLSearchParams | URLSearchParams): Filters {
@@ -243,20 +243,24 @@ function HomePageInner() {
       {/* 顶栏 — 全程 sticky（含手机端折叠筛选），始终黏在屏顶
           设计 V2：去 emoji、wordmark 取代 emoji 站名、品牌红只在主 CTA 出现 */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          {/* 最左：Wordmark + 平台切换器（融为一个 ▾ 按钮，低调） */}
-          <PlatformSwitcher />
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
+          {/* 黑堡 wordmark — 纯视觉,brand 锚点(地名 = 社区认同) */}
+          <span className="font-bold text-stone-900 whitespace-nowrap text-base sm:text-lg tracking-tight flex-shrink-0">
+            黑堡
+          </span>
 
-          {/* 中：搜索 */}
-          <div className="flex-1 min-w-0 relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
-            <input
-              value={filters.q}
-              onChange={e => setFiltersRaw(f => ({ ...f, q: e.target.value }))}
-              placeholder={t('header.search')}
-              className="w-full bg-stone-100 border border-transparent rounded-chip pl-9 pr-3 py-2 focus:outline-none focus:bg-white focus:border-stone-300 transition-colors"
-            />
-          </div>
+          {/* 平台 tab — 二手 / 室友&转租 平铺(Sprint 6.5 改造,替代 ▾ dropdown) */}
+          <PlatformTabs />
+
+          {/* 搜索 — 桌面常驻 max-w-260px,移动 icon 化 */}
+          <SearchBox
+            value={filters.q}
+            onChange={(v) => setFiltersRaw(f => ({ ...f, q: v }))}
+            placeholder={t('header.search')}
+          />
+
+          {/* spacer:桌面把右侧按钮推到右边 */}
+          <div className="flex-1 hidden md:block" />
 
           {/* 右：我的发布（toggle + 新消息红点徽章） */}
           <button
