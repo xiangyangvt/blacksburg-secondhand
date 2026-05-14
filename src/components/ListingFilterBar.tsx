@@ -11,6 +11,7 @@ import {
   LISTING_TYPES,
   LISTING_AREAS,
 } from '@/lib/utils';
+import { SavedListingsButton } from './SavedListingsButton';
 
 export type ListingFilters = {
   type: 'all' | string;          // listing type id
@@ -65,47 +66,52 @@ export function ListingFilterBar({
   const clearAll = () => onChange(LISTING_FILTERS_DEFAULT);
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 py-0.5">
-      <ChipDropdown
-        label="类型"
-        value={filters.type}
-        defaultValue="all"
-        options={typeOptions}
-        onChange={(v) => onChange({ type: v })}
-      />
-      <ChipDropdown
-        label="性别"
-        value={filters.canApplyAs}
-        defaultValue="any"
-        options={canApplyOptions}
-        onChange={(v) => onChange({ canApplyAs: v as ListingFilters['canApplyAs'] })}
-      />
-      <AreasChip
-        selected={filters.areas}
-        onChange={(areas) => onChange({ areas })}
-      />
-      <BudgetChip
-        min={filters.budgetMin}
-        max={filters.budgetMax}
-        onChange={(min, max) => onChange({ budgetMin: min, budgetMax: max })}
-      />
-      <ChipDropdown
-        label="排序"
-        value={filters.sort}
-        defaultValue="newest"
-        options={sortOptions}
-        onChange={(v) => onChange({ sort: v as ListingFilters['sort'] })}
-      />
+    <div className="flex items-start gap-2">
+      <div className="flex-1 flex flex-wrap items-center gap-1.5 py-0.5">
+        <ChipDropdown
+          label="类型"
+          value={filters.type}
+          defaultValue="all"
+          options={typeOptions}
+          onChange={(v) => onChange({ type: v })}
+        />
+        <ChipDropdown
+          label="性别"
+          value={filters.canApplyAs}
+          defaultValue="any"
+          options={canApplyOptions}
+          onChange={(v) => onChange({ canApplyAs: v as ListingFilters['canApplyAs'] })}
+        />
+        <AreasChip
+          selected={filters.areas}
+          onChange={(areas) => onChange({ areas })}
+        />
+        <BudgetChip
+          min={filters.budgetMin}
+          max={filters.budgetMax}
+          onChange={(min, max) => onChange({ budgetMin: min, budgetMax: max })}
+        />
+        <ChipDropdown
+          label="排序"
+          value={filters.sort}
+          defaultValue="newest"
+          options={sortOptions}
+          onChange={(v) => onChange({ sort: v as ListingFilters['sort'] })}
+        />
 
-      {hasAny && (
-        <button
-          type="button"
-          onClick={clearAll}
-          className="flex-shrink-0 text-xs text-stone-500 hover:text-stone-900 px-2 py-1.5 underline-offset-2 hover:underline whitespace-nowrap"
-        >
-          清空
-        </button>
-      )}
+        {hasAny && (
+          <button
+            type="button"
+            onClick={clearAll}
+            className="flex-shrink-0 text-xs text-stone-500 hover:text-stone-900 px-2 py-1.5 underline-offset-2 hover:underline whitespace-nowrap"
+          >
+            清空
+          </button>
+        )}
+      </div>
+
+      {/* 室友心愿单(独立于二手心愿单)— 跟 / 主页 CartButton 同位置但内容是 listings */}
+      <SavedListingsButton className="self-start" />
     </div>
   );
 }

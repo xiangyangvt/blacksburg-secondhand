@@ -14,7 +14,7 @@ import NextImage from 'next/image';
 import {
   Mail, MapPin, X,
   ChevronLeft, ChevronRight,
-  Pencil, Trash2, Flag,
+  Pencil, Trash2, Flag, Heart,
 } from 'lucide-react';
 import {
   LISTING_TYPES,
@@ -26,6 +26,8 @@ import { MoreMenu } from './MoreMenu';
 import { ShareButton } from './ShareButton';
 import { InquirySection } from './InquirySection';
 import { buildListingShareText, clientOrigin } from '@/lib/shareText';
+import { isListingSaved, toggleSavedListing, subscribeSavedListings } from '@/lib/savedListings';
+import { showSuccess, showWarning } from '@/lib/toast';
 
 export type Listing = {
   id: string;
@@ -171,6 +173,28 @@ export function ListingCard({
 
   const photos = Array.isArray(listing.photoUrls) ? listing.photoUrls : [];
 
+  // 室友心愿单收藏状态(Sprint 6.7)
+  const [isSaved, setIsSaved] = useState(false);
+  useEffect(() => {
+    const update = () => setIsSaved(isListingSaved(listing.id));
+    update();
+    return subscribeSavedListings(update);
+  }, [listing.id]);
+
+  const handleToggleSave = () => {
+    const ret = toggleSavedListing({
+      id: listing.id,
+      title: listing.title,
+      type: listing.type,
+      photoUrl: photos[0] ?? null,
+      budgetMin: (listing as any).budgetMin ?? null,
+      budgetMax: (listing as any).budgetMax ?? null,
+    });
+    if (ret === 'full') showWarning('室友心愿单满了(最多 50 条)');
+    else if (ret === 'added') showSuccess('已加入室友心愿单');
+    // removed 时静默
+  };
+
   const toggleExpand = () => {
     setExpanded(prev => {
       const next = !prev;
@@ -255,26 +279,41 @@ export function ListingCard({
         {/* === 图片区 === */}
         {photos.length > 0 && (
           <>
-            {/* Mobile：紧凑模式封面图（点击进 lightbox） */}
-            <button
-              data-no-toggle
-              onClick={() => setZoomIdx(0)}
-              className="md:hidden block w-full aspect-[4/3] relative overflow-hidden bg-stone-100"
-              aria-label={`查看第 1 / ${photos.length} 张图`}
-            >
-              <NextImage
-                src={photos[0]}
-                alt={listing.title}
-                fill
-                sizes="50vw"
-                className="object-cover"
-              />
-              {photos.length > 1 && (
-                <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
-                  {photos.length} 张
-                </span>
-              )}
-            </button>
+            {/* Mobile：紧凑模式封面图（点击进 lightbox）+ 浮动 ♥ 心愿单按钮 */}
+            <div className="md:hidden relative">
+              <button
+                data-no-toggle
+                onClick={() => setZoomIdx(0)}
+                className="block w-full aspect-[4/3] relative overflow-hidden bg-stone-100"
+                aria-label={`查看第 1 / ${photos.length} 张图`}
+              >
+                <NextImage
+                  src={photos[0]}
+                  alt={listing.title}
+                  fill
+                  sizes="50vw"
+                  className="object-cover"
+                />
+                {photos.length > 1 && (
+                  <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                    {photos.length} 张
+                  </span>
+                )}
+              </button>
+              {/* ♥ 浮动按钮 — 跟 ItemCard 同款套路 */}
+              <button
+                data-no-toggle
+                onClick={(e) => { e.stopPropagation(); handleToggleSave(); }}
+                aria-label={isSaved ? '从室友心愿单移除' : '加入室友心愿单'}
+                className={`absolute top-1.5 right-1.5 w-8 h-8 rounded-full flex items-center justify-center shadow-card active:scale-90 transition-all ${
+                  isSaved
+                    ? 'bg-rose-500 text-white'
+                    : 'bg-white/90 text-stone-700 hover:bg-white backdrop-blur-sm'
+                }`}
+              >
+                <Heart size={15} strokeWidth={2.2} fill={isSaved ? 'currentColor' : 'none'} />
+              </button>
+            </div>
 
             {/* Desktop：缩略图横排，每张可点开 lightbox */}
             <div className="hidden md:flex gap-2 overflow-x-auto no-scrollbar p-3 pb-1">

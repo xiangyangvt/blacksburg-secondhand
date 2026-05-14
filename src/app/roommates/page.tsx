@@ -10,7 +10,6 @@ import { ListingCard, type Listing } from '@/components/ListingCard';
 import { RecentListingStrip } from '@/components/RecentListingStrip';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
-import { CartButton } from '@/components/CartButton';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
 import { ListingPostModal, type ListingEditInitial } from '@/components/ListingPostModal';
 import { ListingApplyModal } from '@/components/ListingApplyModal';
@@ -222,9 +221,6 @@ function RoommatesContent() {
 
           {/* spacer 桌面把右侧按钮推到右边 */}
           <div className="flex-1 hidden md:block" />
-
-          {/* 心愿单(全站可见,跟 / 主页同款) */}
-          <CartButton />
           <button
             onClick={() => {
               setMyPanelOpen(true);

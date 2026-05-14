@@ -1,6 +1,7 @@
 'use client';
 
 import { Clock } from 'lucide-react';
+import { CartButton } from './CartButton';
 import { CATEGORIES } from '@/lib/utils';
 import { useT } from '@/i18n/I18nProvider';
 import { Dropdown } from './Dropdown';
@@ -28,8 +29,8 @@ export function FilterSidebar({
 
   return (
     <aside className="md:w-56 md:flex-shrink-0 space-y-4">
-      {/* Sprint 6.6:CartButton 搬到 header 了。这里只保留"最近看过" toggle */}
-      <div className="bg-white border border-stone-200 rounded-lg p-2">
+      {/* 桌面端心愿单 + 最近看过 toggle —— 顶部独立小栏(Sprint 6.7 回退到 sidebar) */}
+      <div className="flex items-center justify-between gap-2 bg-white border border-stone-200 rounded-lg p-2">
         <button
           type="button"
           onClick={() => onChange({ onlyRecent: !filters.onlyRecent })}
@@ -42,6 +43,7 @@ export function FilterSidebar({
           <Clock size={13} />
           最近看过
         </button>
+        <CartButton />
       </div>
 
       {/* 分类 — 手机平铺换行，桌面纵列 */}
