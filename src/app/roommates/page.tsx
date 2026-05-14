@@ -9,6 +9,8 @@ import { Plus, PackageOpen, Construction } from 'lucide-react';
 import { ListingCard, type Listing } from '@/components/ListingCard';
 import { RecentListingStrip } from '@/components/RecentListingStrip';
 import { PlatformTabs } from '@/components/PlatformTabs';
+import { SearchBox } from '@/components/SearchBox';
+import { CartButton } from '@/components/CartButton';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
 import { ListingPostModal, type ListingEditInitial } from '@/components/ListingPostModal';
 import { ListingApplyModal } from '@/components/ListingApplyModal';
@@ -81,6 +83,19 @@ function RoommatesContent() {
   const [editTarget, setEditTarget] = useState<{ listing: ListingEditInitial; editCode: string } | null>(null);
 
   const [filters, setFilters] = useState<ListingFilters>(LISTING_FILTERS_DEFAULT);
+
+  // Sprint 6.6:加搜索 q,客户端 filter listing.title / description
+  const [q, setQ] = useState('');
+
+  // 客户端搜索过滤(在 server filter 后再做一次 q 匹配)
+  const searchFilteredListings = useMemo(() => {
+    const ql = q.trim().toLowerCase();
+    if (!ql) return listings;
+    return listings.filter(l =>
+      (l.title ?? '').toLowerCase().includes(ql) ||
+      (l.description ?? '').toLowerCase().includes(ql)
+    );
+  }, [listings, q]);
 
   // 通知 badge：未读 application / 状态变化
   const unreadListings = useUnreadCount('listing');
@@ -197,7 +212,19 @@ function RoommatesContent() {
             黑堡
           </span>
           <PlatformTabs />
-          <div className="flex-1" />
+
+          {/* 搜索 — 跟 / 主页同款,Sprint 6.6 加上 */}
+          <SearchBox
+            value={q}
+            onChange={setQ}
+            placeholder="搜索室友 listing"
+          />
+
+          {/* spacer 桌面把右侧按钮推到右边 */}
+          <div className="flex-1 hidden md:block" />
+
+          {/* 心愿单(全站可见,跟 / 主页同款) */}
+          <CartButton />
           <button
             onClick={() => {
               setMyPanelOpen(true);
@@ -205,7 +232,7 @@ function RoommatesContent() {
             }}
             className="relative px-3 sm:px-4 py-2 rounded-chip text-sm font-medium whitespace-nowrap bg-white border border-stone-300 text-stone-700 hover:bg-stone-100 transition-colors"
           >
-            我发的
+            我的
             {unreadListings > 0 && !myPanelOpen && (
               <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow">
                 {unreadListings > 9 ? '9+' : unreadListings}
@@ -249,10 +276,12 @@ function RoommatesContent() {
 
         {loading ? (
           <SkeletonGrid />
-        ) : listings.length === 0 ? (
+        ) : searchFilteredListings.length === 0 ? (
           <div className="text-center text-stone-500 py-20">
             <PackageOpen size={56} strokeWidth={1.2} className="mx-auto mb-4 text-stone-300" />
-            <div className="mb-3">这里还没有匹配的 listing</div>
+            <div className="mb-3">
+              {q.trim() ? `没有找到包含「${q.trim()}」的 listing` : '这里还没有匹配的 listing'}
+            </div>
             <button
               onClick={onPost}
               className="text-brand underline hover:text-brand-dark"
@@ -263,7 +292,7 @@ function RoommatesContent() {
         ) : (
           <GroupedListings
             filters={filters}
-            listings={listings}
+            listings={searchFilteredListings}
             focusId={focusId}
             onApply={onApply}
             onEditListing={onEditListing}

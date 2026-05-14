@@ -202,7 +202,7 @@ export const messages = {
   'footer.prohibited':     { zh: '⚠️ 禁止发布枪支、毒品、活物、违法物品。',         en: '⚠️ No firearms, drugs, live animals, or illegal items.' },
 
   // 我的发布（G4）
-  'my.title':              { zh: '我发的',                                   en: 'My Posts' },
+  'my.title':              { zh: '我的',                                     en: 'My Posts' },
   'my.intro':              { zh: '输入你发布时用的联系方式查看所有商品。要看草稿请加输识别码。', en: 'Enter your contact to see your posts. Add your edit code to see drafts too.' },
   'my.contactLabel':       { zh: '联系方式（如微信号 zhang3）',                en: 'Contact (e.g. wechat zhang3)' },
   'my.editCodeLabel':      { zh: '识别码（看草稿才需要）',                     en: 'Edit code (only needed for drafts)' },
@@ -216,7 +216,7 @@ export const messages = {
   'my.empty':              { zh: '这里还没有任何商品',                         en: 'Nothing here yet' },
   'my.draftEmpty':         { zh: '没有草稿。批量导入后的商品默认是草稿。',         en: 'No drafts. Items from batch import start as drafts.' },
   'my.errLookup':          { zh: '查找失败',                                  en: 'Lookup failed' },
-  'my.headerLink':         { zh: '我发的',                                    en: 'My Posts' },
+  'my.headerLink':         { zh: '我的',                                      en: 'My Posts' },
 
   // 批量导入
   'batch.tabSingle':       { zh: '单条发布',                                en: 'Single' },
@@ -235,7 +235,7 @@ export const messages = {
   'batch.previewErrors':   { zh: '有 {n} 条解析失败',                          en: '{n} failed' },
   'batch.previewSubmit':   { zh: '✅ 全部入库为草稿（共 {n} 条）',                en: '✅ Import {n} as drafts' },
   'batch.previewSubmitting': { zh: '入库中…',                                  en: 'Importing…' },
-  'batch.previewSuccess':  { zh: '✓ 已成功入库 {n} 条草稿，去「我发的」一条条发布即可', en: '✓ {n} drafts created, go to My Posts to publish' },
+  'batch.previewSuccess':  { zh: '✓ 已成功入库 {n} 条草稿，去「我的」一条条发布即可', en: '✓ {n} drafts created, go to My Posts to publish' },
   'batch.errEmpty':        { zh: '请先粘贴商品文本',                            en: 'Paste item text first' },
   'batch.errNoValid':      { zh: '没有可入库的有效条目（请先修复错误）',           en: 'No valid items (fix errors first)' },
   'batch.errAllErrors':    { zh: '所有条目都有错，请检查格式',                    en: 'All items have errors' },

@@ -1,12 +1,13 @@
 'use client';
 
-// 心愿单入口按钮 —— 固定在筛选条最右侧的"墙"
-// 点击呼出 ShoppingCartPanel（悬浮 modal，跟 MyPostsPanel 一个套路），不再跳路由
-// 同时监听全局事件 hb-open-cart：其它地方（如 /cart 旧链接落地）可触发同一个 panel
-// 注：事件名保留 hb-open-cart 是为了向后兼容，不破坏 /cart 旧落地
+// 心愿单入口按钮(Sprint 6.6 重设计)
+// - 图标:ShoppingBag(购物袋) + Heart(心)复合,语义更明确"装着心愿"
+//   单独 ♥ 用户读为"喜欢/收藏",bag+heart 直觉就是"心愿购物袋"
+// - 放在 header 而不是筛选条 —— 全站可见 + 二手/室友切换不挪位置
+// - 监听全局事件 hb-open-cart 让 /cart 旧路由 redirect 进来时能打开
 
 import { useEffect, useState } from 'react';
-import { Heart } from 'lucide-react';
+import { ShoppingBag, Heart } from 'lucide-react';
 import { getCart, subscribeCart } from '@/lib/shoppingCart';
 import { ShoppingCartPanel } from './ShoppingCartPanel';
 
@@ -20,7 +21,6 @@ export function CartButton({ className = '' }: { className?: string }) {
     return subscribeCart(update);
   }, []);
 
-  // 监听全局事件让其它入口（/cart 路由 fallback 等）能打开同一个 panel
   useEffect(() => {
     const onOpen = () => setOpen(true);
     window.addEventListener('hb-open-cart', onOpen);
@@ -35,13 +35,24 @@ export function CartButton({ className = '' }: { className?: string }) {
         type="button"
         onClick={() => setOpen(true)}
         aria-label={`心愿单 ${hasItems ? `· ${count} 件` : ''}`}
-        className={`relative inline-flex items-center justify-center w-10 h-10 rounded-full border transition-all shadow-card hover:shadow-card-hover active:scale-95 ${
+        title="心愿单"
+        className={`relative inline-flex items-center justify-center w-10 h-10 rounded-full border transition-all shadow-card hover:shadow-card-hover active:scale-95 flex-shrink-0 ${
           hasItems
             ? 'bg-brand text-white border-brand hover:bg-brand-dark'
             : 'bg-white text-stone-600 border-stone-300 hover:bg-stone-50'
         } ${className}`}
       >
-        <Heart size={18} strokeWidth={2.2} fill={hasItems ? 'currentColor' : 'none'} />
+        {/* 复合图标:袋子轮廓 + 内嵌心 */}
+        <span className="relative inline-flex items-center justify-center" aria-hidden>
+          <ShoppingBag size={20} strokeWidth={1.8} />
+          <Heart
+            size={10}
+            strokeWidth={2.5}
+            fill="currentColor"
+            className="absolute"
+            style={{ top: '58%', left: '50%', transform: 'translate(-50%, -50%)' }}
+          />
+        </span>
         {hasItems && (
           <span
             className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow"

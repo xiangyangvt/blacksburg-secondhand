@@ -15,6 +15,7 @@ import { getRecentViewIds } from '@/lib/recentViews';
 import { useUnreadCount, markSeen } from '@/lib/notifications';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
+import { CartButton } from '@/components/CartButton';
 import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
@@ -262,7 +263,10 @@ function HomePageInner() {
           {/* spacer:桌面把右侧按钮推到右边 */}
           <div className="flex-1 hidden md:block" />
 
-          {/* 右：我的发布（toggle + 新消息红点徽章） */}
+          {/* 心愿单(Sprint 6.6:从筛选条搬上来,复合 bag+heart 图标) */}
+          <CartButton />
+
+          {/* 右：我的（toggle + 新消息红点徽章） */}
           <button
             onClick={() => {
               setMyPanelOpen(o => !o);

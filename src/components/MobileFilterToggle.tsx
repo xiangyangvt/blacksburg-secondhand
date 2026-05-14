@@ -9,7 +9,6 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { SlidersHorizontal, ChevronDown, X, Clock } from 'lucide-react';
 import { FilterSidebar, type Filters } from './FilterSidebar';
-import { CartButton } from './CartButton';
 import { CATEGORIES } from '@/lib/utils';
 import { useT } from '@/i18n/I18nProvider';
 
@@ -53,10 +52,8 @@ export function MobileFilterToggle({
 
   return (
     <div className="md:hidden">
-      {/* 外层 flex：左侧 chips 换行不影响右侧购物车 "墙"
-          align-items: start 让购物车按钮固定在第一行高度 */}
-      <div className="flex items-start gap-2">
-        <div className="flex-1 flex flex-wrap items-center gap-1.5 py-0.5">
+      {/* Sprint 6.6:CartButton 已搬到 header,这里只剩筛选 chip(可自然换行) */}
+      <div className="flex flex-wrap items-center gap-1.5 py-0.5">
           <ChipDropdown
             label="类目"
             value={filters.category}
@@ -108,10 +105,6 @@ export function MobileFilterToggle({
               清空
             </button>
           )}
-        </div>
-
-        {/* 购物车入口 —— 固定在筛选条右侧的"墙"，左侧 chip 多了换行不影响这里 */}
-        <CartButton className="flex-shrink-0 self-start" />
       </div>
 
       {/* 更多 panel：从"更多"chip 下方降下来，盖住下方主页内容 */}

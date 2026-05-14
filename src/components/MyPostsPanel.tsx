@@ -602,7 +602,7 @@ export function MyPostsPanel({ onClose }: { onClose: () => void }) {
           <button
             onClick={onClose}
             className="inline-flex items-center gap-1.5 px-6 py-2 bg-white border border-stone-300 text-stone-700 rounded-chip hover:bg-stone-100 active:scale-95 text-sm font-medium transition-all shadow-card"
-            aria-label="收起我发的"
+            aria-label="收起我的"
           >
             <ChevronUp size={16} />
             收起
