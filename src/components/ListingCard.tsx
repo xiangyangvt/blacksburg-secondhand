@@ -14,9 +14,8 @@ import NextImage from 'next/image';
 import {
   Mail, MapPin, X,
   ChevronLeft, ChevronRight,
-  Pencil, Trash2, Flag,
+  Pencil, Trash2, Flag, Heart,
 } from 'lucide-react';
-import { KeyHeartIcon } from './KeyHeartIcon';
 import {
   LISTING_TYPES,
   LIFESTYLE_DIMS,
@@ -289,7 +288,7 @@ export function ListingCard({
               : 'bg-white/90 text-stone-700 hover:bg-white backdrop-blur-sm'
           } ${photos.length > 0 ? 'hidden md:flex' : 'flex'}`}
         >
-          <KeyHeartIcon size={15} fill={isSaved} />
+          <Heart size={15} strokeWidth={2.2} fill={isSaved ? 'currentColor' : 'none'} />
         </button>
 
         {/* === 图片区 === */}
@@ -327,7 +326,7 @@ export function ListingCard({
                     : 'bg-white/90 text-stone-700 hover:bg-white backdrop-blur-sm'
                 }`}
               >
-                <KeyHeartIcon size={15} fill={isSaved} />
+                <Heart size={15} strokeWidth={2.2} fill={isSaved ? 'currentColor' : 'none'} />
               </button>
             </div>
 
