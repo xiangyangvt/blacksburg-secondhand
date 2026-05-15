@@ -218,7 +218,18 @@ export function ListingPostModal({
   const [moveInFuzzy, setMoveInFuzzy] = useState(initialListing?.moveInFuzzy ?? '');
   const [budgetMin, setBudgetMin] = useState(initialListing?.budgetMin?.toString() ?? '');
   const [budgetMax, setBudgetMax] = useState(initialListing?.budgetMax?.toString() ?? '');
-  const [areas, setAreas] = useState<string[]>(initialListing?.areas ?? []);
+  // Sprint 6.7j:areas 拆分为"预定义 chips + 自定义输入"
+  //   - 老 listing 里的 areas 可能含非预定义字符串(以前的自定义)
+  //   - 处理:那些字符串去掉,改为 ['其他'] 标记(chip 激活),自定义输入默认空白(per Sean)
+  const initialAreasRaw = initialListing?.areas ?? [];
+  const initialPredefined = initialAreasRaw.filter(a => (LISTING_AREAS as readonly string[]).includes(a));
+  const initialHadCustom = initialAreasRaw.some(a => !(LISTING_AREAS as readonly string[]).includes(a));
+  const initialAreasState =
+    initialHadCustom && !initialPredefined.includes('其他')
+      ? [...initialPredefined, '其他']
+      : initialPredefined;
+  const [areas, setAreas] = useState<string[]>(initialAreasState);
+  const [customArea, setCustomArea] = useState<string>(''); // 默认空白
 
   // 类型特有
   const [currentResidents, setCurrentResidents] = useState(initialListing?.currentResidents?.toString() ?? '');
@@ -315,7 +326,14 @@ export function ListingPostModal({
       moveInFuzzy: meta.showMoveInFuzzy ? (moveInFuzzy || null) : null,
       budgetMin: budgetMin === '' ? null : Number(budgetMin),
       budgetMax: budgetMax === '' ? null : Number(budgetMax),
-      areas,
+      // Sprint 6.7j:如果选了"其他"且填了自定义文本,提交时把"其他"替换为自定义文本
+      areas: (() => {
+        const trimmed = customArea.trim();
+        if (areas.includes('其他') && trimmed) {
+          return areas.map(a => (a === '其他' ? trimmed : a));
+        }
+        return areas;
+      })(),
       currentResidents: meta.showCurrentResidents && currentResidents !== ''
         ? Number(currentResidents)
         : null,
@@ -638,6 +656,16 @@ export function ListingPostModal({
                   );
                 })}
               </div>
+              {/* Sprint 6.7j:点了"其他"chip 才出现自定义输入 */}
+              {areas.includes('其他') && (
+                <input
+                  value={customArea}
+                  onChange={e => setCustomArea(e.target.value)}
+                  maxLength={30}
+                  placeholder="例:Patrick Henry Drive / 某个具体街区名"
+                  className="mt-2 w-full border border-stone-300 rounded px-3 py-2 text-sm"
+                />
+              )}
             </div>
           </section>
 

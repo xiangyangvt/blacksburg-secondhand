@@ -38,8 +38,13 @@ export function validateListingFields(f: any): string | null {
 
   if (f.areas !== undefined) {
     if (!Array.isArray(f.areas)) return '区域格式不合法';
+    if (f.areas.length > 6) return '区域最多 6 个';
     for (const a of f.areas) {
-      if (!VALID_AREAS.includes(a)) return `区域不合法: ${a}`;
+      if (typeof a !== 'string') return '区域格式不合法';
+      const trimmed = a.trim();
+      if (!trimmed) return '区域不能为空';
+      if (trimmed.length > 30) return '区域名最多 30 字';
+      // Sprint 6.7j:放开校验,允许自定义区域名(预定义之外的字符串也接受)
     }
   }
 
