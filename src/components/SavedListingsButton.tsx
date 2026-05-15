@@ -6,9 +6,9 @@
 // - 放 ListingFilterBar 右侧
 
 import { useEffect, useState } from 'react';
-import { Heart } from 'lucide-react';
 import { getSavedListings, subscribeSavedListings } from '@/lib/savedListings';
 import { SavedListingsPanel } from './SavedListingsPanel';
+import { KeyHeartIcon } from './KeyHeartIcon';
 
 export function SavedListingsButton({ className = '' }: { className?: string }) {
   const [count, setCount] = useState(0);
@@ -35,7 +35,7 @@ export function SavedListingsButton({ className = '' }: { className?: string }) 
             : 'bg-white text-stone-600 border-stone-300 hover:bg-stone-50'
         } ${className}`}
       >
-        <Heart size={18} strokeWidth={2} fill={has ? 'currentColor' : 'none'} />
+        <KeyHeartIcon size={18} fill={has} />
         {has && (
           <span
             className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow"

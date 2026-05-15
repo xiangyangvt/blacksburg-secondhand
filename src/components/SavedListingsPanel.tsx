@@ -8,9 +8,10 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import NextImage from 'next/image';
-import { Heart, X, Trash2, ChevronUp, Home } from 'lucide-react';
+import { X, Trash2, ChevronUp, Home } from 'lucide-react';
 import { getSavedListings, removeSavedListing, subscribeSavedListings, type SavedListing } from '@/lib/savedListings';
 import { LISTING_TYPES, listingTypeBgClass } from '@/lib/utils';
+import { KeyHeartIcon } from './KeyHeartIcon';
 
 export function SavedListingsPanel({ onClose }: { onClose: () => void }) {
   const [list, setList] = useState<SavedListing[]>([]);
@@ -47,7 +48,7 @@ export function SavedListingsPanel({ onClose }: { onClose: () => void }) {
         {/* 顶部 */}
         <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-3 rounded-t-card">
           <h2 className="text-lg font-semibold text-stone-900 flex items-center gap-2">
-            <Heart size={20} className="text-brand" fill="currentColor" />
+            <KeyHeartIcon size={20} fill className="text-brand" />
             室友心愿单
             {list.length > 0 && (
               <span className="text-stone-500 text-sm font-normal">· {list.length} 条</span>
@@ -66,7 +67,7 @@ export function SavedListingsPanel({ onClose }: { onClose: () => void }) {
         <div className="p-3 sm:p-4">
           {list.length === 0 ? (
             <div className="text-center text-stone-500 py-16 bg-white rounded-lg border border-stone-200">
-              <Heart size={56} strokeWidth={1.2} className="mx-auto mb-4 text-stone-300" />
+              <KeyHeartIcon size={56} strokeWidth={1.2} className="mx-auto mb-4 text-stone-300" />
               <div className="mb-3">室友心愿单是空的</div>
               <button
                 onClick={onClose}
