@@ -146,14 +146,14 @@ export function ItemCard({
   useEffect(() => { setOrigin(clientOrigin()); }, []);
 
   // autoExpand 触发:分享链接 ?focus=ID / 同卖家 toast router.push 都会改 autoExpand prop
-  // Sprint 6.7h 补 setExpanded(true)——之前 expanded 是 useState(autoExpand) 只取初值,
-  // autoExpand 后变 true 时不会自动展开
+  // Sprint 6.7h 补 setExpanded(true) + block 改 'start' 让 scroll-margin-top 生效,
+  // 卡片顶部对齐筛选栏下沿(不被 sticky header 盖住)
   useEffect(() => {
     if (!autoExpand) return;
     setExpanded(true);
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
-        cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       })
     );
   }, [autoExpand]);
@@ -234,7 +234,7 @@ export function ItemCard({
       ref={cardRef}
       data-item-id={item.id}
       onClick={onCardClick}
-      className={`bg-white rounded-lg shadow-sm border ${expanded ? 'border-brand/40' : 'border-stone-200'} p-3 md:p-4 hover:shadow-md transition-all cursor-pointer scroll-mt-24 ${expanded ? 'col-span-2 md:col-span-1' : ''}`}
+      className={`bg-white rounded-lg shadow-sm border ${expanded ? 'border-brand/40' : 'border-stone-200'} p-3 md:p-4 hover:shadow-md transition-all cursor-pointer scroll-mt-36 md:scroll-mt-24 ${expanded ? 'col-span-2 md:col-span-1' : ''}`}
     >
       {/* === 图片：手机端封面图（正方形）/ 桌面端缩略图横排 === */}
       {photos.length > 0 && (
