@@ -273,10 +273,25 @@ export function ListingCard({
         ref={cardRef}
         data-listing-id={listing.id}
         onClick={onCardClick}
-        className={`bg-white rounded-card shadow-card border overflow-hidden hover:shadow-card-hover transition-all cursor-pointer scroll-mt-24 ${
+        className={`relative bg-white rounded-card shadow-card border overflow-hidden hover:shadow-card-hover transition-all cursor-pointer scroll-mt-24 ${
           expanded ? 'border-brand/40 col-span-2 md:col-span-1' : 'border-stone-200'
         }`}
       >
+        {/* ♥ 收藏(article 级浮动):无图卡 + 桌面常驻;mobile + 有图时上方封面已经有同款浮动 ♥,这里隐藏 */}
+        <button
+          type="button"
+          data-no-toggle
+          onClick={(e) => { e.stopPropagation(); handleToggleSave(); }}
+          aria-label={isSaved ? '从室友心愿单移除' : '加入室友心愿单'}
+          className={`absolute top-2 right-2 z-10 w-8 h-8 rounded-full items-center justify-center shadow-card active:scale-90 transition-all ${
+            isSaved
+              ? 'bg-rose-500 text-white'
+              : 'bg-white/90 text-stone-700 hover:bg-white backdrop-blur-sm'
+          } ${photos.length > 0 ? 'hidden md:flex' : 'flex'}`}
+        >
+          <KeyHeartIcon size={15} fill={isSaved} />
+        </button>
+
         {/* === 图片区 === */}
         {photos.length > 0 && (
           <>
@@ -371,20 +386,6 @@ export function ListingCard({
             <span className={`ml-auto whitespace-nowrap ${fresh.className} ${expanded ? 'inline' : 'hidden md:inline'}`}>
               {fresh.label}
             </span>
-
-            {/* ♥ 收藏按钮(Sprint 6.7c):no-photo 卡片 + 桌面常驻
-                mobile + 有图时上方封面已经有浮动 ♥,这里隐藏避免重复 */}
-            <button
-              type="button"
-              data-no-toggle
-              onClick={(e) => { e.stopPropagation(); handleToggleSave(); }}
-              aria-label={isSaved ? '从室友心愿单移除' : '加入室友心愿单'}
-              className={`p-1 rounded-full transition-colors flex-shrink-0 items-center justify-center ${
-                isSaved ? 'text-rose-500' : 'text-stone-400 hover:text-rose-500 hover:bg-stone-100'
-              } ${photos.length > 0 ? 'hidden md:inline-flex' : 'inline-flex'}`}
-            >
-              <KeyHeartIcon size={15} fill={isSaved} />
-            </button>
 
             {/* ⋯ 菜单：手机展开后才显示，桌面常驻 */}
             {moreMenuItems.length > 0 && (
