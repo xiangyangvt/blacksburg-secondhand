@@ -173,6 +173,16 @@ export function ListingCard({
 
   const photos = Array.isArray(listing.photoUrls) ? listing.photoUrls : [];
 
+  // 无图占位的类型色 lookup(Sprint 6.7i:方案 A 类型色 + 房子 silhouette)
+  // 注:Tailwind 必须扫到字面 className 才会生成 css,所以列出全部 4 个 type 字面字符串
+  const placeholderColor = ({
+    find_roommate: { bg: 'bg-cat-electronics/10', icon: 'text-cat-electronics/40' },
+    co_rent:       { bg: 'bg-cat-home/10',        icon: 'text-cat-home/40' },
+    sublet:        { bg: 'bg-cat-transport/10',   icon: 'text-cat-transport/40' },
+    summer:        { bg: 'bg-cat-books/10',       icon: 'text-cat-books/40' },
+  } as Record<string, { bg: string; icon: string }>)[listing.type]
+    ?? { bg: 'bg-stone-100', icon: 'text-stone-300' };
+
   // 室友心愿单收藏状态(Sprint 6.7)
   const [isSaved, setIsSaved] = useState(false);
   useEffect(() => {
@@ -292,6 +302,33 @@ export function ListingCard({
         </button>
 
         {/* === 图片区 === */}
+        {photos.length === 0 && (
+          /* 无图占位:类型色浅底 + 自绘房子 silhouette(屋顶 + 屋身 + 2 窗户 + 门)
+             方案 A,仅移动端;桌面无 thumb 区天然紧凑 */
+          <div className={`md:hidden aspect-[4/3] flex items-center justify-center ${placeholderColor.bg}`}>
+            <svg
+              viewBox="0 0 100 80"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`w-24 h-20 ${placeholderColor.icon}`}
+              aria-hidden
+            >
+              {/* 屋顶斜线 */}
+              <path d="M14 36 L50 12 L86 36" />
+              {/* 屋身 + 底部圆角 */}
+              <path d="M22 36 V66 a3 3 0 0 0 3 3 H75 a3 3 0 0 0 3 -3 V36" />
+              {/* 左窗 */}
+              <rect x="32" y="44" width="10" height="10" rx="1.5" />
+              {/* 右窗 */}
+              <rect x="58" y="44" width="10" height="10" rx="1.5" />
+              {/* 门(中下) */}
+              <path d="M44 69 V58 a2.5 2.5 0 0 1 2.5 -2.5 H53.5 a2.5 2.5 0 0 1 2.5 2.5 V69" />
+            </svg>
+          </div>
+        )}
         {photos.length > 0 && (
           <>
             {/* Mobile：紧凑模式封面图（点击进 lightbox）+ 浮动 ♥ 心愿单按钮 */}
