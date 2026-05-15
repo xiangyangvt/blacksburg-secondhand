@@ -371,6 +371,20 @@ export function ListingCard({
               {fresh.label}
             </span>
 
+            {/* ♥ 收藏按钮(Sprint 6.7c):no-photo 卡片 + 桌面常驻
+                mobile + 有图时上方封面已经有浮动 ♥,这里隐藏避免重复 */}
+            <button
+              type="button"
+              data-no-toggle
+              onClick={(e) => { e.stopPropagation(); handleToggleSave(); }}
+              aria-label={isSaved ? '从室友心愿单移除' : '加入室友心愿单'}
+              className={`p-1 rounded-full transition-colors flex-shrink-0 items-center justify-center ${
+                isSaved ? 'text-rose-500' : 'text-stone-400 hover:text-rose-500 hover:bg-stone-100'
+              } ${photos.length > 0 ? 'hidden md:inline-flex' : 'inline-flex'}`}
+            >
+              <Heart size={15} strokeWidth={2.2} fill={isSaved ? 'currentColor' : 'none'} />
+            </button>
+
             {/* ⋯ 菜单：手机展开后才显示，桌面常驻 */}
             {moreMenuItems.length > 0 && (
               <span className={expanded ? 'inline' : 'hidden md:inline'} data-no-toggle>
