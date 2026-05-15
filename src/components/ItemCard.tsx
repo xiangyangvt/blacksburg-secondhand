@@ -234,7 +234,7 @@ export function ItemCard({
       ref={cardRef}
       data-item-id={item.id}
       onClick={onCardClick}
-      className={`bg-white rounded-lg shadow-sm border ${expanded ? 'border-brand/40' : 'border-stone-200'} p-3 md:p-4 hover:shadow-md transition-all cursor-pointer scroll-mt-36 md:scroll-mt-24 ${expanded ? 'col-span-2 md:col-span-1' : ''}`}
+      className={`bg-white rounded-lg shadow-sm border ${expanded ? 'border-brand/40' : 'border-stone-200'} p-3 md:p-4 hover:shadow-md transition-all cursor-pointer scroll-mt-44 md:scroll-mt-24 ${expanded ? 'col-span-2 md:col-span-1' : ''}`}
     >
       {/* === 图片：手机端封面图（正方形）/ 桌面端缩略图横排 === */}
       {photos.length > 0 && (
@@ -401,7 +401,7 @@ export function ItemCard({
           }`}
         >
           {inCart ? <Check size={13} strokeWidth={2.5} /> : <Heart size={13} />}
-          {inCart ? '已加入心愿单' : '加入心愿单'}
+          {inCart ? '已在心愿单' : '加入心愿单'}
         </button>
 
         {/* 分享：内容是「标题 — $价格 + 链接」，方便丢到微信里 */}
