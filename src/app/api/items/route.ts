@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
   const type     = sp.get('type');     // sell | buy | null(全部)
   const category = sp.get('category'); // home/electronics/...
   const q        = sp.get('q')?.trim();
+  const seller   = sp.get('seller')?.trim();  // Sprint 6.7g:按卖家 contactValue 过滤
   const minPrice = sp.get('minPrice') ? Number(sp.get('minPrice')) : undefined;
   const maxPrice = sp.get('maxPrice') ? Number(sp.get('maxPrice')) : undefined;
   const since    = sp.get('since');    // 1d | 1w | 1m | all
@@ -31,6 +32,7 @@ export async function GET(req: NextRequest) {
   const where: any = { status: 'active', NOT: { category: 'housing' } };
   if (type === 'sell' || type === 'buy') where.type = type;
   if (category && VALID_CATEGORIES.includes(category as any) && category !== 'housing') where.category = category;
+  if (seller) where.contactValue = seller;
   if (q) {
     // 搜索匹配标题、描述、自定义标签
     // 不再匹配 contactValue —— 联系方式现在隐藏，搜索它会反推泄露

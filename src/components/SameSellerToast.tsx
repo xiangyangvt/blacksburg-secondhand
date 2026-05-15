@@ -1,18 +1,18 @@
 'use client';
 
-// UX-13:同卖家其他物品曝光
+// UX-13:同卖家其他物品曝光(Sprint 6.7g 改造)
 // 用户点 ♡ 加入心愿单后,如果同卖家还有 ≥ 2 件其他 active 物品,
-// 通过 sonner toast.custom 渲染富内容:已加入提示 + 同卖家其他物品缩略图 + "全部加入"按钮
+// 通过 sonner toast.custom 渲染富内容
 //
-// 心理学依据:
-// - Self-Determination Theory(competence):"我聪明,一趟搞定多件"
-// - 黑堡 WeChat-deal 文化先验:一次见面一锅端,一次能解决就一次
-// - 意图形成后的低边际成本:L4 commitment 跨过后加件几乎无成本
+// Sprint 6.7g 行为调整:
+//   - 主按钮 "去看看 (N)" → 跳 /?seller=X 用 seller 过滤显示该卖家所有商品
+//   - 缩略图点击 → 跳 /?focus=ID 直接看那个商品(关闭 toast)
+//   - 不再就地加入(避免不可逆动作)
 
+import { useRouter } from 'next/navigation';
 import NextImage from 'next/image';
 import { Heart, X, Package } from 'lucide-react';
 import { toast } from 'sonner';
-import { addToCart, isInCart } from '@/lib/shoppingCart';
 
 export type SameSellerItem = {
   id: string;
@@ -26,11 +26,6 @@ export type SameSellerItem = {
   customContactLabel: string | null;
 };
 
-/**
- * 触发 toast.custom 渲染同卖家曝光
- * - items 长度 < 2 → 不触发(交给调用者用普通 toast)
- * - items 长度 ≥ 2 → 渲染富内容 toast,持续 8s
- */
 export function showSameSellerToast(items: SameSellerItem[]): boolean {
   if (items.length < 2) return false;
   toast.custom((t) => (
@@ -40,35 +35,19 @@ export function showSameSellerToast(items: SameSellerItem[]): boolean {
 }
 
 function SameSellerCard({ items, onClose }: { items: SameSellerItem[]; onClose: () => void }) {
-  const itemToCartSnapshot = (it: SameSellerItem) => ({
-    id: it.id,
-    title: it.title,
-    price: it.price,
-    itemType: it.itemType,
-    category: it.category,
-    photoUrl: it.photoUrls[0] ?? null,
-    contactType: it.contactType,
-    contactValue: it.contactValue,
-    customContactLabel: it.customContactLabel,
-  });
+  const router = useRouter();
+  const contactValue = items[0]?.contactValue ?? '';
 
-  const addAll = () => {
-    let added = 0;
-    for (const it of items) {
-      if (isInCart(it.id)) continue;
-      const ret = addToCart(itemToCartSnapshot(it));
-      if (ret === true) added++;
-      if (ret === 'full') break;
-    }
+  const goCheckAll = () => {
     onClose();
-    if (added > 0) {
-      toast.success(`已一并加入 ${added} 件`);
+    if (contactValue) {
+      router.push(`/?seller=${encodeURIComponent(contactValue)}`);
     }
   };
 
-  const addOne = (it: SameSellerItem) => {
-    if (isInCart(it.id)) return;
-    addToCart(itemToCartSnapshot(it));
+  const goItem = (id: string) => {
+    onClose();
+    router.push(`/?focus=${id}`);
   };
 
   return (
@@ -87,15 +66,15 @@ function SameSellerCard({ items, onClose }: { items: SameSellerItem[]; onClose: 
         </button>
       </div>
       <div className="text-xs text-stone-600 mb-2.5">
-        此卖家还有 <strong>{items.length}</strong> 件 · 一起加入省一趟见面
+        此卖家还有 <strong>{items.length}</strong> 件 · 点缩略图直接看,或一起浏览省一趟见面
       </div>
       <div className="grid grid-cols-4 gap-1.5 mb-3">
         {items.slice(0, 4).map(it => (
           <button
             key={it.id}
-            onClick={() => addOne(it)}
-            className="relative aspect-square rounded overflow-hidden bg-stone-100 hover:opacity-90 active:scale-95 transition-transform group"
-            title={`${it.title} - $${it.price ?? '面议'} (点击加入)`}
+            onClick={() => goItem(it.id)}
+            className="relative aspect-square rounded overflow-hidden bg-stone-100 hover:opacity-90 active:scale-95 transition-transform"
+            title={`${it.title} - $${it.price ?? '面议'}(点击查看)`}
           >
             {it.photoUrls[0] ? (
               <NextImage
@@ -113,18 +92,15 @@ function SameSellerCard({ items, onClose }: { items: SameSellerItem[]; onClose: 
             <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] px-1 rounded font-medium">
               {it.price === null ? '面议' : `$${it.price}`}
             </span>
-            <span className="absolute top-0.5 right-0.5 bg-white/90 text-brand p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-              <Heart size={10} strokeWidth={2.5} />
-            </span>
           </button>
         ))}
       </div>
       <div className="flex gap-2">
         <button
-          onClick={addAll}
+          onClick={goCheckAll}
           className="flex-1 px-3 py-1.5 bg-brand text-white rounded-chip text-sm font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card"
         >
-          全部加入 ({items.length})
+          去看看 ({items.length})
         </button>
         <button
           onClick={onClose}

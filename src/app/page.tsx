@@ -35,6 +35,7 @@ function parseFiltersFromSearchParams(sp: ReadonlyURLSearchParams | URLSearchPar
     maxPrice: get('maxPrice') ?? '',
     since:    since === '1d' || since === '1w' || since === '1m' ? since : 'all',
     sort:     sort === 'oldest' || sort === 'priceAsc' || sort === 'priceDesc' ? sort : 'newest',
+    seller:   get('seller'),  // Sprint 6.7g:同卖家曝光 toast 触发,?seller=contactValue
   };
 }
 
@@ -49,6 +50,7 @@ function buildFiltersSearch(f: Filters, debouncedQ: string): string {
   if (f.maxPrice)           sp.set('maxPrice', f.maxPrice);
   if (f.since !== 'all')    sp.set('since', f.since);
   if (f.sort  !== 'newest') sp.set('sort', f.sort);
+  if (f.seller)             sp.set('seller', f.seller);
   const s = sp.toString();
   return s ? `?${s}` : '';
 }
@@ -73,15 +75,9 @@ function HomePageInner() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [origin, setOrigin] = useState('');
-  const [stats, setStats] = useState<{ thisMonthCount: number; totalActive: number } | null>(null);
   useEffect(() => {
     setOrigin(clientOrigin());
     captureUtmFromUrl(); // 首屏抓 ?utm_source=xxx / ?from=xxx 存 sessionStorage，后续发布/询价都带上
-    // 取首页"本月新发布"微点缀；失败静默
-    fetch('/api/stats')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setStats(d); })
-      .catch(() => {});
   }, []);
   // 初次渲染从 URL 解析；之后状态独立，由 state → URL 单向同步
   const [filters, setFiltersRaw] = useState<Filters>(() => parseFiltersFromSearchParams(searchParams));
@@ -168,6 +164,7 @@ function HomePageInner() {
     if (filters.minPrice)           sp.set('minPrice', filters.minPrice);
     if (filters.maxPrice)           sp.set('maxPrice', filters.maxPrice);
     if (filters.since !== 'all')    sp.set('since', filters.since);
+    if (filters.seller)             sp.set('seller', filters.seller);
     sp.set('sort', filters.sort);
 
     try {
@@ -185,9 +182,17 @@ function HomePageInner() {
     }
     // 故意不把 filters.q 放进依赖：q 通过 debouncedQ 才触发 fetch
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.type, filters.category, debouncedQ, filters.minPrice, filters.maxPrice, filters.since, filters.sort]);
+  }, [filters.type, filters.category, debouncedQ, filters.minPrice, filters.maxPrice, filters.since, filters.sort, filters.seller]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
+
+  // Sprint 6.7g:同卖家曝光 toast → router.push(/?seller=X),需要在 URL 变化时把 seller 同步进 state
+  const sellerFromUrl = searchParams.get('seller') ?? undefined;
+  useEffect(() => {
+    if (sellerFromUrl !== filters.seller) {
+      setFiltersRaw(f => ({ ...f, seller: sellerFromUrl }));
+    }
+  }, [sellerFromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEdit = async (code: string, item: Item) => {
     // 用专门的 verify-code 端点（之前是发"假 PATCH"验证，hack 性质，改用干净的方式）
@@ -303,12 +308,6 @@ function HomePageInner() {
           </button>
         </div>
 
-        {stats && stats.totalActive > 0 && (
-          <div className="max-w-6xl mx-auto px-4 pb-2 text-xs text-stone-500">
-            {t('header.statsLine', { m: stats.thisMonthCount, t: stats.totalActive })}
-          </div>
-        )}
-
         {/* 手机端折叠筛选——和顶栏同一 sticky 单元，一起黏顶 */}
         <div className="md:hidden max-w-6xl mx-auto px-3 pb-2">
           <MobileFilterToggle filters={filters} onChange={updateFilter} />
@@ -327,6 +326,19 @@ function HomePageInner() {
           {focusMissing && (
             <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
               你访问的商品可能已下架 / 已售出，下面是其他在售商品。
+            </div>
+          )}
+
+          {/* Sprint 6.7g:seller 过滤激活时的 banner */}
+          {filters.seller && (
+            <div className="mb-3 p-3 rounded-lg bg-brand/5 border border-brand/20 text-stone-800 text-sm flex items-center gap-2">
+              <span>正在看 <strong className="font-mono">{filters.seller}</strong> 的所有商品</span>
+              <button
+                onClick={() => updateFilter({ seller: undefined })}
+                className="ml-auto text-brand hover:text-brand-dark underline whitespace-nowrap"
+              >
+                ✕ 清除
+              </button>
             </div>
           )}
 
