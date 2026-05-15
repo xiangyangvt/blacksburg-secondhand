@@ -86,8 +86,9 @@ function HomePageInner() {
   const [myPanelOpen, setMyPanelOpen] = useState(false);
   const unreadItems = useUnreadCount('item');
 
-  // 分享链接 /?focus=ID：mount 时一次性读 URL，不放进 state（filter 改动不会丢这个）
-  const [focusId] = useState<string | null>(() => searchParams.get('focus'));
+  // /?focus=ID:Sprint 6.7h 改造 —— 改成 derived from searchParams,响应 router.push 跳转
+  // (老版本 useState 只取初值,toast 缩略图 router.push 后 focusId 不更新 → 卡片不展开)
+  const focusId = searchParams.get('focus');
 
   // /cart 旧路由 redirect 过来时带 ?openWishlist=1（旧 ?openCart=1 兼容）→ mount 时触发心愿单 panel 打开
   useEffect(() => {

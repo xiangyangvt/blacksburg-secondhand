@@ -108,7 +108,7 @@ export function ItemCard({
         // UX-13:同卖家其他物品曝光。失败静默降级为普通"已加入"toast
         try {
           const ssRes = await fetch(
-            `/api/items/by-contact?value=${encodeURIComponent(data.contactValue)}&excludeId=${item.id}&limit=6`,
+            `/api/items/by-contact?value=${encodeURIComponent(data.contactValue)}&excludeId=${item.id}&limit=30`,
           );
           if (ssRes.ok) {
             const ssData = await ssRes.json();
@@ -145,9 +145,12 @@ export function ItemCard({
   const [origin, setOrigin] = useState('');
   useEffect(() => { setOrigin(clientOrigin()); }, []);
 
-  // autoExpand 触发：分享链接 ?focus=ID 打开时，对应卡片自动展开 + scroll
+  // autoExpand 触发:分享链接 ?focus=ID / 同卖家 toast router.push 都会改 autoExpand prop
+  // Sprint 6.7h 补 setExpanded(true)——之前 expanded 是 useState(autoExpand) 只取初值,
+  // autoExpand 后变 true 时不会自动展开
   useEffect(() => {
     if (!autoExpand) return;
+    setExpanded(true);
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });

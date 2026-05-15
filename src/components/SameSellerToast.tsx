@@ -27,7 +27,8 @@ export type SameSellerItem = {
 };
 
 export function showSameSellerToast(items: SameSellerItem[]): boolean {
-  if (items.length < 2) return false;
+  // Sprint 6.7h:门槛从 ≥2 降到 ≥1(总数 >1 即触发)
+  if (items.length < 1) return false;
   toast.custom((t) => (
     <SameSellerCard items={items} onClose={() => toast.dismiss(t)} />
   ), { duration: 8000 });
@@ -65,15 +66,16 @@ function SameSellerCard({ items, onClose }: { items: SameSellerItem[]; onClose: 
           <X size={14} />
         </button>
       </div>
-      <div className="text-xs text-stone-600 mb-2.5">
+      <div className="text-xs text-stone-600 mb-2">
         此卖家还有 <strong>{items.length}</strong> 件 · 点缩略图直接看,或一起浏览省一趟见面
       </div>
-      <div className="grid grid-cols-4 gap-1.5 mb-3">
-        {items.slice(0, 4).map(it => (
+      {/* 横向滚动条:展示全部物品,而不是只 4 个 */}
+      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1.5 -mx-3 px-3 scrollbar-thin">
+        {items.map(it => (
           <button
             key={it.id}
             onClick={() => goItem(it.id)}
-            className="relative aspect-square rounded overflow-hidden bg-stone-100 hover:opacity-90 active:scale-95 transition-transform"
+            className="relative w-20 h-20 flex-shrink-0 rounded overflow-hidden bg-stone-100 hover:opacity-90 active:scale-95 transition-transform"
             title={`${it.title} - $${it.price ?? '面议'}(点击查看)`}
           >
             {it.photoUrls[0] ? (

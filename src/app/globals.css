@@ -44,6 +44,13 @@ select {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* 细可见滚动条 —— 同卖家 toast 横向滑动用 */
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent; }
+.scrollbar-thin::-webkit-scrollbar { height: 6px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 3px; }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.35); }
+
 /* 按钮过渡 */
 button { transition: all 0.15s ease; }
 
