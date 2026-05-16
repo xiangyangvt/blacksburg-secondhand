@@ -1,10 +1,15 @@
 'use client';
 
-// Sprint 7 Phase 1.7:本地事件卡片(/localnews 用)
-// 设计:封面图(可空,无图用类型色占位)+ 中文标题 + 时间 + 地点 + 摘要 + 来源链接
+// Sprint 7 Phase 1.7+:本地事件卡片(/localnews 用)— 双态版
+// - 紧凑(mobile 默认): 封面 + 类型 chip + 标题 + 时间(占 1 col)
+// - 展开:col-span-2 md:col-span-1 占满整行,显示完整描述 + 原标题 + "查看原站" 按钮
+// - 跟 ListingCard / ItemCard 同款交互:点卡片空白处 toggle,按钮/链接不触发
+//
+// 图片渲染:用普通 <img>(不用 NextImage)— 11 个抓取源就 11+ 个域名,挨个白名单不现实;
+// 这些都是 thumbnail 不需要 next 优化;onError 失败时 fallback 到类型色占位
 
-import NextImage from 'next/image';
-import { Calendar, MapPin, ExternalLink } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Calendar, MapPin, ExternalLink, Clock } from 'lucide-react';
 
 export type EventCardData = {
   id: string;
@@ -34,91 +39,205 @@ const CATEGORY_COLOR: Record<string, { bg: string; text: string; placeholder: st
   discussion: { bg: 'bg-cat-books/10',       text: 'text-cat-books',       placeholder: 'bg-cat-books/10 text-cat-books/40' },
 };
 
-function formatEventTime(startAt: string | Date | null, endAt: string | Date | null): string | null {
+/** 紧凑端显示的相对时间("今天 19:00" / "明天" / "3 天后 5/20") */
+function formatEventTime(startAt: string | Date | null): string | null {
   if (!startAt) return null;
   const start = typeof startAt === 'string' ? new Date(startAt) : startAt;
+  if (isNaN(start.getTime())) return null;
   const now = new Date();
   const diffMs = start.getTime() - now.getTime();
   const diffH = diffMs / 3600000;
   const diffD = diffMs / 86400000;
 
-  // 相对时间:今天 / 明天 / N 天后
-  let when: string;
-  if (diffH < 6 && diffH > -3) {
-    when = '即将开始';
-  } else if (start.toDateString() === now.toDateString()) {
-    when = `今天 ${start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
-  } else if (diffD < 1.5 && diffD > 0) {
-    when = `明天 ${start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
-  } else if (diffD < 7 && diffD > 0) {
+  if (diffH < 6 && diffH > -3) return '即将开始';
+  if (start.toDateString() === now.toDateString())
+    return `今天 ${start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+  if (diffD < 1.5 && diffD > 0)
+    return `明天 ${start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+  if (diffD < 7 && diffD > 0) {
     const days = Math.ceil(diffD);
-    when = `${days} 天后 · ${start.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}`;
-  } else {
-    when = start.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' });
+    return `${days} 天后 · ${start.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}`;
   }
-  return when;
+  return start.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' });
 }
 
-export function EventCard({ event }: { event: EventCardData }) {
+/** 展开端显示的完整时间("5月20日 周三 19:00 – 22:00") */
+function formatEventFullTime(startAt: string | Date | null, endAt: string | Date | null): string | null {
+  if (!startAt) return null;
+  const start = typeof startAt === 'string' ? new Date(startAt) : startAt;
+  if (isNaN(start.getTime())) return null;
+  const opts: Intl.DateTimeFormatOptions = { month: 'long', day: 'numeric', weekday: 'short' };
+  const timeOpts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
+  const dateStr = start.toLocaleDateString('zh-CN', opts);
+  const startTime = start.toLocaleTimeString('zh-CN', timeOpts);
+
+  if (endAt) {
+    const end = typeof endAt === 'string' ? new Date(endAt) : endAt;
+    if (!isNaN(end.getTime())) {
+      // 同一天 → 简写;跨天 → 全写
+      if (start.toDateString() === end.toDateString()) {
+        return `${dateStr} ${startTime} – ${end.toLocaleTimeString('zh-CN', timeOpts)}`;
+      }
+      return `${dateStr} ${startTime} – ${end.toLocaleDateString('zh-CN', opts)} ${end.toLocaleTimeString('zh-CN', timeOpts)}`;
+    }
+  }
+  return `${dateStr} ${startTime}`;
+}
+
+export function EventCard({
+  event,
+  autoExpand = false,
+}: {
+  event: EventCardData;
+  /** 后续可能从 /localnews?focus=ID 进来时自动展开 */
+  autoExpand?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(autoExpand);
+  const [imgFailed, setImgFailed] = useState(false);
+  const cardRef = useRef<HTMLElement>(null);
+
+  // autoExpand:focus 进来的目标卡片自动 scroll
+  useEffect(() => {
+    if (!autoExpand) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      })
+    );
+  }, [autoExpand]);
+
   const cat = event.category ?? 'events';
   const colors = CATEGORY_COLOR[cat] ?? CATEGORY_COLOR.events;
-  const timeLabel = formatEventTime(event.startAt, event.endAt);
+  const timeLabel = formatEventTime(event.startAt);
+  const fullTimeLabel = formatEventFullTime(event.startAt, event.endAt);
+  const showImage = !!(event.imageUrl && !imgFailed);
+
+  const toggleExpand = () => {
+    setExpanded(prev => {
+      const next = !prev;
+      if (next) {
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          })
+        );
+      }
+      return next;
+    });
+  };
+
+  // 点卡片空白处 toggle;按钮 / 链接 / 标 data-no-toggle 的元素不触发
+  const onCardClick = (e: React.MouseEvent<HTMLElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('a, button, [data-no-toggle]')) return;
+    toggleExpand();
+  };
 
   return (
-    <a
-      href={event.sourceUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="block bg-white rounded-card border border-stone-200 shadow-card hover:shadow-card-hover overflow-hidden transition-all active:scale-[0.99] no-underline text-stone-900"
+    <article
+      ref={cardRef}
+      onClick={onCardClick}
+      className={`relative bg-white rounded-card shadow-card border overflow-hidden hover:shadow-card-hover transition-all cursor-pointer scroll-mt-44 md:scroll-mt-24 ${
+        expanded ? 'border-brand/40 col-span-2 md:col-span-1' : 'border-stone-200'
+      }`}
     >
-      {/* 图片区(有图 → 真图;无图 → 类型色 + 占位 svg 房子或日历) */}
-      <div className={`aspect-[16/9] relative overflow-hidden ${event.imageUrl ? '' : colors.placeholder + ' flex items-center justify-center'}`}>
-        {event.imageUrl ? (
-          <NextImage
-            src={event.imageUrl}
+      {/* 图片区:紧凑端 4/3(mobile 比 16/9 更适合双列窄卡);展开 16/9 横展 */}
+      <div
+        className={`relative overflow-hidden ${
+          expanded ? 'aspect-[2/1]' : 'aspect-[4/3] md:aspect-[16/9]'
+        } ${showImage ? 'bg-stone-100' : `${colors.placeholder} flex items-center justify-center`}`}
+      >
+        {showImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={event.imageUrl!}
             alt={event.title}
-            fill
-            sizes="(max-width: 768px) 100vw, 50vw"
-            className="object-cover"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setImgFailed(true)}
+            className="w-full h-full object-cover"
           />
         ) : (
-          <Calendar size={56} strokeWidth={1.2} className="opacity-50" />
+          <Calendar size={expanded ? 64 : 48} strokeWidth={1.2} className="opacity-50" />
         )}
       </div>
 
-      {/* 内容 */}
       <div className="p-3 md:p-4 space-y-1.5">
+        {/* 类型 chip + 相对时间 */}
         <div className="flex items-center gap-1.5 text-xs flex-wrap">
           <span className={`px-2 py-0.5 rounded-full font-medium ${colors.bg} ${colors.text}`}>
             {CATEGORY_LABEL[cat] ?? cat}
           </span>
-          {timeLabel && (
+          {timeLabel && !expanded && (
             <span className="text-stone-600">{timeLabel}</span>
           )}
         </div>
 
-        <h3 className="font-semibold text-stone-900 leading-tight line-clamp-2">
+        {/* 标题 */}
+        <h3 className={`font-semibold text-stone-900 leading-tight ${expanded ? 'text-base md:text-lg' : 'line-clamp-2 text-sm md:text-base'}`}>
           {event.title}
         </h3>
 
-        {event.location && (
-          <div className="flex items-center gap-1 text-xs text-stone-500">
-            <MapPin size={12} strokeWidth={2} className="flex-shrink-0" />
-            <span className="truncate">{event.location}</span>
+        {/* 紧凑端:地点 + 描述(描述桌面才显) */}
+        {!expanded && (
+          <>
+            {event.location && (
+              <div className="flex items-center gap-1 text-xs text-stone-500">
+                <MapPin size={12} strokeWidth={2} className="flex-shrink-0" />
+                <span className="truncate">{event.location}</span>
+              </div>
+            )}
+            {event.description && (
+              <p className="text-sm text-stone-600 leading-relaxed hidden md:block md:line-clamp-3">
+                {event.description}
+              </p>
+            )}
+            <div className="md:hidden text-[11px] text-stone-400 pt-1">点开看详情 →</div>
+          </>
+        )}
+
+        {/* 展开:完整时间 + 地点 + 描述 + 原标题 + 跳源按钮 */}
+        {expanded && (
+          <div className="space-y-2 pt-1">
+            {fullTimeLabel && (
+              <div className="flex items-start gap-1.5 text-sm text-stone-700">
+                <Clock size={14} strokeWidth={2} className="flex-shrink-0 mt-0.5" />
+                <span>{fullTimeLabel}</span>
+              </div>
+            )}
+            {event.location && (
+              <div className="flex items-start gap-1.5 text-sm text-stone-700">
+                <MapPin size={14} strokeWidth={2} className="flex-shrink-0 mt-0.5" />
+                <span>{event.location}</span>
+              </div>
+            )}
+            {event.description && (
+              <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">
+                {event.description}
+              </p>
+            )}
+            {event.titleOriginal && event.titleOriginal !== event.title && (
+              <div className="text-xs text-stone-500 pt-1 border-t border-stone-100">
+                原标题: <span className="italic">{event.titleOriginal}</span>
+              </div>
+            )}
+
+            {/* 操作区:跳源 + 来源标 */}
+            <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-stone-100" data-no-toggle>
+              <span className="text-[11px] text-stone-400">来源: {event.source}</span>
+              <a
+                href={event.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-chip text-sm font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card no-underline"
+              >
+                <ExternalLink size={13} />
+                查看原站
+              </a>
+            </div>
           </div>
         )}
-
-        {event.description && (
-          <p className="text-sm text-stone-600 line-clamp-3 leading-relaxed">
-            {event.description}
-          </p>
-        )}
-
-        <div className="flex items-center gap-1 text-xs text-stone-400 pt-1">
-          <span>来源: {event.source}</span>
-          <ExternalLink size={11} strokeWidth={2} />
-        </div>
       </div>
-    </a>
+    </article>
   );
 }

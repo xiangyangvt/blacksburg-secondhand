@@ -87,7 +87,7 @@ export default function LocalNewsPage() {
         ) : events.length === 0 ? (
           <EmptyState cat={cat} />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
             {events.map(e => (
               <EventCard key={e.id} event={e} />
             ))}
@@ -96,7 +96,7 @@ export default function LocalNewsPage() {
 
         {/* 角注 */}
         <p className="text-xs text-stone-400 mt-8 text-center">
-          每天早上 7 点自动更新 · 内容版权归各源站所有 · 点卡片跳转原站查看完整信息
+          每天早上 7 点自动更新 · 内容版权归各源站所有 · 点卡片展开看详情
         </p>
       </div>
     </main>
@@ -105,10 +105,10 @@ export default function LocalNewsPage() {
 
 function SkeletonGrid() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
       {[1, 2, 3, 4].map(i => (
         <div key={i} className="bg-white rounded-card border border-stone-200 overflow-hidden animate-pulse">
-          <div className="aspect-[16/9] bg-stone-100" />
+          <div className="aspect-[4/3] md:aspect-[16/9] bg-stone-100" />
           <div className="p-3 md:p-4 space-y-2">
             <div className="h-4 w-16 bg-stone-200 rounded-full" />
             <div className="h-5 bg-stone-200 rounded w-3/4" />
