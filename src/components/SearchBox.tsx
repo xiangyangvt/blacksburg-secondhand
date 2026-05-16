@@ -14,8 +14,10 @@ export function SearchBox({
   onChange: (v: string) => void;
   placeholder: string;
 }) {
+  // Mobile: flex-1(填充剩余空间);sm+(>= 640px): 显式固定 220px 像素宽
+  // 用显式宽度避免 flex-1 + max-w 的双重不确定性导致跨页面宽度感知差异
   return (
-    <div className="flex-1 min-w-0 max-w-[260px] relative">
+    <div className="flex-1 min-w-0 sm:flex-none sm:w-[220px] relative">
       <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
       <input
         value={value}
