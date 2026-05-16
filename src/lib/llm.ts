@@ -110,12 +110,21 @@ export async function extractJSON<T = any>({
     ],
     response_format: { type: 'json_object' },
     temperature: 0.1,
+    // DeepSeek max output = 8192;给足以容下 ~30 events 的 JSON
+    // 不设的话默认 4096,events 多的源会被截断成 invalid JSON
+    max_tokens: 8000,
   });
 
   try {
     return JSON.parse(raw) as T;
   } catch (e) {
-    throw new Error(`LLM extract returned invalid JSON: ${raw.slice(0, 200)}...`);
+    // 同时显示头尾各 200 字符 — 头部确认是不是 JSON 起手,尾部确认是不是被截断
+    const head = raw.slice(0, 200);
+    const tail = raw.length > 400 ? raw.slice(-200) : '';
+    throw new Error(
+      `LLM extract returned invalid JSON (len=${raw.length}). ` +
+      `Head: ${head}${tail ? ` ... Tail: ${tail}` : ''}`
+    );
   }
 }
 
