@@ -21,6 +21,7 @@ import {
   type SavedEvent,
 } from '@/lib/savedEvents';
 import { CalendarHeartIcon } from './CalendarHeartIcon';
+import { parseLocation } from '@/lib/eventLocation';
 
 const CATEGORY_LABEL: Record<string, string> = {
   events: '活动',
@@ -235,12 +236,20 @@ function EventRow({ ev, onClose, dim = false }: { ev: SavedEvent; onClose: () =>
           {ev.title}
           <ExternalLink size={11} className="inline ml-1 -mt-0.5 text-stone-300" />
         </a>
-        {ev.location && (
-          <div className="text-xs text-stone-500 flex items-center gap-0.5 truncate">
-            <MapPin size={11} className="flex-shrink-0" />
-            <span className="truncate">{ev.location}</span>
-          </div>
-        )}
+        {(() => {
+          const { city, venue } = parseLocation(ev.location);
+          if (!city && !venue) return null;
+          return (
+            <div className="text-xs text-stone-500 flex items-center gap-0.5 truncate">
+              <MapPin size={11} className="flex-shrink-0" />
+              <span className="truncate">
+                {city && <span className="font-medium text-stone-700">{city}</span>}
+                {city && venue && <span className="text-stone-400"> · </span>}
+                {venue && <span>{venue}</span>}
+              </span>
+            </div>
+          );
+        })()}
       </div>
 
       {/* 移除 */}

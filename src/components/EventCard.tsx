@@ -12,6 +12,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Calendar, MapPin, ExternalLink, Clock, Heart } from 'lucide-react';
 import { isEventSaved, toggleSavedEvent, subscribeSavedEvents } from '@/lib/savedEvents';
 import { showSuccess, showWarning } from '@/lib/toast';
+import { parseLocation } from '@/lib/eventLocation';
 
 export type EventCardData = {
   id: string;
@@ -113,6 +114,8 @@ export function EventCard({
   const timeLabel = formatEventTime(event.startAt);
   const fullTimeLabel = formatEventFullTime(event.startAt, event.endAt);
   const showImage = !!(event.imageUrl && !imgFailed);
+  // 城市先于场地展示(距离决策锚点)。city 加粗高亮,venue 浅色辅助
+  const { city: locCity, venue: locVenue } = parseLocation(event.location);
 
   // 心愿单收藏状态(跟 ListingCard 同款 subscribe 模式)
   const [isSaved, setIsSaved] = useState(false);
@@ -241,13 +244,17 @@ export function EventCard({
           {event.title}
         </h3>
 
-        {/* 紧凑端:地点 + 描述(描述桌面才显) */}
+        {/* 紧凑端:地点(城市优先,加粗) + 描述(描述桌面才显) */}
         {!expanded && (
           <>
-            {event.location && (
+            {(locCity || locVenue) && (
               <div className="flex items-center gap-1 text-xs text-stone-500">
                 <MapPin size={12} strokeWidth={2} className="flex-shrink-0" />
-                <span className="truncate">{event.location}</span>
+                <span className="truncate">
+                  {locCity && <span className="font-medium text-stone-800">{locCity}</span>}
+                  {locCity && locVenue && <span className="text-stone-400"> · </span>}
+                  {locVenue && <span>{locVenue}</span>}
+                </span>
               </div>
             )}
             {event.description && (
@@ -268,10 +275,14 @@ export function EventCard({
                 <span>{fullTimeLabel}</span>
               </div>
             )}
-            {event.location && (
+            {(locCity || locVenue) && (
               <div className="flex items-start gap-1.5 text-sm text-stone-700">
                 <MapPin size={14} strokeWidth={2} className="flex-shrink-0 mt-0.5" />
-                <span>{event.location}</span>
+                <span>
+                  {locCity && <span className="font-semibold">{locCity}</span>}
+                  {locCity && locVenue && <span className="text-stone-400"> · </span>}
+                  {locVenue && <span className="text-stone-700">{locVenue}</span>}
+                </span>
               </div>
             )}
             {event.description && (
