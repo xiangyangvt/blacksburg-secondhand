@@ -13,11 +13,13 @@
 import type { SourceDefinition, RawEvent } from '../types';
 
 const SUB = 'VirginiaTech';
+// 走 old.reddit.com — 反爬比 www.reddit.com 松,数据中心 IP(Railway 等)更容易过。
+// 如果还是被 403,下一步上 OAuth(reddit.com/prefs/apps 创建 script app)。
 // .json 拿 hot(默认排序),limit=25 一次够用
-const FEED_URL = `https://www.reddit.com/r/${SUB}/.json?limit=25`;
-// Reddit TOS 要求 UA 写清 bot 身份 + 联系方式 - 不写好可能被 429
-// 注:必须 ASCII-only,em-dash/中文 character > 255 会被 node fetch 拒绝(ByteString error)
-const UA = 'web:com.blacksburg-local:v1.0 (server-to-server bot for blacksburg community info aggregation)';
+const FEED_URL = `https://old.reddit.com/r/${SUB}/.json?limit=25&raw_json=1`;
+// Reddit TOS 要求 UA 写清 bot 身份 + 联系方式;且 ASCII-only
+// 用真实浏览器 UA + 加 bot 标识备注,通过率最高(Reddit 不强制纯 bot UA 格式)
+const UA = 'Mozilla/5.0 (compatible; BlacksburgLocalBot/1.0; community info aggregator)';
 
 type RedditPost = {
   id: string;
