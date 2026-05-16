@@ -1099,7 +1099,7 @@ function PlatformTab({
   active: boolean;
   icon: React.ReactNode;
   label: string;
-  count: number;
+  count?: number;  // Phase 3A.2:可选 — 黑堡 tab 不预知 count,fetch 后才有
   badge?: number;
   onClick: () => void;
 }) {
@@ -1114,11 +1114,13 @@ function PlatformTab({
     >
       {icon}
       <span>{label}</span>
-      <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-        active ? 'bg-white/20' : 'bg-stone-100 text-stone-600'
-      }`}>
-        {count}
-      </span>
+      {count !== undefined && (
+        <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+          active ? 'bg-white/20' : 'bg-stone-100 text-stone-600'
+        }`}>
+          {count}
+        </span>
+      )}
       {badge !== undefined && badge > 0 && (
         <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
           {badge > 9 ? '9+' : badge}
