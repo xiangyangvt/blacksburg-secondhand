@@ -16,8 +16,9 @@ export type SavedEvent = {
   title: string;                // 中文标题(已翻译)
   source: string;               // e.g. 'nextthreedays'
   sourceUrl: string;            // 原站 URL
-  startAt: string | null;       // ISO 8601 或 null
+  startAt: string | null;       // ISO 8601 或 null(news/discussion 通常无)
   endAt: string | null;         // ISO 8601 或 null
+  publishedAt: string | null;   // 发布时间(news/discussion 用,events/sports 可有可无)
   location: string | null;
   category: string | null;      // events / sports / news / discussion
   imageUrl: string | null;

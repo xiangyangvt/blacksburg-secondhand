@@ -36,19 +36,39 @@ const CATEGORY_CHIP: Record<string, string> = {
   discussion: 'bg-cat-books/10 text-cat-books',
 };
 
+/** Wishlist 行内时间:跟 EventCard 同款语义
+ *   - events/sports 用 startAt(future-based,"今天 19:00" / "明天" / "3 天后")
+ *   - news/discussion 用 publishedAt(past-based,"3 小时前" / "昨天" / "3 天前") */
 function formatWhen(e: SavedEvent): string {
-  if (!e.startAt) return '时间待定';
-  const d = new Date(e.startAt);
-  if (isNaN(d.getTime())) return '时间待定';
+  const isPastBased = e.category === 'news' || e.category === 'discussion';
+  const time = isPastBased ? e.publishedAt : e.startAt;
+  if (!time) return '时间待定';
+  const t = new Date(time);
+  if (isNaN(t.getTime())) return '时间待定';
   const now = new Date();
-  const diffD = (d.getTime() - now.getTime()) / 86400000;
-  if (d.toDateString() === now.toDateString())
-    return `今天 ${d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
-  if (diffD < 1.5 && diffD > 0)
-    return `明天 ${d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
-  if (diffD < 7 && diffD > 0)
-    return `${Math.ceil(diffD)} 天后 · ${d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}`;
-  return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' });
+  const diffMs = isPastBased ? now.getTime() - t.getTime() : t.getTime() - now.getTime();
+  const diffH = diffMs / 3600000;
+  const diffD = diffMs / 86400000;
+
+  if (diffMs < 0) {
+    return t.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' });
+  }
+
+  if (isPastBased) {
+    if (diffH < 1) return `${Math.max(1, Math.floor(diffMs / 60000))} 分钟前`;
+    if (t.toDateString() === now.toDateString()) return `${Math.floor(diffH)} 小时前`;
+    if (diffD < 1.5) return `昨天 ${t.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+    if (diffD < 7) return `${Math.ceil(diffD)} 天前`;
+    return t.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' });
+  }
+
+  if (t.toDateString() === now.toDateString())
+    return `今天 ${t.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+  if (diffD < 1.5)
+    return `明天 ${t.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+  if (diffD < 7)
+    return `${Math.ceil(diffD)} 天后 · ${t.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}`;
+  return t.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' });
 }
 
 export function EventWishlistPanel({ onClose }: { onClose: () => void }) {

@@ -23,6 +23,7 @@ export type EventCardData = {
   description: string | null;
   startAt: string | Date | null;
   endAt: string | Date | null;
+  publishedAt: string | Date | null;  // news/discussion 类用这个排序 + 展示
   location: string | null;
   category: string | null;
   imageUrl: string | null;
@@ -42,25 +43,54 @@ const CATEGORY_COLOR: Record<string, { bg: string; text: string; placeholder: st
   discussion: { bg: 'bg-cat-books/10',       text: 'text-cat-books',       placeholder: 'bg-cat-books/10 text-cat-books/40' },
 };
 
-/** 紧凑端显示的相对时间("今天 19:00" / "明天 19:00" / "3 天后 5/20" / "5/22 周五")
- *  注:不用"即将开始"那种含糊的相对短语 — 直接给具体日期/时间,
- *  用户能立刻判断是否赶得上(Sean 反馈) */
-function formatEventTime(startAt: string | Date | null): string | null {
-  if (!startAt) return null;
-  const start = typeof startAt === 'string' ? new Date(startAt) : startAt;
-  if (isNaN(start.getTime())) return null;
+/** 紧凑端相对时间:
+ *  - 活动/体育(future-based): "今天 19:00" / "明天" / "3 天后 5/20" / "5/22 周五"
+ *  - 新闻/讨论(past-based):   "30 分钟前" / "3 小时前" / "昨天 14:30" / "3 天前" / "5/13 周日"
+ *
+ *  注:不用"即将开始"那种含糊短语(Sean 反馈)
+ */
+function formatEventTime(time: string | Date | null, isPastBased: boolean): string | null {
+  if (!time) return null;
+  const t = typeof time === 'string' ? new Date(time) : time;
+  if (isNaN(t.getTime())) return null;
   const now = new Date();
-  const diffD = (start.getTime() - now.getTime()) / 86400000;
+  // 距离 = 绝对值;direction 决定语义(后 vs 前)
+  const diffMs = isPastBased ? now.getTime() - t.getTime() : t.getTime() - now.getTime();
+  const diffH = diffMs / 3600000;
+  const diffD = diffMs / 86400000;
 
-  if (start.toDateString() === now.toDateString())
-    return `今天 ${start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
-  if (diffD < 1.5 && diffD > 0)
-    return `明天 ${start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
-  if (diffD < 7 && diffD > 0) {
-    const days = Math.ceil(diffD);
-    return `${days} 天后 · ${start.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}`;
+  // 过去/未来交叉(负值):降级到完整日期
+  if (diffMs < 0) {
+    return t.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' });
   }
-  return start.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' });
+
+  if (isPastBased) {
+    if (diffH < 1) {
+      const mins = Math.max(1, Math.floor(diffMs / 60000));
+      return `${mins} 分钟前`;
+    }
+    if (t.toDateString() === now.toDateString()) {
+      return `${Math.floor(diffH)} 小时前`;
+    }
+    if (diffD < 1.5) {
+      return `昨天 ${t.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+    }
+    if (diffD < 7) {
+      return `${Math.ceil(diffD)} 天前`;
+    }
+    return t.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' });
+  }
+
+  // future-based(活动/体育)
+  if (t.toDateString() === now.toDateString())
+    return `今天 ${t.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+  if (diffD < 1.5)
+    return `明天 ${t.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+  if (diffD < 7) {
+    const days = Math.ceil(diffD);
+    return `${days} 天后 · ${t.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}`;
+  }
+  return t.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' });
 }
 
 /** 展开端显示的完整时间("5月20日 周三 19:00 – 22:00") */
@@ -110,8 +140,14 @@ export function EventCard({
 
   const cat = event.category ?? 'events';
   const colors = CATEGORY_COLOR[cat] ?? CATEGORY_COLOR.events;
-  const timeLabel = formatEventTime(event.startAt);
-  const fullTimeLabel = formatEventFullTime(event.startAt, event.endAt);
+  // news/discussion 用 publishedAt(发布时间,过去),events/sports 用 startAt(活动时间,未来)
+  const isPastBased = event.category === 'news' || event.category === 'discussion';
+  const referenceTime = isPastBased ? event.publishedAt : event.startAt;
+  const timeLabel = formatEventTime(referenceTime, isPastBased);
+  // 展开端完整时间:past-based 显发布时间日期;future-based 显活动起止
+  const fullTimeLabel = isPastBased
+    ? formatEventFullTime(event.publishedAt, null)
+    : formatEventFullTime(event.startAt, event.endAt);
   const showImage = !!(event.imageUrl && !imgFailed);
   // 城市先于场地展示(距离决策锚点)。city 加粗高亮,venue 浅色辅助
   const { city: locCity, venue: locVenue } = parseLocation(event.location);
@@ -125,17 +161,16 @@ export function EventCard({
   }, [event.id]);
 
   const handleToggleSave = () => {
+    const toIso = (v: string | Date | null) =>
+      typeof v === 'string' ? v : v ? v.toISOString() : null;
     const ret = toggleSavedEvent({
       id: event.id,
       title: event.title,
       source: event.source,
       sourceUrl: event.sourceUrl,
-      startAt: typeof event.startAt === 'string'
-        ? event.startAt
-        : event.startAt ? event.startAt.toISOString() : null,
-      endAt: typeof event.endAt === 'string'
-        ? event.endAt
-        : event.endAt ? event.endAt.toISOString() : null,
+      startAt: toIso(event.startAt),
+      endAt: toIso(event.endAt),
+      publishedAt: toIso(event.publishedAt),
       location: event.location,
       category: event.category,
       imageUrl: event.imageUrl,
