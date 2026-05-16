@@ -15,8 +15,9 @@ import type { SourceDefinition, RawEvent } from '../types';
 const SUB = 'VirginiaTech';
 // .json 拿 hot(默认排序),limit=25 一次够用
 const FEED_URL = `https://www.reddit.com/r/${SUB}/.json?limit=25`;
-// Reddit TOS 要求 UA 写清 bot 身份 + 联系方式 — 不写好可能被 429
-const UA = 'web:com.blacksburg-local:v1.0 (by /u/blacksburgbot — server-to-server scraper for community info aggregation)';
+// Reddit TOS 要求 UA 写清 bot 身份 + 联系方式 - 不写好可能被 429
+// 注:必须 ASCII-only,em-dash/中文 character > 255 会被 node fetch 拒绝(ByteString error)
+const UA = 'web:com.blacksburg-local:v1.0 (server-to-server bot for blacksburg community info aggregation)';
 
 type RedditPost = {
   id: string;
