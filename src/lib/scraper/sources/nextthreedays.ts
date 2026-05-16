@@ -41,10 +41,10 @@ export const nextthreedays: SourceDefinition = {
     "title": string,           // Event name (English original, max 100 chars)
     "sourceUrl": string,       // Full URL to the event detail page (absolute, must start with https://)
     "description"?: string,    // ONE sentence summary, max 150 chars. Keep it terse.
-    "startAt"?: string,        // ISO 8601 with timezone if available, e.g. "2026-05-20T19:00:00-04:00"
-    "endAt"?: string,          // ISO 8601
+    "startAt"?: string,        // ISO 8601 in local time WITH -04:00 offset (Blacksburg = EDT summer / EST winter). DO NOT guess if unknown — leave null.
+    "endAt"?: string,          // ISO 8601 same rules
     "location"?: string,       // Venue + city, max 80 chars, e.g. "Champs Sports Grille, Blacksburg"
-    "imageUrl"?: string,       // Full URL to thumbnail image
+    "imageUrl"?: string,       // REQUIRED if visible. Full absolute URL to thumbnail <img> near event title. Look for <img src="...">.
     "qualityScore"?: number    // 0-1, your judgment of whether this looks like a real local event vs noise (default 0.8)
   }>
 }`,
@@ -55,6 +55,17 @@ CRITICAL output budget rules (output will be truncated if too long):
 - Extract AT MOST 20 events. If page has more, pick the 20 most upcoming/highest-quality.
 - description MUST be ≤ 150 chars. ONE sentence only. No marketing fluff.
 - Keep titles ≤ 100 chars. Strip "Featured Event:" / venue prefixes if redundant with location.
+
+IMAGE RULES (current data has 0% image coverage — FIX THIS):
+- Each event card on nextthreedays.com has a thumbnail. Find the <img> tag near the event title or detail link and copy its src into imageUrl.
+- If src is relative (starts with /), prefix https://www.nextthreedays.com.
+- If you see no image for an event, OMIT the field — don't make one up.
+- Common image hosts: nextthreedays.com itself, or upload subdomain. Either is fine.
+
+TIME RULES (don't fabricate timestamps):
+- Blacksburg is Eastern Time. Use offset -04:00 (EDT, March-Nov) or -05:00 (EST, Nov-March).
+- If event has only a date but no time, set startAt to that date at NOON local: "2026-05-21T12:00:00-04:00" is WRONG if real time is unknown — instead, OMIT startAt entirely. Leaving it null is better than guessing.
+- If multiple events share the same listed start time on the page (e.g., "All Day"), use the time literally shown on the page — do NOT batch-assign 12:00.
 
 Other rules:
 - Only extract events explicitly listed on this page. Don't invent.

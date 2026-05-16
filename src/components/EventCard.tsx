@@ -9,7 +9,9 @@
 // 这些都是 thumbnail 不需要 next 优化;onError 失败时 fallback 到类型色占位
 
 import { useState, useRef, useEffect } from 'react';
-import { Calendar, MapPin, ExternalLink, Clock } from 'lucide-react';
+import { Calendar, MapPin, ExternalLink, Clock, Heart } from 'lucide-react';
+import { isEventSaved, toggleSavedEvent, subscribeSavedEvents } from '@/lib/savedEvents';
+import { showSuccess, showWarning } from '@/lib/toast';
 
 export type EventCardData = {
   id: string;
@@ -112,6 +114,35 @@ export function EventCard({
   const fullTimeLabel = formatEventFullTime(event.startAt, event.endAt);
   const showImage = !!(event.imageUrl && !imgFailed);
 
+  // 心愿单收藏状态(跟 ListingCard 同款 subscribe 模式)
+  const [isSaved, setIsSaved] = useState(false);
+  useEffect(() => {
+    const update = () => setIsSaved(isEventSaved(event.id));
+    update();
+    return subscribeSavedEvents(update);
+  }, [event.id]);
+
+  const handleToggleSave = () => {
+    const ret = toggleSavedEvent({
+      id: event.id,
+      title: event.title,
+      source: event.source,
+      sourceUrl: event.sourceUrl,
+      startAt: typeof event.startAt === 'string'
+        ? event.startAt
+        : event.startAt ? event.startAt.toISOString() : null,
+      endAt: typeof event.endAt === 'string'
+        ? event.endAt
+        : event.endAt ? event.endAt.toISOString() : null,
+      location: event.location,
+      category: event.category,
+      imageUrl: event.imageUrl,
+    });
+    if (ret === 'full') showWarning('活动心愿单满了(最多 50 条)');
+    else if (ret === 'added') showSuccess('已加入活动心愿单');
+    // removed 静默
+  };
+
   const toggleExpand = () => {
     setExpanded(prev => {
       const next = !prev;
@@ -141,6 +172,21 @@ export function EventCard({
         expanded ? 'border-brand/40 col-span-2 md:col-span-1' : 'border-stone-200'
       }`}
     >
+      {/* ♥ 收藏按钮(article 级浮动):无图卡显示;有图卡用封面内的浮动 ♥ */}
+      <button
+        type="button"
+        data-no-toggle
+        onClick={(e) => { e.stopPropagation(); handleToggleSave(); }}
+        aria-label={isSaved ? '从活动心愿单移除' : '加入活动心愿单'}
+        className={`absolute top-2 right-2 z-10 w-8 h-8 rounded-full items-center justify-center shadow-card active:scale-90 transition-all ${
+          isSaved
+            ? 'bg-rose-500 text-white'
+            : 'bg-white/90 text-stone-700 hover:bg-white backdrop-blur-sm'
+        } ${showImage ? 'hidden' : 'flex'}`}
+      >
+        <Heart size={15} strokeWidth={2.2} fill={isSaved ? 'currentColor' : 'none'} />
+      </button>
+
       {/* 图片区:紧凑端 4/3(mobile 比 16/9 更适合双列窄卡);展开 16/9 横展 */}
       <div
         className={`relative overflow-hidden ${
@@ -159,6 +205,23 @@ export function EventCard({
           />
         ) : (
           <Calendar size={expanded ? 64 : 48} strokeWidth={1.2} className="opacity-50" />
+        )}
+
+        {/* 有图卡:♥ 按钮浮在封面右上,跟 ItemCard / ListingCard 一致 */}
+        {showImage && (
+          <button
+            type="button"
+            data-no-toggle
+            onClick={(e) => { e.stopPropagation(); handleToggleSave(); }}
+            aria-label={isSaved ? '从活动心愿单移除' : '加入活动心愿单'}
+            className={`absolute top-1.5 right-1.5 w-8 h-8 rounded-full flex items-center justify-center shadow-card active:scale-90 transition-all ${
+              isSaved
+                ? 'bg-rose-500 text-white'
+                : 'bg-white/90 text-stone-700 hover:bg-white backdrop-blur-sm'
+            }`}
+          >
+            <Heart size={15} strokeWidth={2.2} fill={isSaved ? 'currentColor' : 'none'} />
+          </button>
         )}
       </div>
 

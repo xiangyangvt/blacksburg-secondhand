@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { Sparkles, MessageCircle } from 'lucide-react';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { EventCard, type EventCardData } from '@/components/EventCard';
+import { EventWishlistButton } from '@/components/EventWishlistButton';
 
 const CATEGORIES = [
   { id: 'all',        label: '全部' },
@@ -37,11 +38,12 @@ export default function LocalNewsPage() {
 
   return (
     <main className="min-h-screen">
-      {/* 顶栏:跟 / 二手 / 室友 同款 — 黑堡 wordmark + PlatformTabs */}
+      {/* 顶栏:跟 / 二手 / 室友 同款 — 黑堡 wordmark + PlatformTabs + 心愿单 */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
           <PlatformTabs />
           <div className="flex-1" />
+          <EventWishlistButton />
         </div>
       </header>
 
