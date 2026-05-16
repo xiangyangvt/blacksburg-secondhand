@@ -15,7 +15,9 @@ import {
   X, FolderOpen, Pencil, Trash2, CheckCircle2, ChevronUp,
   Home, ShoppingBag, MapPin, Calendar,
   Inbox, Send, Check, XCircle, Clock, AlertTriangle,
+  Mountain,
 } from 'lucide-react';
+import { MyEventsContent } from './MyEventsPanel';
 import { useT, useLocale } from '@/i18n/I18nProvider';
 import {
   categoryLabel,
@@ -293,7 +295,8 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
 
   return (
     <>
-      {/* 查找表单 */}
+      {/* 查找表单 — 仅 二手/室友 平台需要,黑堡走 cookie 不用 lookup */}
+      {platform !== 'event' && (
       <section className="bg-white border border-stone-200 rounded-lg p-4 mb-4">
         <p className="text-sm text-stone-600 mb-3">{t('my.intro')}</p>
 
@@ -332,28 +335,43 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
           )}
         </div>
       </section>
+      )}
 
-      {/* 结果 */}
-      {hasLookedUp && (
+      {/* 平台 tab — 黑堡 直接显;二手/室友 需 lookup 后才显 */}
+      {(platform === 'event' || hasLookedUp) && (
+        <div className="flex gap-1.5 mb-3 overflow-x-auto no-scrollbar">
+          <PlatformTab
+            active={platform === 'item'}
+            icon={<ShoppingBag size={14} />}
+            label="买卖二手"
+            count={itemActiveN + itemDraftN}
+            onClick={() => setPlatform('item')}
+          />
+          <PlatformTab
+            active={platform === 'listing'}
+            icon={<Home size={14} />}
+            label="找室友 & 租房"
+            count={listingActiveN + listingDraftN + (sentApps?.length ?? 0)}
+            badge={inboxPendingN + sentPendingN}
+            onClick={() => setPlatform('listing')}
+          />
+          <PlatformTab
+            active={platform === 'event'}
+            icon={<Mountain size={14} />}
+            label="黑堡本地"
+            onClick={() => setPlatform('event')}
+          />
+        </div>
+      )}
+
+      {/* === 黑堡平台 (Phase 3A.2 统一) === */}
+      {platform === 'event' && (
+        <MyEventsContent initialTab="posts" onItemClick={onClose} />
+      )}
+
+      {/* === 二手/室友 平台:lookup 之后才显内容 === */}
+      {platform !== 'event' && hasLookedUp && (
         <>
-          {/* 平台 tab（外层） */}
-          <div className="flex gap-1.5 mb-3 overflow-x-auto no-scrollbar">
-            <PlatformTab
-              active={platform === 'item'}
-              icon={<ShoppingBag size={14} />}
-              label="买卖二手"
-              count={itemActiveN + itemDraftN}
-              onClick={() => setPlatform('item')}
-            />
-            <PlatformTab
-              active={platform === 'listing'}
-              icon={<Home size={14} />}
-              label="找室友 & 租房"
-              count={listingActiveN + listingDraftN + (sentApps?.length ?? 0)}
-              badge={inboxPendingN + sentPendingN}
-              onClick={() => setPlatform('listing')}
-            />
-          </div>
 
           {/* === 买卖二手平台 === */}
           {platform === 'item' && (

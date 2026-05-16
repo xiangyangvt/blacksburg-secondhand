@@ -18,7 +18,7 @@ import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
 import { EventCard, type EventCardData } from '@/components/EventCard';
 import { EventWishlistButton } from '@/components/EventWishlistButton';
-import { MyEventsPanel } from '@/components/MyEventsPanel';
+import { MyPostsPanel } from '@/components/MyPostsPanel';
 import { EventPostModal } from '@/components/EventPostModal';
 import { FabPostButton } from '@/components/FabPostButton';
 import { ScrollToTop } from '@/components/ScrollToTop';
@@ -334,8 +334,8 @@ export default function LocalNewsPage() {
         </p>
       </div>
 
-      {/* Phase 2C 我的活动 panel(留言 + 联系方式 3 tab) */}
-      {myPanelOpen && <MyEventsPanel onClose={() => setMyPanelOpen(false)} />}
+      {/* Phase 3A.2 我的统一 panel — 跟二手/室友同一个 MyPostsPanel,默认选中"黑堡本地"tab */}
+      {myPanelOpen && <MyPostsPanel onClose={() => setMyPanelOpen(false)} initialPlatform="event" />}
 
       {/* Phase 3A 发布 modal */}
       {postModalOpen && (
