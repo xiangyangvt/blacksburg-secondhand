@@ -27,6 +27,11 @@ function relevanceTime(e: EventRow): number {
 }
 
 // GET /api/events?category=events|sports|news|discussion&limit=50
+//
+// Phase 2A 新增 response 字段:
+//   - 每条 event 自带 clickCount(已在 model 里,直接 select)
+//   - 顶层 availableCategories: 当前 dataset 里实际有数据的类别列表
+//     (前端用于"无数据自动隐藏 chip")
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const category = sp.get('category');
@@ -37,24 +42,32 @@ export async function GET(req: NextRequest) {
   // 新闻/讨论没有 startAt/endAt — 走 startAt:null 分支保留下来,后续靠 publishedAt 排序
   const oneDayAgo = new Date(Date.now() - 86400000);
 
-  const where: any = {
+  const baseWhere: any = {
     status: 'active',
     qualityScore: { gte: 0.5 },
     OR: [
       { endAt: { gte: new Date() } },
       { endAt: null, startAt: { gte: oneDayAgo } },
-      { startAt: null }, // 没 startAt 的(news/discussion)— 由 publishedAt 排序
+      { startAt: null },
     ],
   };
-  if (category) where.category = category;
+  const where = category ? { ...baseWhere, category } : baseWhere;
 
-  // 拉够多让排序后还有富余 — DB 层不做精确 sort,因为 sort 字段是按 row 计算的
-  const candidates = await prisma.event.findMany({
-    where,
-    // 先按 scrapedAt 降序拉,保证最近爬到的优先入候选;再在内存里按 relevance 排
-    orderBy: { scrapedAt: 'desc' },
-    take: Math.min(limit * 3, 300),
-  });
+  // 并行:① 候选 events ② 全数据集 category 列表(无视 category 筛选)
+  const [candidates, allCategoryRows] = await Promise.all([
+    prisma.event.findMany({
+      where,
+      orderBy: { scrapedAt: 'desc' },
+      take: Math.min(limit * 3, 300),
+    }),
+    // 拿当前 active+合规 events 里实际出现的 category(不受 category 筛选影响)
+    // Phase 2A: 前端用这个让 chip 自动隐藏没数据的类别
+    prisma.event.groupBy({
+      by: ['category'],
+      where: baseWhere,
+      _count: { id: true },
+    }),
+  ]);
 
   const now = Date.now();
   const sorted = candidates
@@ -63,5 +76,12 @@ export async function GET(req: NextRequest) {
     .slice(0, limit)
     .map(x => x.row);
 
-  return NextResponse.json({ events: sorted });
+  const availableCategories = allCategoryRows
+    .filter(r => r.category && r._count.id > 0)
+    .map(r => r.category as string);
+
+  return NextResponse.json({
+    events: sorted,
+    availableCategories,
+  });
 }

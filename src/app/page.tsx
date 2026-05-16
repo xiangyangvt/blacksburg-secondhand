@@ -285,17 +285,8 @@ function HomePageInner() {
             )}
           </button>
 
-          {/* 右：分享本站（仅桌面） */}
-          {origin && (
-            <ShareButton
-              shareText={buildSiteShareText({ origin })}
-              label={t('site.shareSite')}
-              icon={<Share2 size={16} />}
-              className="hidden md:inline-flex"
-            />
-          )}
-
-          {/* 最右：发布（主 CTA；手机端走 FAB） */}
+          {/* 最右：发布（主 CTA；手机端走 FAB)
+              注:Sprint 7.1 移除了 ShareButton 让 / 跟 /roommates header 对齐(我的按钮同 X 位置) */}
           <button
             onClick={() => setPostModal({ mode: 'create' })}
             className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-brand text-white rounded-chip hover:bg-brand-dark active:scale-95 transition-all text-sm font-medium whitespace-nowrap shadow-card"

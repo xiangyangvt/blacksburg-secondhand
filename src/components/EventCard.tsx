@@ -9,7 +9,7 @@
 // 这些都是 thumbnail 不需要 next 优化;onError 失败时 fallback 到类型色占位
 
 import { useState, useRef, useEffect } from 'react';
-import { Calendar, MapPin, ExternalLink, Clock, Heart } from 'lucide-react';
+import { Calendar, MapPin, ExternalLink, Clock, Heart, Flame } from 'lucide-react';
 import { isEventSaved, toggleSavedEvent, subscribeSavedEvents } from '@/lib/savedEvents';
 import { showSuccess, showWarning } from '@/lib/toast';
 import { parseLocation } from '@/lib/eventLocation';
@@ -27,7 +27,28 @@ export type EventCardData = {
   location: string | null;
   category: string | null;
   imageUrl: string | null;
+  // Phase 2A:热度跟踪相关
+  clickCount?: number;
+  scrapedAt?: string | Date | null;
 };
+
+// Phase 2A:热度梯度。clicks/hour 阈值。
+// 设计:新鲜内容(scrape 1 小时内 1 次点击就 = 1.0 clicks/hr → 🔥)
+// 老内容需要更多 clicks 才能上热度,自然降权
+const HEAT_LEVELS = [
+  { min: 5, color: 'text-rose-600',  fill: true,  label: '🔥🔥' },  // 高热
+  { min: 1.5, color: 'text-rose-500', fill: true,  label: '🔥' },    // 中热
+  { min: 0.5, color: 'text-orange-500', fill: false, label: '🔥' },  // 微热
+] as const;
+
+function getHeatLevel(clickCount: number | undefined, scrapedAt: string | Date | null | undefined) {
+  if (!clickCount || clickCount < 1) return null;
+  const scraped = scrapedAt ? new Date(scrapedAt).getTime() : Date.now() - 24 * 3600e3;
+  const ageH = Math.max(1, (Date.now() - scraped) / 3600e3);
+  const heat = clickCount / ageH;
+  for (const lv of HEAT_LEVELS) if (heat >= lv.min) return lv;
+  return null;
+}
 
 const CATEGORY_LABEL: Record<string, string> = {
   events: '活动',
@@ -148,6 +169,9 @@ export function EventCard({
   const fullTimeLabel = isPastBased
     ? formatEventFullTime(event.publishedAt, null)
     : formatEventFullTime(event.startAt, event.endAt);
+
+  // Phase 2A 热度梯度
+  const heat = getHeatLevel(event.clickCount, event.scrapedAt);
   const showImage = !!(event.imageUrl && !imgFailed);
   // 城市先于场地展示(距离决策锚点)。city 加粗高亮,venue 浅色辅助
   const { city: locCity, venue: locVenue } = parseLocation(event.location);
@@ -180,10 +204,22 @@ export function EventCard({
     // removed 静默
   };
 
+  // Phase 2A:展开时上报 click(/api/events/[id]/click)— 防刷在 server 端做
+  // 仅展开方向计数(收起不计),避免双击产生 2 次 increment
+  const trackedRef = useRef(false);
+  const reportClick = () => {
+    if (trackedRef.current) return; // 同一卡片单 mount 周期只上报一次
+    trackedRef.current = true;
+    fetch(`/api/events/${event.id}/click`, { method: 'POST' }).catch(() => {
+      /* 静默 — server 防刷或网络故障不影响体验 */
+    });
+  };
+
   const toggleExpand = () => {
     setExpanded(prev => {
       const next = !prev;
       if (next) {
+        reportClick();
         requestAnimationFrame(() =>
           requestAnimationFrame(() => {
             cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -263,11 +299,18 @@ export function EventCard({
       </div>
 
       <div className="p-3 md:p-4 space-y-1.5">
-        {/* 类型 chip + 相对时间 */}
+        {/* 类型 chip + 相对时间 + 热度 🔥(Phase 2A) */}
         <div className="flex items-center gap-1.5 text-xs flex-wrap">
           <span className={`px-2 py-0.5 rounded-full font-medium ${colors.bg} ${colors.text}`}>
             {CATEGORY_LABEL[cat] ?? cat}
           </span>
+          {/* 热度 🔥 — 紧凑端在 chip 旁边,展开端也显;颜色梯度按 clicks/hour */}
+          {heat && (
+            <span className={`inline-flex items-center gap-0.5 font-semibold ${heat.color}`} title={`热度 · ${event.clickCount ?? 0} 次点击`}>
+              <Flame size={12} strokeWidth={2.4} fill={heat.fill ? 'currentColor' : 'none'} />
+              {heat.label.length > 2 && <Flame size={12} strokeWidth={2.4} fill="currentColor" />}
+            </span>
+          )}
           {timeLabel && !expanded && (
             <span className="text-stone-600">{timeLabel}</span>
           )}
