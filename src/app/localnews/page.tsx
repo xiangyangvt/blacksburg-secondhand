@@ -65,9 +65,11 @@ const LOC_SCOPES: Array<{ id: LocationScope; label: string }> = [
   { id: 'nrv',   label: '整个 NRV' },
 ];
 
-// 默认 sort=date 时按钮显「排序」(更像分类标签);用户选了其他时显具体值
+// 选项内 label 是具体含义("按时间" / "按热度" / "按距离");
+// 按钮文案逻辑在 render 时单独处理:sort=date 默认状态显「排序」,其它显选项 label
+// 这样用户能从下拉里选「按时间」回到默认 — 跟「按热度/按距离」并列
 const SORTS: Array<{ id: Sort; label: string }> = [
-  { id: 'date',     label: '排序' },
+  { id: 'date',     label: '按时间' },
   { id: 'hot',      label: '按热度' },
   { id: 'distance', label: '按距离' },
 ];
@@ -284,9 +286,9 @@ export default function LocalNewsPage() {
             value={filters.locScope}
             onChange={(v) => updateFilter('locScope', v as LocationScope)}
           />
-          {/* 排序 dropdown */}
+          {/* 排序 dropdown — 默认状态按钮显「排序」(分类标签感),选了非默认显具体 label */}
           <FilterDropdown
-            label={SORTS.find(s => s.id === filters.sort)!.label}
+            label={filters.sort === 'date' ? '排序' : SORTS.find(s => s.id === filters.sort)!.label}
             active={filters.sort !== 'date'}
             options={SORTS}
             value={filters.sort}
