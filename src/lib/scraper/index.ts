@@ -6,6 +6,7 @@ import { nextthreedays } from './sources/nextthreedays';
 import { stepintoblacksburg } from './sources/stepintoblacksburg';
 import { reddit } from './sources/reddit';
 import { gobblerconnect } from './sources/gobblerconnect';
+import { hokiesports } from './sources/hokiesports';
 
 // 启用顺序 = 数组顺序。后续加源在这里加 import + 加进数组
 export const SOURCES: SourceDefinition[] = [
@@ -13,6 +14,7 @@ export const SOURCES: SourceDefinition[] = [
   stepintoblacksburg,
   reddit,
   gobblerconnect,
+  hokiesports,
 ];
 
 export { runScraper, runAllScrapers } from './runner';
