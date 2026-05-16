@@ -1,11 +1,13 @@
-// POST /api/events/[id]/contact-send — 向某条评论的作者发送我的联系方式
+// POST /api/events/[id]/contact-send — 向评论作者 或 user-posted event 的 poster 发送我的联系方式
 //
-// body: { toCommentId, nickname, contactType, contact, contactLabel? }
+// body: { toCommentId?, nickname, contactType, contact, contactLabel? }
+//   - 有 toCommentId → 发给该评论的作者
+//   - 无 toCommentId → 发给 event 的 poster(仅 source='user' 的 event 支持)
+//
 // 防刷:同 event 同 from→to 只能发一次(DB unique constraint)
 // 注:Sean 设计 — asymmetric, 无 accept/decline,B 收到后是否回赠完全独立
 //
-// 安全:visitorId 不暴露给客户端(只用 toCommentId 引用目标)
-// server 根据 toCommentId 查出 comment.visitorId 作为 toVisitorId
+// 安全:visitorId 不暴露给客户端(只用 toCommentId 或 event.posterVisitorId 间接路由)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
@@ -26,13 +28,12 @@ export async function POST(
   try { body = await req.json(); }
   catch { return NextResponse.json({ ok: false, error: '无效请求' }, { status: 400 }); }
 
-  const toCommentId    = (body.toCommentId    ?? '').toString();
+  const toCommentId    = body.toCommentId ? (body.toCommentId ?? '').toString() : null;
   const nickname       = (body.nickname       ?? '').toString().trim().slice(0, 20);
   const contactType    = (body.contactType    ?? '').toString();
   const contact        = (body.contact        ?? '').toString().trim().slice(0, 80);
   const contactLabel   = (body.contactLabel   ?? '').toString().trim().slice(0, 20) || null;
 
-  if (!toCommentId) return NextResponse.json({ ok: false, error: '缺少目标评论' }, { status: 400 });
   if (!nickname)    return NextResponse.json({ ok: false, error: '请填写昵称' }, { status: 400 });
   if (!ALLOWED_CONTACT_TYPES.has(contactType)) {
     return NextResponse.json({ ok: false, error: '联系方式类型不支持' }, { status: 400 });
@@ -46,24 +47,49 @@ export async function POST(
   const existing = req.cookies.get(VID_COOKIE)?.value;
   const fromVisitorId = existing || randomUUID();
 
-  // 查目标评论 → 拿 toVisitorId
-  const targetComment = await prisma.eventComment.findUnique({
-    where: { id: toCommentId },
-    select: { id: true, visitorId: true, eventId: true, status: true },
-  });
-  if (!targetComment || targetComment.status !== 'active') {
-    return NextResponse.json({ ok: false, error: '目标评论不存在或已删除' }, { status: 404 });
-  }
-  if (targetComment.eventId !== eventId) {
-    return NextResponse.json({ ok: false, error: '评论与 event 不匹配' }, { status: 400 });
-  }
-  if (targetComment.visitorId === fromVisitorId) {
-    return NextResponse.json({ ok: false, error: '不能给自己的评论发联系方式' }, { status: 400 });
+  // 确定 toVisitorId — 两种来源:
+  //   1. toCommentId 指向某评论 → 评论作者
+  //   2. 无 toCommentId → event poster(source='user')
+  let toVisitorId: string;
+  let resolvedCommentId: string | null = null;
+
+  if (toCommentId) {
+    const targetComment = await prisma.eventComment.findUnique({
+      where: { id: toCommentId },
+      select: { id: true, visitorId: true, eventId: true, status: true },
+    });
+    if (!targetComment || targetComment.status !== 'active') {
+      return NextResponse.json({ ok: false, error: '目标评论不存在或已删除' }, { status: 404 });
+    }
+    if (targetComment.eventId !== eventId) {
+      return NextResponse.json({ ok: false, error: '评论与 event 不匹配' }, { status: 400 });
+    }
+    if (targetComment.visitorId === fromVisitorId) {
+      return NextResponse.json({ ok: false, error: '不能给自己的评论发联系方式' }, { status: 400 });
+    }
+    toVisitorId = targetComment.visitorId;
+    resolvedCommentId = targetComment.id;
+  } else {
+    // 发给 event poster — 只对 user-posted event 有效
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, source: true, posterVisitorId: true },
+    });
+    if (!event) return NextResponse.json({ ok: false, error: 'event 不存在' }, { status: 404 });
+    if (event.source !== 'user' || !event.posterVisitorId) {
+      return NextResponse.json({ ok: false, error: '此活动不支持直接发联系方式(请在某条评论上发送)' }, { status: 400 });
+    }
+    if (event.posterVisitorId === fromVisitorId) {
+      return NextResponse.json({ ok: false, error: '不能给自己发布的活动发联系方式' }, { status: 400 });
+    }
+    toVisitorId = event.posterVisitorId;
   }
 
-  // event 存在性
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true } });
-  if (!event) return NextResponse.json({ ok: false, error: 'event 不存在' }, { status: 404 });
+  // event 存在性(toCommentId 路径已查过,此处只在 toCommentId 路径里二次确认 — 上面 if 已经隐式校验,跳过)
+  if (toCommentId) {
+    const ev = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true } });
+    if (!ev) return NextResponse.json({ ok: false, error: 'event 不存在' }, { status: 404 });
+  }
 
   // 创建(unique 约束在 DB 层自动防重复)
   try {
@@ -75,8 +101,8 @@ export async function POST(
         fromContactType: contactType,
         fromContact: contact,
         fromContactLabel: contactLabel,
-        toVisitorId: targetComment.visitorId,
-        toCommentId: targetComment.id,
+        toVisitorId,
+        toCommentId: resolvedCommentId,
       },
     });
 

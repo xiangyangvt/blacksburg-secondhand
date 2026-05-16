@@ -14,6 +14,8 @@ import { isEventSaved, toggleSavedEvent, subscribeSavedEvents } from '@/lib/save
 import { showSuccess, showWarning } from '@/lib/toast';
 import { parseLocation } from '@/lib/eventLocation';
 import { EventCommentSection } from './EventCommentSection';
+import { ContactSendModal } from './ContactSendModal';
+import { Send } from 'lucide-react';
 
 export type EventCardData = {
   id: string;
@@ -28,9 +30,17 @@ export type EventCardData = {
   location: string | null;
   category: string | null;
   imageUrl: string | null;
-  // Phase 2A:热度跟踪相关
+  // Phase 2A:热度跟踪
   clickCount?: number;
   scrapedAt?: string | Date | null;
+  // Phase 3A:用户发布字段(scraped events 全 null)
+  customCategory?: string | null;
+  posterNickname?: string | null;
+  posterContactType?: string | null;
+  posterContact?: string | null;
+  posterContactLabel?: string | null;
+  posterContactPublic?: boolean | null;
+  photoUrls?: string[];
 };
 
 // Phase 2A:热度梯度。clicks/hour 阈值。
@@ -56,6 +66,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   sports: '体育',
   news: '新闻',
   discussion: '讨论',
+  other: '其他',
 };
 
 const CATEGORY_COLOR: Record<string, { bg: string; text: string; placeholder: string }> = {
@@ -63,6 +74,7 @@ const CATEGORY_COLOR: Record<string, { bg: string; text: string; placeholder: st
   sports:     { bg: 'bg-cat-transport/10',   text: 'text-cat-transport',   placeholder: 'bg-cat-transport/10 text-cat-transport/40' },
   news:       { bg: 'bg-cat-electronics/10', text: 'text-cat-electronics', placeholder: 'bg-cat-electronics/10 text-cat-electronics/40' },
   discussion: { bg: 'bg-cat-books/10',       text: 'text-cat-books',       placeholder: 'bg-cat-books/10 text-cat-books/40' },
+  other:      { bg: 'bg-stone-100',          text: 'text-stone-700',       placeholder: 'bg-stone-100 text-stone-400' },
 };
 
 /** 紧凑端相对时间:
@@ -173,6 +185,8 @@ export function EventCard({
 
   // Phase 2A 热度梯度
   const heat = getHeatLevel(event.clickCount, event.scrapedAt);
+  // Phase 3A 发给 poster modal 状态
+  const [sendToPosterOpen, setSendToPosterOpen] = useState(false);
   const showImage = !!(event.imageUrl && !imgFailed);
   // 城市先于场地展示(距离决策锚点)。city 加粗高亮,venue 浅色辅助
   const { city: locCity, venue: locVenue } = parseLocation(event.location);
@@ -303,7 +317,7 @@ export function EventCard({
         {/* 类型 chip + 相对时间 + 热度 🔥(Phase 2A) */}
         <div className="flex items-center gap-1.5 text-xs flex-wrap">
           <span className={`px-2 py-0.5 rounded-full font-medium ${colors.bg} ${colors.text}`}>
-            {CATEGORY_LABEL[cat] ?? cat}
+            {cat === 'other' && event.customCategory ? event.customCategory : (CATEGORY_LABEL[cat] ?? cat)}
           </span>
           {/* 热度 🔥 — 紧凑端在 chip 旁边,展开端也显;颜色梯度按 clicks/hour */}
           {heat && (
@@ -374,22 +388,85 @@ export function EventCard({
               </div>
             )}
 
-            {/* 操作区:跳源 + 来源标 */}
+            {/* Phase 3A 用户发布 events 公开联系方式块(若 poster 选了公开) */}
+            {event.source === 'user' && event.posterContactPublic && event.posterContact && (
+              <div className="flex items-center gap-2 pt-2 mt-1 border-t border-stone-100 text-sm" data-no-toggle>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-stone-500 mb-0.5">
+                    {event.posterContactType === 'other' ? (event.posterContactLabel || '联系方式') :
+                     event.posterContactType === 'wechat' ? '微信' :
+                     event.posterContactType === 'phone' ? '手机' :
+                     event.posterContactType === 'discord' ? 'Discord' :
+                     event.posterContactType === 'email' ? 'Email' : '联系方式'}
+                  </div>
+                  <div className="font-mono text-stone-900 break-all">{event.posterContact}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(event.posterContact!);
+                      showSuccess('已复制');
+                    } catch {
+                      showWarning('复制失败,请手动选中');
+                    }
+                  }}
+                  className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-chip bg-stone-100 border border-stone-300 text-stone-700 hover:bg-stone-200"
+                >
+                  复制
+                </button>
+              </div>
+            )}
+
+            {/* 操作区:跳源(scraped) / 发布者信息(user) */}
             <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-stone-100" data-no-toggle>
-              <span className="text-[11px] text-stone-400">来源: {event.source}</span>
-              <a
-                href={event.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-chip text-sm font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card no-underline"
-              >
-                <ExternalLink size={13} />
-                查看原站
-              </a>
+              <span className="text-[11px] text-stone-400">
+                {event.source === 'user'
+                  ? <>用户发布{event.posterNickname && <> · {event.posterNickname}</>}</>
+                  : <>来源: {event.source}</>}
+              </span>
+              {event.source !== 'user' ? (
+                <a
+                  href={event.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-chip text-sm font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card no-underline"
+                >
+                  <ExternalLink size={13} />
+                  查看原站
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSendToPosterOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-chip text-sm font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card"
+                >
+                  <Send size={13} />
+                  发送我的联系方式
+                </button>
+              )}
             </div>
 
             {/* Phase 2C 评论区 — 找搭子/讨论 */}
             <EventCommentSection eventId={event.id} eventTitle={event.title} />
+
+            {/* Phase 3A 发给 poster modal */}
+            {sendToPosterOpen && (
+              <ContactSendModal
+                eventId={event.id}
+                eventTitle={event.title}
+                target={{
+                  id: null,
+                  nickname: event.posterNickname || '发布者',
+                  content: event.title,
+                }}
+                onClose={() => setSendToPosterOpen(false)}
+                onSent={() => {
+                  setSendToPosterOpen(false);
+                  showSuccess('已发送你的联系方式');
+                }}
+              />
+            )}
           </div>
         )}
       </div>

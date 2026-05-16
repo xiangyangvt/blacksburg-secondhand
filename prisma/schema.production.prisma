@@ -233,6 +233,17 @@ model Event {
   // Phase 2A 热度
   clickCount      Int       @default(0)
 
+  // Phase 3A 用户发布字段
+  posterCodeHash      String?
+  posterVisitorId     String?
+  posterNickname      String?
+  posterContactType   String?
+  posterContact       String?
+  posterContactLabel  String?
+  posterContactPublic Boolean? @default(false)
+  customCategory      String?
+  photoUrls           String?
+
   status          String    @default("active")
 
   @@unique([source, sourceUrl])
@@ -241,6 +252,7 @@ model Event {
   @@index([status, startAt])
   @@index([category])
   @@index([clickCount])
+  @@index([posterVisitorId])
 }
 
 model EventClickThrottle {

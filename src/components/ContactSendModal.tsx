@@ -19,9 +19,9 @@ import { CONTACT_TYPES, validateContactInput, type ContactType } from '@/lib/con
 import { getNickname, setNickname, getLastContact, setLastContact } from '@/lib/eventNickname';
 
 type Target = {
-  id: string;
+  id: string | null;   // 评论 id;null = 发给 event poster(用户发布的活动)
   nickname: string;
-  content: string;
+  content: string;     // 上下文(评论文 或 event 标题)
 };
 
 export function ContactSendModal({
@@ -81,7 +81,7 @@ export function ContactSendModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          toCommentId: target.id,
+          toCommentId: target.id,  // null 时 server 路由到 event poster
           nickname: cleanNick,
           contactType,
           contact: contact.trim(),

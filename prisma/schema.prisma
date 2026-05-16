@@ -255,10 +255,22 @@ model Event {
   // Phase 2A 热度跟踪 — 每次卡片被点击 +1(visitor 防刷 5 分钟去重在 API 层做)
   clickCount      Int       @default(0)
 
+  // === Phase 3A 用户发布字段(scraped events 这些 null) ===
+  // source = 'user' 时启用
+  posterCodeHash      String?  // bcrypt 识别码,跟 Item/Listing 同款
+  posterVisitorId     String?  // server-only,用于路由"发送联系方式给 poster"
+  posterNickname      String?
+  posterContactType   String?  // wechat | phone | discord | email | other
+  posterContact       String?
+  posterContactLabel  String?  // contactType=other 时用户自填(如 'Line')
+  posterContactPublic Boolean? @default(false)  // 是否公开显示联系方式
+  customCategory      String?  // category='other' 时用户自填的类目名
+  photoUrls           String?  // JSON 序列化 URL 数组,跟 Item.photoUrls 同款
+
   // Phase 3 chat 用,Phase 1 留空。pgvector 类型在 SQLite 不支持,先省略字段
   // Postgres 上来时通过 raw SQL migrate 加 embedding 列
 
-  status          String    @default("active")  // active | hidden | expired
+  status          String    @default("active")  // active | hidden | expired | deleted
 
   @@unique([source, sourceUrl])
   @@index([startAt])
@@ -266,6 +278,7 @@ model Event {
   @@index([status, startAt])
   @@index([category])
   @@index([clickCount])
+  @@index([posterVisitorId])  // Phase 3A 用户在"我的"看自己发布的活动
 }
 
 // Phase 2A 防刷:同 visitor 5 分钟内对同一 event 只算一次 click

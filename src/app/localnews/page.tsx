@@ -13,17 +13,18 @@
 // 7. 卡片热度 🔥 icon(按 click 计数梯度)+ 点击触发 /api/events/[id]/click
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Plus } from 'lucide-react';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
 import { EventCard, type EventCardData } from '@/components/EventCard';
 import { EventWishlistButton } from '@/components/EventWishlistButton';
 import { MyEventsPanel } from '@/components/MyEventsPanel';
+import { EventPostModal } from '@/components/EventPostModal';
 import { distanceFromBlacksburg, isLocalCore, isWithinNrv } from '@/lib/eventDistance';
 
 // ============ 筛选状态机 ============
 
-type CatId = 'all' | 'events' | 'sports' | 'news' | 'discussion';
+type CatId = 'all' | 'events' | 'sports' | 'news' | 'discussion' | 'other';
 type DateRange = 'all' | 'today' | '3day' | 'week' | 'month';
 type Sort = 'date' | 'hot' | 'distance';
 type LocationScope = 'all' | 'local' | 'nrv';
@@ -50,6 +51,7 @@ const CATEGORIES: Array<{ id: CatId; label: string }> = [
   { id: 'sports',     label: '体育' },
   { id: 'news',       label: '新闻' },
   { id: 'discussion', label: '讨论' },
+  { id: 'other',      label: '其他' },
 ];
 
 const DATE_RANGES: Array<{ id: DateRange; label: string }> = [
@@ -134,6 +136,8 @@ export default function LocalNewsPage() {
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [myPanelOpen, setMyPanelOpen] = useState(false);
+  const [postModalOpen, setPostModalOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // 发布后强制重新 fetch
 
   // localStorage 初始化(SSR-safe:首次 render 用 default,mount 后 hydrate)
   useEffect(() => {
@@ -159,25 +163,25 @@ export default function LocalNewsPage() {
   }, [filters]);
 
   // fetch:cat 变化时重新拉(date / sort / location 都是客户端 filter)
+  // refreshKey 变化时也强制重 fetch(发布新 event 后)
   useEffect(() => {
     let cancel = false;
     setLoading(true);
     const url = filters.cat === 'all'
       ? '/api/events?limit=80'
       : `/api/events?category=${filters.cat}&limit=80`;
-    fetch(url)
+    fetch(url, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : { events: [], availableCategories: [] })
       .then(d => {
         if (cancel) return;
         setEvents(d.events ?? []);
-        // availableCategories 跟 cat 筛选无关 — API 返回的总是全 dataset 的(我们配合 baseWhere)
         if (Array.isArray(d.availableCategories)) {
           setAvailableCategories(d.availableCategories);
         }
       })
       .finally(() => { if (!cancel) setLoading(false); });
     return () => { cancel = true; };
-  }, [filters.cat]);
+  }, [filters.cat, refreshKey]);
 
   // 应用 search + date + location + sort
   const visible = useMemo(() => {
@@ -226,6 +230,14 @@ export default function LocalNewsPage() {
             className="relative px-3 sm:px-4 py-2 rounded-chip text-sm font-medium whitespace-nowrap bg-white border border-stone-300 text-stone-700 hover:bg-stone-100 transition-colors"
           >
             我的
+          </button>
+          {/* 发布 — 跟 / 和 /roommates 同款主 CTA;mobile 用 FAB,这里隐藏 */}
+          <button
+            onClick={() => setPostModalOpen(true)}
+            className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-brand text-white rounded-chip hover:bg-brand-dark active:scale-95 transition-all text-sm font-medium whitespace-nowrap shadow-card"
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            <span>发布</span>
           </button>
         </div>
       </header>
@@ -321,6 +333,23 @@ export default function LocalNewsPage() {
 
       {/* Phase 2C 我的活动 panel(留言 + 联系方式 3 tab) */}
       {myPanelOpen && <MyEventsPanel onClose={() => setMyPanelOpen(false)} />}
+
+      {/* Phase 3A 发布 modal */}
+      {postModalOpen && (
+        <EventPostModal
+          onClose={() => setPostModalOpen(false)}
+          onCreated={() => setRefreshKey(k => k + 1)}
+        />
+      )}
+
+      {/* Mobile FAB — sm 以下显示 */}
+      <button
+        onClick={() => setPostModalOpen(true)}
+        className="sm:hidden fixed bottom-5 right-5 z-30 w-14 h-14 rounded-full bg-brand text-white shadow-overlay flex items-center justify-center active:scale-95 transition-all"
+        aria-label="发布活动"
+      >
+        <Plus size={26} strokeWidth={2.5} />
+      </button>
     </main>
   );
 }
