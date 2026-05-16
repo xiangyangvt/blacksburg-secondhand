@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Copy } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { BatchImportPanel } from './BatchImportPanel';
 import { CATEGORIES, CONTACT_TYPES } from '@/lib/utils';
 import { getStoredUtmSource } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
-import { showError, showWarning } from '@/lib/toast';
+import { showError, showWarning, showSuccess } from '@/lib/toast';
 import { validateContact, contactPlaceholder, validatePriceSoft } from '@/lib/contactValidation';
 import { HelpHint } from './HelpHint';
 import type { Item } from './ItemCard';
@@ -297,15 +297,35 @@ export function PostModal({
                 <p className="text-stone-500">✓ 这台设备会自动记住,下次发布预填。换设备或清浏览器缓存就要重新设。</p>
               </HelpHint>
             </div>
-            <input
-              value={editCode}
-              onChange={e => setEditCode(e.target.value)}
-              minLength={6}
-              maxLength={50}
-              type="text"
-              placeholder={t('post.editCodePh')}
-              className="w-full border border-stone-300 rounded px-3 py-2 font-mono"
-            />
+            <div className="flex gap-2">
+              <input
+                value={editCode}
+                onChange={e => setEditCode(e.target.value)}
+                minLength={6}
+                maxLength={50}
+                type="text"
+                placeholder={t('post.editCodePh')}
+                className="flex-1 min-w-0 border border-stone-300 rounded px-3 py-2 font-mono"
+              />
+              {editCode.length >= 6 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(editCode);
+                      showSuccess('识别码已复制');
+                    } catch {
+                      showError('复制失败,请手动选中');
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-stone-100 text-stone-700 rounded hover:bg-stone-200 flex-shrink-0"
+                  title="复制识别码"
+                >
+                  <Copy size={12} />
+                  复制
+                </button>
+              )}
+            </div>
             <div className="text-xs text-stone-600 mt-1.5">
               ⚠️ 改 / 删 / 标已售时要用,记住它
             </div>

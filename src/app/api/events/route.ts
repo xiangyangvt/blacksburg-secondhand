@@ -40,6 +40,20 @@ function relevanceTime(e: EventRow): number {
 
 // GET /api/events?category=events|sports|news|discussion&limit=50
 //
+// Phase 3A.1: 旧 → 新类别 ID 翻译表(Railway 上 db push 不跑 data migration,
+// DB 里可能还存旧 ID;UI 层用新 ID 过滤会找不到。这里两边都包容)
+const CATEGORY_NEW_TO_OLD: Record<string, string[]> = {
+  life:        ['life', 'events'],
+  competition: ['competition', 'sports'],
+  discussion:  ['discussion', 'news'],
+  // exercise / academic / other 是新的,不需要 alias
+};
+const CATEGORY_OLD_TO_NEW: Record<string, string> = {
+  events: 'life',
+  sports: 'competition',
+  news:   'discussion',
+};
+
 // Phase 2A 新增 response 字段:
 //   - 每条 event 自带 clickCount(已在 model 里,直接 select)
 //   - 顶层 availableCategories: 当前 dataset 里实际有数据的类别列表
@@ -63,7 +77,10 @@ export async function GET(req: NextRequest) {
       { startAt: null },
     ],
   };
-  const where = category ? { ...baseWhere, category } : baseWhere;
+  // category 筛选 — 同时匹配新 ID 和旧 ID(兼容未迁移数据)
+  const where = category
+    ? { ...baseWhere, category: { in: CATEGORY_NEW_TO_OLD[category] ?? [category] } }
+    : baseWhere;
 
   // 并行:① 候选 events ② 全数据集 category 列表(无视 category 筛选)
   const [candidates, allCategoryRows] = await Promise.all([
@@ -88,9 +105,11 @@ export async function GET(req: NextRequest) {
     .slice(0, limit)
     .map(x => x.row);
 
-  const availableCategories = allCategoryRows
+  // availableCategories — 把旧 ID 翻成新 ID,UI 用新 ID 过滤 chip
+  const availableCategoriesRaw = allCategoryRows
     .filter(r => r.category && r._count.id > 0)
-    .map(r => r.category as string);
+    .map(r => CATEGORY_OLD_TO_NEW[r.category as string] ?? (r.category as string));
+  const availableCategories = Array.from(new Set(availableCategoriesRaw));
 
   // Strip 敏感字段 — posterCodeHash / posterVisitorId 不能返客户端
   // 同时把 photoUrls 从 JSON string parse 成数组方便前端用

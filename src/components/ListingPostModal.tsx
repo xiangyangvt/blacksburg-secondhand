@@ -9,7 +9,7 @@
 // - C/D 特有：是否带家具（D 默认勾选）
 
 import { useState, useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
+import { X, Copy } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import {
   LISTING_TYPES,
@@ -20,7 +20,7 @@ import {
   CONTACT_TYPES,
 } from '@/lib/utils';
 import { getStoredUtmSource } from '@/lib/utm';
-import { showError, showWarning } from '@/lib/toast';
+import { showError, showWarning, showSuccess } from '@/lib/toast';
 import { validateContact, contactPlaceholder } from '@/lib/contactValidation';
 
 const LS_LAST_CODE      = 'hb_last_edit_code';
@@ -738,14 +738,34 @@ export function ListingPostModal({
 
           <section>
             <Label required>识别码（≥6 位，用于以后修改/删除/审批申请）</Label>
-            <input
-              type="password"
-              value={editCode}
-              onChange={e => setEditCode(e.target.value)}
-              minLength={6}
-              placeholder="例：myroom123"
-              className="w-full border border-stone-300 rounded px-3 py-2"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={editCode}
+                onChange={e => setEditCode(e.target.value)}
+                minLength={6}
+                placeholder="例：myroom123"
+                className="flex-1 min-w-0 border border-stone-300 rounded px-3 py-2 font-mono"
+              />
+              {editCode.length >= 6 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(editCode);
+                      showSuccess('识别码已复制');
+                    } catch {
+                      showError('复制失败,请手动选中');
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-stone-100 text-stone-700 rounded hover:bg-stone-200 flex-shrink-0"
+                  title="复制识别码"
+                >
+                  <Copy size={12} />
+                  复制
+                </button>
+              )}
+            </div>
             <p className="text-xs text-stone-500 mt-1">
               💡 这不是密码——只是用来证明这条信息是你发的。丢了无法找回；浏览器会本地记住，下次自动填。
             </p>
