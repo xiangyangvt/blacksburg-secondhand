@@ -41,15 +41,13 @@ function formatWhen(e: SavedEvent): string {
   const d = new Date(e.startAt);
   if (isNaN(d.getTime())) return '时间待定';
   const now = new Date();
-  const diffMs = d.getTime() - now.getTime();
-  const diffD = diffMs / 86400000;
+  const diffD = (d.getTime() - now.getTime()) / 86400000;
   if (d.toDateString() === now.toDateString())
     return `今天 ${d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
   if (diffD < 1.5 && diffD > 0)
     return `明天 ${d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
   if (diffD < 7 && diffD > 0)
     return `${Math.ceil(diffD)} 天后 · ${d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}`;
-  // 远期或过去:M/D 周X
   return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' });
 }
 

@@ -42,17 +42,16 @@ const CATEGORY_COLOR: Record<string, { bg: string; text: string; placeholder: st
   discussion: { bg: 'bg-cat-books/10',       text: 'text-cat-books',       placeholder: 'bg-cat-books/10 text-cat-books/40' },
 };
 
-/** 紧凑端显示的相对时间("今天 19:00" / "明天" / "3 天后 5/20") */
+/** 紧凑端显示的相对时间("今天 19:00" / "明天 19:00" / "3 天后 5/20" / "5/22 周五")
+ *  注:不用"即将开始"那种含糊的相对短语 — 直接给具体日期/时间,
+ *  用户能立刻判断是否赶得上(Sean 反馈) */
 function formatEventTime(startAt: string | Date | null): string | null {
   if (!startAt) return null;
   const start = typeof startAt === 'string' ? new Date(startAt) : startAt;
   if (isNaN(start.getTime())) return null;
   const now = new Date();
-  const diffMs = start.getTime() - now.getTime();
-  const diffH = diffMs / 3600000;
-  const diffD = diffMs / 86400000;
+  const diffD = (start.getTime() - now.getTime()) / 86400000;
 
-  if (diffH < 6 && diffH > -3) return '即将开始';
   if (start.toDateString() === now.toDateString())
     return `今天 ${start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
   if (diffD < 1.5 && diffD > 0)
