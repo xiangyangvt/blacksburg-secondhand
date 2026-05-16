@@ -74,6 +74,10 @@ Other rules:
 - qualityScore: 0.85 default for real events, lower if title is generic ("Event"), higher if has location + time.`,
     });
 
+    // 已确认:nextthreedays 列表页和详情页都没有 per-event 图片。
+    // og:image 全是网站 logo(n3dlogo.png),所以不在这里调用 enrichImagesFromDetailPages
+    // (会被 looksGeneric 过滤掉,纯浪费时间)。
+    // /localnews 用类目色 + Calendar icon 占位作为视觉兜底。
     return Array.isArray(result?.events) ? result.events : [];
   },
 };
