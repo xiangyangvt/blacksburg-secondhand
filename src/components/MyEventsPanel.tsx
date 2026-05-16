@@ -15,8 +15,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { X, ChevronUp, MessageSquare, Send, Inbox, Check } from 'lucide-react';
+import { X, ChevronUp, MessageSquare, Send, Inbox, Check, Copy, Undo2 } from 'lucide-react';
 import { contactTypeLabel } from '@/lib/contactTypes';
+import { showSuccess, showError } from '@/lib/toast';
 
 type EventInfo = {
   id: string;
@@ -82,6 +83,28 @@ function deepLink(eventId: string): string {
   return `/localnews?focus=${eventId}`;
 }
 
+async function copyText(text: string) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // fallback for older browsers / non-https
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    showSuccess('已复制');
+  } catch {
+    showError('复制失败,请手动选中复制');
+  }
+}
+
 export function MyEventsPanel({
   onClose, initialTab = 'comments',
 }: {
@@ -122,6 +145,25 @@ export function MyEventsPanel({
     return () => { cancel = true; };
   }, []);
 
+  // 撤回 sent —— DELETE /api/events/[id]/contact-send/[sid]
+  const revokeSent = async (item: SentItem) => {
+    try {
+      const res = await fetch(
+        `/api/events/${item.eventId}/contact-send/${item.id}`,
+        { method: 'DELETE' },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        showError(data.error || '撤回失败');
+        return;
+      }
+      setSent(prev => prev.filter(s => s.id !== item.id));
+      showSuccess('已撤回');
+    } catch {
+      showError('网络故障');
+    }
+  };
+
   const unreadCount = useMemo(() => received.filter(r => r.isUnread).length, [received]);
 
   if (!mounted) return null;
@@ -161,7 +203,7 @@ export function MyEventsPanel({
           ) : tab === 'comments' ? (
             <CommentsList items={comments} onClose={onClose} />
           ) : tab === 'sent' ? (
-            <SentList items={sent} onClose={onClose} />
+            <SentList items={sent} onClose={onClose} onRevoke={revokeSent} />
           ) : (
             <ReceivedList items={received} onClose={onClose} />
           )}
@@ -247,7 +289,15 @@ function CommentsList({ items, onClose }: { items: MyComment[]; onClose: () => v
   );
 }
 
-function SentList({ items, onClose }: { items: SentItem[]; onClose: () => void }) {
+function SentList({
+  items, onClose, onRevoke,
+}: {
+  items: SentItem[];
+  onClose: () => void;
+  onRevoke: (item: SentItem) => Promise<void> | void;
+}) {
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
   if (items.length === 0) {
     return <EmptyHint icon={<Send size={40} />} text="还没发过联系方式" hint="想跟谁一起去时,点 TA 评论上的「发送我的联系方式」" />;
   }
@@ -271,9 +321,34 @@ function SentList({ items, onClose }: { items: SentItem[]; onClose: () => void }
           <div className="text-xs text-stone-500 mt-1">
             你发了:{contactTypeLabel(s.myContactType, s.myContactLabel)} · <span className="font-mono text-stone-700">{s.myContact}</span>
           </div>
-          <div className="text-xs text-stone-400 mt-1 flex items-center gap-2">
+          <div className="text-xs text-stone-400 mt-1 flex items-center gap-2 flex-wrap">
             <span>{formatWhen(s.createdAt)}</span>
             {!s.matched && <span className="text-stone-400">· 等待 TA 回赠</span>}
+            {/* 撤回按钮 — 二步确认避免误删 */}
+            <span className="ml-auto">
+              {confirmId === s.id ? (
+                <span className="inline-flex items-center gap-1.5 text-xs">
+                  <span className="text-stone-500">确认撤回?</span>
+                  <button
+                    onClick={async () => { await onRevoke(s); setConfirmId(null); }}
+                    className="text-rose-600 hover:text-rose-700 font-medium"
+                  >确认</button>
+                  <button
+                    onClick={() => setConfirmId(null)}
+                    className="text-stone-500 hover:text-stone-700"
+                  >取消</button>
+                </span>
+              ) : (
+                <button
+                  onClick={() => setConfirmId(s.id)}
+                  className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-rose-600"
+                  title="撤回:对方下次打开「我的」时就看不到了"
+                >
+                  <Undo2 size={11} />
+                  撤回
+                </button>
+              )}
+            </span>
           </div>
         </div>
       ))}
@@ -301,9 +376,20 @@ function ReceivedList({ items, onClose }: { items: ReceivedItem[]; onClose: () =
           <div className="text-xs text-stone-600 mb-1">
             <span className="font-medium text-stone-800">{r.fromNickname}</span> 想跟你一起去
           </div>
-          <div className="text-sm bg-stone-50 rounded-lg p-2 mt-1 border border-stone-200">
-            <div className="text-xs text-stone-500 mb-0.5">{contactTypeLabel(r.fromContactType, r.fromContactLabel)}</div>
-            <div className="font-mono text-stone-900 break-all">{r.fromContact}</div>
+          <div className="text-sm bg-stone-50 rounded-lg p-2 mt-1 border border-stone-200 flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-stone-500 mb-0.5">{contactTypeLabel(r.fromContactType, r.fromContactLabel)}</div>
+              <div className="font-mono text-stone-900 break-all">{r.fromContact}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => copyText(r.fromContact)}
+              className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-chip bg-white border border-stone-300 text-stone-700 hover:bg-stone-100 active:scale-95 transition-all"
+              title="复制联系方式"
+            >
+              <Copy size={12} />
+              复制
+            </button>
           </div>
           <div className="text-xs text-stone-400 mt-1.5 flex items-center gap-2">
             <span>{formatWhen(r.createdAt)}</span>
