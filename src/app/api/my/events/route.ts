@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ comments: [], sent: [], received: [] });
   }
 
-  const [myComments, sent, received] = await Promise.all([
+  const [myComments, sent, received, myPosts] = await Promise.all([
     prisma.eventComment.findMany({
       where: { visitorId, status: 'active' },
       orderBy: { createdAt: 'desc' },
@@ -35,6 +35,16 @@ export async function GET(req: NextRequest) {
     prisma.eventContactSend.findMany({
       where: { toVisitorId: visitorId, status: 'active' },
       orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
+    // Phase 3A 我发的活动 — user-posted events 当前 visitor 发的
+    prisma.event.findMany({
+      where: {
+        source: 'user',
+        posterVisitorId: visitorId,
+        status: 'active',
+      },
+      orderBy: { scrapedAt: 'desc' },
       take: 100,
     }),
   ]);
@@ -116,9 +126,35 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // 我发的活动 — strip posterCodeHash/posterVisitorId,加 commentCount
+  // 先批量查 commentCount(posts 内 join)
+  const postIds = myPosts.map(p => p.id);
+  const commentCounts = postIds.length > 0
+    ? await prisma.eventComment.groupBy({
+        by: ['eventId'],
+        where: { eventId: { in: postIds }, status: 'active' },
+        _count: { id: true },
+      })
+    : [];
+  const ccMap = new Map(commentCounts.map(c => [c.eventId, c._count.id]));
+
+  const postsResult = myPosts.map((p: any) => {
+    const { posterCodeHash, posterVisitorId, photoUrls: pu, ...rest } = p;
+    let photoUrls: string[] = [];
+    if (pu) {
+      try { photoUrls = JSON.parse(pu); } catch { photoUrls = []; }
+    }
+    return {
+      ...rest,
+      photoUrls,
+      commentCount: ccMap.get(p.id) ?? 0,
+    };
+  });
+
   return NextResponse.json({
     comments: commentsResult,
     sent: sentResult,
     received: receivedResult,
+    posts: postsResult,
   });
 }

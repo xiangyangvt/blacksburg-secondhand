@@ -15,7 +15,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { X, ChevronUp, MessageSquare, Send, Inbox, Check, Copy, Undo2 } from 'lucide-react';
+import { X, ChevronUp, MessageSquare, Send, Inbox, Check, Copy, Undo2, FileText } from 'lucide-react';
 import { contactTypeLabel } from '@/lib/contactTypes';
 import { showSuccess, showError } from '@/lib/toast';
 
@@ -62,7 +62,21 @@ type ReceivedItem = {
   isUnread: boolean;
 };
 
-type Tab = 'comments' | 'sent' | 'received';
+type Tab = 'posts' | 'comments' | 'sent' | 'received';
+
+type MyPost = {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string | null;
+  customCategory: string | null;
+  startAt: string | null;
+  endAt: string | null;
+  location: string | null;
+  scrapedAt: string;
+  status: string;
+  commentCount: number;
+};
 
 function formatWhen(iso: string): string {
   const d = new Date(iso);
@@ -116,6 +130,7 @@ export function MyEventsPanel({
   const [comments, setComments] = useState<MyComment[]>([]);
   const [sent, setSent] = useState<SentItem[]>([]);
   const [received, setReceived] = useState<ReceivedItem[]>([]);
+  const [posts, setPosts] = useState<MyPost[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { setMounted(true); }, []);
@@ -134,12 +149,13 @@ export function MyEventsPanel({
     let cancel = false;
     setLoading(true);
     fetch('/api/my/events', { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : { comments: [], sent: [], received: [] })
+      .then(r => r.ok ? r.json() : { comments: [], sent: [], received: [], posts: [] })
       .then(d => {
         if (cancel) return;
         setComments(d.comments ?? []);
         setSent(d.sent ?? []);
         setReceived(d.received ?? []);
+        setPosts(d.posts ?? []);
       })
       .finally(() => { if (!cancel) setLoading(false); });
     return () => { cancel = true; };
@@ -189,17 +205,20 @@ export function MyEventsPanel({
           </button>
         </div>
 
-        {/* tab 行 */}
-        <div className="bg-white border-b border-stone-200 px-3 flex gap-1">
-          <TabButton active={tab === 'comments'} onClick={() => setTab('comments')} icon={<MessageSquare size={14} />} label="留言" count={comments.length} />
-          <TabButton active={tab === 'sent'}     onClick={() => setTab('sent')}     icon={<Send size={14} />}          label="已发出" count={sent.length} />
-          <TabButton active={tab === 'received'} onClick={() => setTab('received')} icon={<Inbox size={14} />}         label="已收到" count={received.length} badge={unreadCount} />
+        {/* tab 行 — 4 tab:我发的活动 / 留言 / 已发出 / 已收到 */}
+        <div className="bg-white border-b border-stone-200 px-3 flex gap-1 overflow-x-auto no-scrollbar">
+          <TabButton active={tab === 'posts'}    onClick={() => setTab('posts')}    icon={<FileText size={14} />}       label="我发的活动" count={posts.length} />
+          <TabButton active={tab === 'comments'} onClick={() => setTab('comments')} icon={<MessageSquare size={14} />}  label="留言" count={comments.length} />
+          <TabButton active={tab === 'sent'}     onClick={() => setTab('sent')}     icon={<Send size={14} />}           label="已发出" count={sent.length} />
+          <TabButton active={tab === 'received'} onClick={() => setTab('received')} icon={<Inbox size={14} />}          label="已收到" count={received.length} badge={unreadCount} />
         </div>
 
         {/* 内容 */}
         <div className="p-3 sm:p-4 min-h-[200px]">
           {loading ? (
             <div className="text-center text-stone-400 py-12 text-sm">加载中...</div>
+          ) : tab === 'posts' ? (
+            <PostsList items={posts} onClose={onClose} />
           ) : tab === 'comments' ? (
             <CommentsList items={comments} onClose={onClose} />
           ) : tab === 'sent' ? (
@@ -397,6 +416,55 @@ function ReceivedList({ items, onClose }: { items: ReceivedItem[]; onClose: () =
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// === Phase 3A 我发的活动 list ===
+const CATEGORY_LABEL_SHORT: Record<string, string> = {
+  life: '生活',
+  exercise: '运动',
+  academic: '学术',
+  competition: '比赛',
+  discussion: '讨论',
+  other: '其他',
+};
+
+function PostsList({ items, onClose }: { items: MyPost[]; onClose: () => void }) {
+  if (items.length === 0) {
+    return <EmptyHint icon={<FileText size={40} />} text="还没发过活动" hint="在 /localnews 顶部点「+ 发布」分享给社区" />;
+  }
+  return (
+    <div className="space-y-2">
+      {items.map(p => {
+        const catLabel = p.category === 'other'
+          ? (p.customCategory || '其他')
+          : (CATEGORY_LABEL_SHORT[p.category ?? ''] ?? '活动');
+        return (
+          <div key={p.id} className="bg-white rounded-card border border-stone-200 p-3">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-brand/10 text-brand">
+                {catLabel}
+              </span>
+              <Link
+                href={`/localnews?focus=${p.id}`}
+                onClick={onClose}
+                className="flex-1 min-w-0 text-sm font-medium text-stone-900 hover:text-brand truncate"
+              >
+                {p.title}
+              </Link>
+            </div>
+            {p.description && (
+              <div className="text-xs text-stone-600 line-clamp-2 mt-1">{p.description}</div>
+            )}
+            <div className="flex items-center gap-3 text-xs text-stone-400 mt-1.5 flex-wrap">
+              <span>{formatWhen(p.scrapedAt)}发布</span>
+              {p.commentCount > 0 && <span>· {p.commentCount} 条评论</span>}
+              {p.location && <span className="truncate">· {p.location}</span>}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
