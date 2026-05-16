@@ -40,13 +40,6 @@ export default function LocalNewsPage() {
       {/* 顶栏:跟 / 二手 / 室友 同款 — 黑堡 wordmark + PlatformTabs */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
-          {/* 黑堡 wordmark — 在 /localnews 用 brand 色高亮表示"你在这" */}
-          <Link
-            href="/localnews"
-            className="font-bold whitespace-nowrap text-base sm:text-lg tracking-tight flex-shrink-0 text-brand"
-          >
-            黑堡
-          </Link>
           <PlatformTabs />
           <div className="flex-1" />
         </div>

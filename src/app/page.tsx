@@ -251,15 +251,7 @@ function HomePageInner() {
           设计 V2：去 emoji、wordmark 取代 emoji 站名、品牌红只在主 CTA 出现 */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
-          {/* 黑堡 wordmark (Sprint 7):点击进 /localnews 信息流 hub */}
-          <Link
-            href="/localnews"
-            className="font-bold text-stone-900 hover:text-brand whitespace-nowrap text-base sm:text-lg tracking-tight flex-shrink-0 transition-colors"
-          >
-            黑堡
-          </Link>
-
-          {/* 平台 tab — 二手 / 室友&转租 平铺(Sprint 6.5 改造,替代 ▾ dropdown) */}
+          {/* 平台 tab(Sprint 7:3 tab — 黑堡 / 二手 / 室友&转租) */}
           <PlatformTabs />
 
           {/* 搜索 — 桌面常驻 max-w-260px,移动 icon 化 */}

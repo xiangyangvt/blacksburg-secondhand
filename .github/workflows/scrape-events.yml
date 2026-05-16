@@ -2,8 +2,8 @@ name: Scrape Local Events
 
 on:
   schedule:
-    # 11 UTC = 7 AM EDT(夏令时)/ 6 AM EST(冬令时);Sean 在 EDT,DST 切换日会有 ±1h 漂移,无所谓
-    - cron: '0 11 * * *'
+    # 12 UTC = 7 AM EST(冬令)/ 8 AM EDT(夏令);Sean 锚 EST 7 AM,DST 切换日漂 ±1h
+    - cron: '0 12 * * *'
   workflow_dispatch:  # 手动触发用
 
 jobs:

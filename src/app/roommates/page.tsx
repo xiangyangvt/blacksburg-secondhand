@@ -207,13 +207,6 @@ function RoommatesContent() {
     <main className="min-h-screen">
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
-          {/* 黑堡 wordmark (Sprint 7):点击进 /localnews 信息流 hub */}
-          <Link
-            href="/localnews"
-            className="font-bold text-stone-900 hover:text-brand whitespace-nowrap text-base sm:text-lg tracking-tight flex-shrink-0 transition-colors"
-          >
-            黑堡
-          </Link>
           <PlatformTabs />
 
           {/* 搜索 — 跟 / 主页同款,Sprint 6.6 加上 */}
