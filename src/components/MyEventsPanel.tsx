@@ -127,10 +127,11 @@ async function copyText(text: string) {
  * 在 MyPostsPanel 里直接 render <MyEventsContent /> 不重复 modal
  */
 export function MyEventsContent({
-  initialTab = 'posts', onItemClick,
+  initialTab = 'posts', onItemClick, contact,
 }: {
   initialTab?: Tab;
   onItemClick?: () => void;  // 点 event link 时回调(modal 用来关闭自己)
+  contact?: string;          // Phase 2B+: 可选,soft-login contact — 找回 cross-device 内容
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [comments, setComments] = useState<MyComment[]>([]);
@@ -142,7 +143,10 @@ export function MyEventsContent({
   useEffect(() => {
     let cancel = false;
     setLoading(true);
-    fetch('/api/my/events', { cache: 'no-store' })
+    const url = contact
+      ? `/api/my/events?contact=${encodeURIComponent(contact)}`
+      : '/api/my/events';
+    fetch(url, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : { comments: [], sent: [], received: [], posts: [] })
       .then(d => {
         if (cancel) return;
@@ -153,7 +157,7 @@ export function MyEventsContent({
       })
       .finally(() => { if (!cancel) setLoading(false); });
     return () => { cancel = true; };
-  }, []);
+  }, [contact]);
 
   // 撤回 sent
   const revokeSent = async (item: SentItem) => {

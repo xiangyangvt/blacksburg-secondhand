@@ -4,7 +4,7 @@
 import type { SourceDefinition } from './types';
 import { nextthreedays } from './sources/nextthreedays';
 import { stepintoblacksburg } from './sources/stepintoblacksburg';
-import { reddit } from './sources/reddit';
+import { reddit, redditNrv } from './sources/reddit';
 import { gobblerconnect } from './sources/gobblerconnect';
 import { hokiesports } from './sources/hokiesports';
 
@@ -15,6 +15,7 @@ export const SOURCES: SourceDefinition[] = [
   reddit,
   gobblerconnect,
   hokiesports,
+  redditNrv,  // Phase 2B: New River Valley 户外讨论
 ];
 
 export { runScraper, runAllScrapers } from './runner';

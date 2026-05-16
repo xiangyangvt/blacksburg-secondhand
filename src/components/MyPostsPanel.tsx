@@ -295,8 +295,7 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
 
   return (
     <>
-      {/* 查找表单 — 仅 二手/室友 平台需要,黑堡走 cookie 不用 lookup */}
-      {platform !== 'event' && (
+      {/* 查找表单 — 三平台都显示(Sean 拍板:黑堡也是 soft login,跨设备找回内容) */}
       <section className="bg-white border border-stone-200 rounded-lg p-4 mb-4">
         <p className="text-sm text-stone-600 mb-3">{t('my.intro')}</p>
 
@@ -335,38 +334,39 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
           )}
         </div>
       </section>
-      )}
 
-      {/* 平台 tab — 黑堡 直接显;二手/室友 需 lookup 后才显 */}
-      {(platform === 'event' || hasLookedUp) && (
-        <div className="flex gap-1.5 mb-3 overflow-x-auto no-scrollbar">
-          <PlatformTab
-            active={platform === 'item'}
-            icon={<ShoppingBag size={14} />}
-            label="买卖二手"
-            count={itemActiveN + itemDraftN}
-            onClick={() => setPlatform('item')}
-          />
-          <PlatformTab
-            active={platform === 'listing'}
-            icon={<Home size={14} />}
-            label="找室友 & 租房"
-            count={listingActiveN + listingDraftN + (sentApps?.length ?? 0)}
-            badge={inboxPendingN + sentPendingN}
-            onClick={() => setPlatform('listing')}
-          />
-          <PlatformTab
-            active={platform === 'event'}
-            icon={<Mountain size={14} />}
-            label="黑堡本地"
-            onClick={() => setPlatform('event')}
-          />
-        </div>
-      )}
+      {/* 平台 tab — 顺序:黑堡 / 二手 / 室友(Sean 拍板 — 黑堡在左 + 三平台都有 lookup) */}
+      <div className="flex gap-1.5 mb-3 overflow-x-auto no-scrollbar">
+        <PlatformTab
+          active={platform === 'event'}
+          icon={<Mountain size={14} />}
+          label="黑堡本地"
+          onClick={() => setPlatform('event')}
+        />
+        <PlatformTab
+          active={platform === 'item'}
+          icon={<ShoppingBag size={14} />}
+          label="买卖二手"
+          count={hasLookedUp ? itemActiveN + itemDraftN : undefined}
+          onClick={() => setPlatform('item')}
+        />
+        <PlatformTab
+          active={platform === 'listing'}
+          icon={<Home size={14} />}
+          label="找室友 & 租房"
+          count={hasLookedUp ? listingActiveN + listingDraftN + (sentApps?.length ?? 0) : undefined}
+          badge={inboxPendingN + sentPendingN}
+          onClick={() => setPlatform('listing')}
+        />
+      </div>
 
-      {/* === 黑堡平台 (Phase 3A.2 统一) === */}
+      {/* === 黑堡平台 (Phase 3A.2 统一) — contact 是 soft login,可选 === */}
       {platform === 'event' && (
-        <MyEventsContent initialTab="posts" onItemClick={onClose} />
+        <MyEventsContent
+          initialTab="posts"
+          contact={hasLookedUp ? contactValue.trim() : undefined}
+          onItemClick={onClose}
+        />
       )}
 
       {/* === 二手/室友 平台:lookup 之后才显内容 === */}

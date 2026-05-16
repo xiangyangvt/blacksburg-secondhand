@@ -1,9 +1,15 @@
 // GET /api/my/events — 当前 visitor 的「我的活动」聚合
 //
-// 返回 3 个列表 + 它们关联的 events 信息:
+// 返回 4 个列表 + 它们关联的 events 信息:
 //   1. comments       — 我发的评论
 //   2. sent           — 我发出的联系方式
 //   3. received       — 别人发给我的联系方式
+//   4. posts          — 我发布的活动(source='user')
+//
+// 身份解析:
+//   - 默认用 cookie 里的 hb_vid
+//   - 如果带 ?contact=xxx,通过 Event.posterContact + EventContactSend.fromContact
+//     反查关联的 visitorIds(支持跨设备「软登录」),并入 cookie visitorId
 //
 // matched 状态:对于每一条 send,如果反向 send 也存在(双方都发了),matched=true
 // (这是 UI 给「已互换」标识用,不是隐私门 — Sean 设计是 send=给联系方式)
@@ -16,32 +22,63 @@ import { prisma } from '@/lib/prisma';
 const VID_COOKIE = 'hb_vid';
 
 export async function GET(req: NextRequest) {
-  const visitorId = req.cookies.get(VID_COOKIE)?.value;
-  if (!visitorId) {
-    return NextResponse.json({ comments: [], sent: [], received: [] });
+  const cookieVid = req.cookies.get(VID_COOKIE)?.value;
+  const url = new URL(req.url);
+  const contact = url.searchParams.get('contact')?.trim() || '';
+
+  // === 解析身份集合 ===
+  const visitorIds = new Set<string>();
+  if (cookieVid) visitorIds.add(cookieVid);
+
+  if (contact) {
+    // 通过用户发的活动反查
+    const postedEvents = await prisma.event.findMany({
+      where: {
+        source: 'user',
+        posterContact: contact,
+        posterVisitorId: { not: null },
+      },
+      select: { posterVisitorId: true },
+    });
+    postedEvents.forEach(e => {
+      if (e.posterVisitorId) visitorIds.add(e.posterVisitorId);
+    });
+
+    // 通过用户发出的联系方式反查
+    const sentByContact = await prisma.eventContactSend.findMany({
+      where: { fromContact: contact },
+      select: { fromVisitorId: true },
+    });
+    sentByContact.forEach(s => visitorIds.add(s.fromVisitorId));
   }
+
+  if (visitorIds.size === 0) {
+    return NextResponse.json({ comments: [], sent: [], received: [], posts: [] });
+  }
+
+  const vidArray = Array.from(visitorIds);
 
   const [myComments, sent, received, myPosts] = await Promise.all([
     prisma.eventComment.findMany({
-      where: { visitorId, status: 'active' },
+      where: { visitorId: { in: vidArray }, status: 'active' },
       orderBy: { createdAt: 'desc' },
       take: 100,
     }),
     prisma.eventContactSend.findMany({
-      where: { fromVisitorId: visitorId, status: 'active' },
+      where: { fromVisitorId: { in: vidArray }, status: 'active' },
       orderBy: { createdAt: 'desc' },
       take: 100,
     }),
     prisma.eventContactSend.findMany({
-      where: { toVisitorId: visitorId, status: 'active' },
+      where: { toVisitorId: { in: vidArray }, status: 'active' },
       orderBy: { createdAt: 'desc' },
       take: 100,
     }),
-    // Phase 3A 我发的活动 — user-posted events 当前 visitor 发的
+    // Phase 3A 我发的活动 — user-posted events
     prisma.event.findMany({
       where: {
         source: 'user',
-        posterVisitorId: visitorId,
+        posterVisitorId: { in: vidArray },
         status: 'active',
       },
       orderBy: { scrapedAt: 'desc' },
