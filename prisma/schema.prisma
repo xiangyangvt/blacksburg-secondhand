@@ -252,6 +252,9 @@ model Event {
   scrapedAt       DateTime  @default(now())
   publishedAt     DateTime? // 源站标的发布时间
 
+  // Phase 2A 热度跟踪 — 每次卡片被点击 +1(visitor 防刷 5 分钟去重在 API 层做)
+  clickCount      Int       @default(0)
+
   // Phase 3 chat 用,Phase 1 留空。pgvector 类型在 SQLite 不支持,先省略字段
   // Postgres 上来时通过 raw SQL migrate 加 embedding 列
 
@@ -262,6 +265,18 @@ model Event {
   @@index([source])
   @@index([status, startAt])
   @@index([category])
+  @@index([clickCount])
+}
+
+// Phase 2A 防刷:同 visitor 5 分钟内对同一 event 只算一次 click
+model EventClickThrottle {
+  id          String   @id @default(cuid())
+  eventId     String
+  visitorId   String
+  createdAt   DateTime @default(now())
+
+  @@unique([eventId, visitorId])
+  @@index([createdAt])
 }
 
 // 抓取运行记录 — 每个源每次跑都记一笔,失败排错用

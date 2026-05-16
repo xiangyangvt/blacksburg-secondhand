@@ -113,25 +113,69 @@ async function cancelPendingDeletionAction(formData: FormData) {
 // ===== 主页面 =====
 type Period = 'hour' | 'day' | 'week' | 'month';
 
+// Phase 2A 修:bucketing 全部基于 Eastern Time(美国东部),不再用 UTC / server 本地时区
+// 之前用 d.toISOString() 取的是 UTC,Sean 在 EST 看 "19:00 ET 发生" 被归到 23:00 UTC
+// 修后 Intl.DateTimeFormat with timeZone='America/New_York',DST 自动处理
+const ET_TZ = 'America/New_York';
+
+const ET_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: ET_TZ,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  weekday: 'short',
+  hour12: false,
+});
+
+function etParts(d: Date): { year: string; month: string; day: string; hour: string; weekday: string } {
+  const parts: Record<string, string> = {};
+  for (const p of ET_FORMATTER.formatToParts(d)) {
+    if (p.type !== 'literal') parts[p.type] = p.value;
+  }
+  // Intl 偶尔返回 hour="24"(午夜后),归到 "00"
+  if (parts.hour === '24') parts.hour = '00';
+  return parts as any;
+}
+
+function etHourKey(d: Date): string {
+  const p = etParts(d);
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:00`;
+}
+function etDateKey(d: Date): string {
+  const p = etParts(d);
+  return `${p.year}-${p.month}-${p.day}`;
+}
+function etWeekKey(d: Date): string {
+  // 周一为周起点。Intl 给的 weekday 是 ET 当地的星期几
+  const p = etParts(d);
+  const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const wd = WD.indexOf(p.weekday);
+  const diff = wd === 0 ? -6 : 1 - wd;
+  // 减去对应天数获得该周周一(同一 ET 时区下的)
+  const monday = new Date(d.getTime() + diff * 86400e3);
+  return etDateKey(monday);
+}
+function etMonthKey(d: Date): string {
+  const p = etParts(d);
+  return `${p.year}-${p.month}`;
+}
+
 const PERIOD_CONFIG: Record<Period, {
   label: string;
   bucketCount: number;
   sinceMs: number;
-  bucketKey: (d: Date) => string;     // 把 date 归到所在 bucket 的 key
-  bucketStart: (offset: number) => Date; // 当前往前 offset 个 bucket 的开始时间（用于预填空桶）
+  bucketKey: (d: Date) => string;     // 把 date 归到所在 bucket 的 key(ET 时区)
+  bucketStart: (offset: number) => Date; // 当前往前 offset 个 bucket 的开始时间(用于预填空桶)
   formatLabel: (key: string) => string;
 }> = {
   hour: {
     label: '小时',
     bucketCount: 24,
     sinceMs: 24 * 3600e3,
-    bucketKey: (d) => `${d.toISOString().slice(0, 13)}:00`, // YYYY-MM-DDTHH:00
-    bucketStart: (offset) => {
-      const d = new Date();
-      d.setMinutes(0, 0, 0);
-      d.setHours(d.getHours() - offset);
-      return d;
-    },
+    bucketKey: etHourKey,
+    // 直接 now - offset 小时,bucketKey 转 ET 即可
+    bucketStart: (offset) => new Date(Date.now() - offset * 3600e3),
     formatLabel: (key) => {
       const hh = key.slice(11, 13);
       return `${parseInt(hh, 10)}:00`;
@@ -141,13 +185,8 @@ const PERIOD_CONFIG: Record<Period, {
     label: '天',
     bucketCount: 14,
     sinceMs: 14 * 86400e3,
-    bucketKey: (d) => d.toISOString().slice(0, 10), // YYYY-MM-DD
-    bucketStart: (offset) => {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      d.setDate(d.getDate() - offset);
-      return d;
-    },
+    bucketKey: etDateKey,
+    bucketStart: (offset) => new Date(Date.now() - offset * 86400e3),
     formatLabel: (key) => {
       const [, m, dd] = key.split('-');
       return `${parseInt(m, 10)}/${parseInt(dd, 10)}`;
@@ -157,23 +196,8 @@ const PERIOD_CONFIG: Record<Period, {
     label: '周',
     bucketCount: 12,
     sinceMs: 12 * 7 * 86400e3,
-    // 周一为周起点（getDay: 0=日 1=一 ... 6=六）
-    bucketKey: (d) => {
-      const monday = new Date(d);
-      monday.setHours(0, 0, 0, 0);
-      const dow = monday.getDay();
-      const diff = dow === 0 ? -6 : 1 - dow;
-      monday.setDate(monday.getDate() + diff);
-      return monday.toISOString().slice(0, 10);
-    },
-    bucketStart: (offset) => {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      const dow = d.getDay();
-      const diff = dow === 0 ? -6 : 1 - dow;
-      d.setDate(d.getDate() + diff - offset * 7);
-      return d;
-    },
+    bucketKey: etWeekKey,
+    bucketStart: (offset) => new Date(Date.now() - offset * 7 * 86400e3),
     formatLabel: (key) => {
       const [, m, dd] = key.split('-');
       return `${parseInt(m, 10)}/${parseInt(dd, 10)}`;
@@ -183,14 +207,9 @@ const PERIOD_CONFIG: Record<Period, {
     label: '月',
     bucketCount: 6,
     sinceMs: 6 * 31 * 86400e3,
-    bucketKey: (d) => d.toISOString().slice(0, 7), // YYYY-MM
-    bucketStart: (offset) => {
-      const d = new Date();
-      d.setDate(1);
-      d.setHours(0, 0, 0, 0);
-      d.setMonth(d.getMonth() - offset);
-      return d;
-    },
+    bucketKey: etMonthKey,
+    // 30.5 天接近平均月长;6 个月范围内 ET 月份归类稳定
+    bucketStart: (offset) => new Date(Date.now() - offset * 30.5 * 86400e3),
     formatLabel: (key) => `${parseInt(key.slice(5, 7), 10)}月`,
   },
 };

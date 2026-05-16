@@ -230,6 +230,9 @@ model Event {
   scrapedAt       DateTime  @default(now())
   publishedAt     DateTime?
 
+  // Phase 2A 热度
+  clickCount      Int       @default(0)
+
   status          String    @default("active")
 
   @@unique([source, sourceUrl])
@@ -237,6 +240,17 @@ model Event {
   @@index([source])
   @@index([status, startAt])
   @@index([category])
+  @@index([clickCount])
+}
+
+model EventClickThrottle {
+  id          String   @id @default(cuid())
+  eventId     String
+  visitorId   String
+  createdAt   DateTime @default(now())
+
+  @@unique([eventId, visitorId])
+  @@index([createdAt])
 }
 
 model ScrapeRun {
