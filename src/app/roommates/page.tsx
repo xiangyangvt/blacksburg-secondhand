@@ -4,6 +4,7 @@
 // L6 后半：filter chip 行（URL query 同步）+ ListingCard 双态
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, PackageOpen, Construction } from 'lucide-react';
 import { ListingCard, type Listing } from '@/components/ListingCard';
@@ -206,10 +207,13 @@ function RoommatesContent() {
     <main className="min-h-screen">
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
-          {/* 黑堡 wordmark + 平台 tab(跟 / 主页同款) */}
-          <span className="font-bold text-stone-900 whitespace-nowrap text-base sm:text-lg tracking-tight flex-shrink-0">
+          {/* 黑堡 wordmark (Sprint 7):点击进 /localnews 信息流 hub */}
+          <Link
+            href="/localnews"
+            className="font-bold text-stone-900 hover:text-brand whitespace-nowrap text-base sm:text-lg tracking-tight flex-shrink-0 transition-colors"
+          >
             黑堡
-          </span>
+          </Link>
           <PlatformTabs />
 
           {/* 搜索 — 跟 / 主页同款,Sprint 6.6 加上 */}

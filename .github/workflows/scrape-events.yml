@@ -1,0 +1,35 @@
+name: Scrape Local Events
+
+on:
+  schedule:
+    # 11 UTC = 7 AM EDT(夏令时)/ 6 AM EST(冬令时);Sean 在 EDT,DST 切换日会有 ±1h 漂移,无所谓
+    - cron: '0 11 * * *'
+  workflow_dispatch:  # 手动触发用
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger scraper endpoint
+        env:
+          SECRET: ${{ secrets.SCRAPER_SECRET }}
+          # 可在 repo Settings → Variables 改 endpoint(比如换 staging 测)
+          ENDPOINT: ${{ vars.SCRAPER_ENDPOINT || 'https://blacksburg-secondhand-production.up.railway.app/api/scraper/run' }}
+        run: |
+          echo "▶ 触发 $ENDPOINT"
+          response=$(curl -sS -X POST "$ENDPOINT" \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            --max-time 600 \
+            -w "\n%{http_code}")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          echo "▶ HTTP $http_code"
+          echo "$body" | head -100
+          if [ "$http_code" != "200" ]; then
+            echo "❌ scraper 返回非 200"
+            exit 1
+          fi
+          echo "✅ scraper 完成"

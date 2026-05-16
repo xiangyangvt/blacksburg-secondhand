@@ -207,6 +207,51 @@ model Report {
   @@index([applicationId])
 }
 
+// ====== 黑堡本地信息流 (Sprint 7) ======
+
+model Event {
+  id              String    @id @default(cuid())
+  source          String
+  sourceUrl       String
+  sourceId        String?
+
+  title           String
+  titleOriginal   String?
+  description     String?
+
+  startAt         DateTime?
+  endAt           DateTime?
+  location        String?
+
+  category        String?
+  imageUrl        String?
+  qualityScore    Float     @default(0.7)
+
+  scrapedAt       DateTime  @default(now())
+  publishedAt     DateTime?
+
+  status          String    @default("active")
+
+  @@unique([source, sourceUrl])
+  @@index([startAt])
+  @@index([source])
+  @@index([status, startAt])
+  @@index([category])
+}
+
+model ScrapeRun {
+  id          String    @id @default(cuid())
+  source      String
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  status      String
+  itemsFound  Int       @default(0)
+  itemsNew    Int       @default(0)
+  errorMsg    String?
+
+  @@index([source, startedAt])
+}
+
 // 识别码找回回路 (Sprint 6 UX-5):用户丢识别码后,提交申请,Sean admin 人工处理
 model RecoveryRequest {
   id                 String   @id @default(cuid())

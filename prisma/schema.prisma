@@ -228,6 +228,56 @@ model Report {
   @@index([applicationId])
 }
 
+// ====== 黑堡本地信息流 (Sprint 7) ======
+
+// 本地事件 / 新闻 / 讨论 — 抓取下来统一存这张表
+model Event {
+  id              String    @id @default(cuid())
+  source          String    // 'nextthreedays' | 'blacksburg_gov' | ...
+  sourceUrl       String    // 原始 URL
+  sourceId        String?   // 源站自带的 id(用于 dedup,可空)
+
+  title           String    // 中文 + 英文专有名词混排
+  titleOriginal   String?   // 英文原始标题(给展示用,可空)
+  description     String?   // 中文摘要 ≤ 200 字
+
+  startAt         DateTime?
+  endAt           DateTime?
+  location        String?
+
+  category        String?   // 'events' | 'sports' | 'news' | 'discussion'
+  imageUrl        String?
+  qualityScore    Float     @default(0.7)  // LLM 估的 0.0-1.0,< 0.5 不展示
+
+  scrapedAt       DateTime  @default(now())
+  publishedAt     DateTime? // 源站标的发布时间
+
+  // Phase 3 chat 用,Phase 1 留空。pgvector 类型在 SQLite 不支持,先省略字段
+  // Postgres 上来时通过 raw SQL migrate 加 embedding 列
+
+  status          String    @default("active")  // active | hidden | expired
+
+  @@unique([source, sourceUrl])
+  @@index([startAt])
+  @@index([source])
+  @@index([status, startAt])
+  @@index([category])
+}
+
+// 抓取运行记录 — 每个源每次跑都记一笔,失败排错用
+model ScrapeRun {
+  id          String    @id @default(cuid())
+  source      String
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  status      String    // running | success | failed
+  itemsFound  Int       @default(0)
+  itemsNew    Int       @default(0)
+  errorMsg    String?
+
+  @@index([source, startedAt])
+}
+
 // 识别码找回回路 (Sprint 6 UX-5):用户丢识别码后,提交申请,Sean admin 人工处理
 // 心理学依据:H9 Error Recovery + Negativity Bias —— 失败体验的兜底路径
 model RecoveryRequest {

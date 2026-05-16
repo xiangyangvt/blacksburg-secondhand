@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useSearchParams, type ReadonlyURLSearchParams } from 'next/navigation';
 import { ItemCard, type Item } from '@/components/ItemCard';
 import { FilterSidebar, type Filters } from '@/components/FilterSidebar';
@@ -250,10 +251,13 @@ function HomePageInner() {
           设计 V2：去 emoji、wordmark 取代 emoji 站名、品牌红只在主 CTA 出现 */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
-          {/* 黑堡 wordmark — 纯视觉,brand 锚点(地名 = 社区认同) */}
-          <span className="font-bold text-stone-900 whitespace-nowrap text-base sm:text-lg tracking-tight flex-shrink-0">
+          {/* 黑堡 wordmark (Sprint 7):点击进 /localnews 信息流 hub */}
+          <Link
+            href="/localnews"
+            className="font-bold text-stone-900 hover:text-brand whitespace-nowrap text-base sm:text-lg tracking-tight flex-shrink-0 transition-colors"
+          >
             黑堡
-          </span>
+          </Link>
 
           {/* 平台 tab — 二手 / 室友&转租 平铺(Sprint 6.5 改造,替代 ▾ dropdown) */}
           <PlatformTabs />
