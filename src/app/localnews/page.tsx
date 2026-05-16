@@ -13,7 +13,7 @@
 // 7. 卡片热度 🔥 icon(按 click 计数梯度)+ 点击触发 /api/events/[id]/click
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { Sparkles, MessageCircle, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
 import { EventCard, type EventCardData } from '@/components/EventCard';
@@ -231,22 +231,7 @@ export default function LocalNewsPage() {
       </header>
 
       <div className="max-w-6xl mx-auto px-3 md:px-4 py-4">
-        {/* Chat 入口占位(Phase 3 实做) */}
-        <div className="mb-4 p-4 rounded-card bg-gradient-to-br from-stone-50 to-stone-100 border border-stone-200 flex items-start gap-3">
-          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center">
-            <Sparkles size={18} className="text-brand" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-medium text-stone-900 text-sm mb-0.5 flex items-center gap-2">
-              问黑堡本地
-              <span className="text-xs text-stone-400 font-normal">即将推出</span>
-            </div>
-            <div className="text-xs text-stone-500">
-              比如:周末有什么好玩的?附近哪家中餐推荐?VT vs Duke 哪天打?
-            </div>
-          </div>
-          <MessageCircle size={20} className="text-stone-300 flex-shrink-0" />
-        </div>
+        {/* Phase 3「问黑堡本地」chat 入口暂时隐藏 — RAG chatbot 上线时再放开 */}
 
         {/* === 主筛选行:类别 chips + 心愿单 === */}
         <div className="mb-2 flex items-center gap-2">
