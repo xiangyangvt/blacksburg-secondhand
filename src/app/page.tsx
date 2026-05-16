@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams, type ReadonlyURLSearchParams } from 'next/navigation';
 import { ItemCard, type Item } from '@/components/ItemCard';
@@ -20,7 +20,8 @@ import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
 import { showError, showSuccess } from '@/lib/toast';
-import { Plus, Share2, PackageOpen } from 'lucide-react';
+import { Plus, Share2, PackageOpen, Shuffle } from 'lucide-react';
+import { sortWithDayJitter, shuffleAll } from '@/lib/sortJitter';
 
 // 把 URL ?type=...&cat=... 解析回 Filters。未知/非法值都退到默认，保证健壮。
 function parseFiltersFromSearchParams(sp: ReadonlyURLSearchParams | URLSearchParams): Filters {
@@ -109,9 +110,23 @@ function HomePageInner() {
   // 用 state + mount 时读避免 SSR/hydration 不一致
   const [recentIds, setRecentIds] = useState<string[]>([]);
   useEffect(() => { setRecentIds(getRecentViewIds('item')); }, [items]);
-  const visibleItems = filters.onlyRecent
-    ? items.filter(it => recentIds.includes(it.id))
-    : items;
+
+  // Phase 3B 二手 random A+B(Sean 设计):
+  // A. 同日 jitter — 跨天严格倒序,同一天发的随机互换顺序(seed 来自 jitterSeed)
+  // B. 「换一批」按钮 — 完全 shuffle 当前可见列表(每次点击换 seed)
+  const [jitterSeed, setJitterSeed] = useState(() => Math.floor(Math.random() * 1_000_000));
+  const [shuffleMode, setShuffleMode] = useState(false);  // 用户点了「换一批」就进 shuffle mode
+  // 重新 fetch 时退出 shuffle mode,回到 jitter 默认
+  useEffect(() => { setShuffleMode(false); }, [items]);
+
+  const visibleItems = useMemo(() => {
+    const filtered = filters.onlyRecent
+      ? items.filter(it => recentIds.includes(it.id))
+      : items;
+    return shuffleMode
+      ? shuffleAll(filtered, jitterSeed)
+      : sortWithDayJitter(filtered, jitterSeed);
+  }, [items, recentIds, filters.onlyRecent, shuffleMode, jitterSeed]);
 
   // 改任何 filter 都自动滚回顶部（除了 q 输入，那个用户在打字时不打断）
   const setFilters = useCallback((updater: (f: Filters) => Filters) => {
@@ -332,11 +347,28 @@ function HomePageInner() {
 
           {/* "最近看过" 改成 filter chip 了（在 MobileFilterToggle / FilterSidebar 里），不再 strip */}
 
-          {/* 计数 */}
+          {/* 计数 + 换一批按钮(Phase 3B Sean 设计) */}
           {!loading && visibleItems.length > 0 && (
-            <div className="text-xs text-stone-500 mb-2 px-1">
-              {t('list.count', { n: visibleItems.length })}
-              {filters.onlyRecent && <span className="text-brand ml-1">· 只看最近浏览过</span>}
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <div className="text-xs text-stone-500">
+                {t('list.count', { n: visibleItems.length })}
+                {filters.onlyRecent && <span className="text-brand ml-1">· 只看最近浏览过</span>}
+                {shuffleMode && <span className="text-brand ml-1">· 已换一批</span>}
+              </div>
+              {visibleItems.length >= 4 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setJitterSeed(Math.floor(Math.random() * 1_000_000));
+                    setShuffleMode(true);
+                  }}
+                  className="ml-auto inline-flex items-center gap-1 text-xs text-stone-600 hover:text-brand"
+                  title="换一批 — 重新打乱当前可见的商品"
+                >
+                  <Shuffle size={12} />
+                  换一批
+                </button>
+              )}
             </div>
           )}
 

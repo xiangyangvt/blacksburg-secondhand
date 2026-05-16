@@ -20,6 +20,8 @@ import { EventCard, type EventCardData } from '@/components/EventCard';
 import { EventWishlistButton } from '@/components/EventWishlistButton';
 import { MyEventsPanel } from '@/components/MyEventsPanel';
 import { EventPostModal } from '@/components/EventPostModal';
+import { FabPostButton } from '@/components/FabPostButton';
+import { ScrollToTop } from '@/components/ScrollToTop';
 import { distanceFromBlacksburg, isLocalCore, isWithinNrv } from '@/lib/eventDistance';
 
 // ============ 筛选状态机 ============
@@ -343,14 +345,15 @@ export default function LocalNewsPage() {
         />
       )}
 
-      {/* Mobile FAB — sm 以下显示 */}
-      <button
+      {/* Mobile FAB — 跟 二手/室友 同款:首屏胶囊"发布",滚动后收圆+半透明 */}
+      <FabPostButton
         onClick={() => setPostModalOpen(true)}
-        className="sm:hidden fixed bottom-5 right-5 z-30 w-14 h-14 rounded-full bg-brand text-white shadow-overlay flex items-center justify-center active:scale-95 transition-all"
-        aria-label="发布活动"
-      >
-        <Plus size={26} strokeWidth={2.5} />
-      </button>
+        label="发布"
+        ariaLabel="发布活动"
+      />
+
+      {/* 回顶部按钮 — 滚动 > 400px 显;左下角半透明 */}
+      <ScrollToTop />
     </main>
   );
 }

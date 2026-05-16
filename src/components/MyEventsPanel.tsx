@@ -119,31 +119,25 @@ async function copyText(text: string) {
   }
 }
 
-export function MyEventsPanel({
-  onClose, initialTab = 'comments',
+/**
+ * MyEventsContent — 可嵌入的内容(tab 行 + 加载 + 4 段列表)
+ * 不含 modal 外壳,方便 MyPostsPanel 在 platform='event' 里复用
+ *
+ * 在独立 MyEventsPanel 里(下面那个) 包了 portal + modal shell
+ * 在 MyPostsPanel 里直接 render <MyEventsContent /> 不重复 modal
+ */
+export function MyEventsContent({
+  initialTab = 'posts', onItemClick,
 }: {
-  onClose: () => void;
   initialTab?: Tab;
+  onItemClick?: () => void;  // 点 event link 时回调(modal 用来关闭自己)
 }) {
-  const [mounted, setMounted] = useState(false);
   const [tab, setTab] = useState<Tab>(initialTab);
   const [comments, setComments] = useState<MyComment[]>([]);
   const [sent, setSent] = useState<SentItem[]>([]);
   const [received, setReceived] = useState<ReceivedItem[]>([]);
   const [posts, setPosts] = useState<MyPost[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => { setMounted(true); }, []);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-    };
-  }, [onClose]);
 
   useEffect(() => {
     let cancel = false;
@@ -161,7 +155,7 @@ export function MyEventsPanel({
     return () => { cancel = true; };
   }, []);
 
-  // 撤回 sent —— DELETE /api/events/[id]/contact-send/[sid]
+  // 撤回 sent
   const revokeSent = async (item: SentItem) => {
     try {
       const res = await fetch(
@@ -181,6 +175,58 @@ export function MyEventsPanel({
   };
 
   const unreadCount = useMemo(() => received.filter(r => r.isUnread).length, [received]);
+  const close = onItemClick ?? (() => {});
+
+  return (
+    <div>
+      {/* tab 行 — 4 tab:我发的活动 / 留言 / 已发出 / 已收到 */}
+      <div className="flex gap-1 overflow-x-auto no-scrollbar border-b border-stone-200 mb-3">
+        <TabButton active={tab === 'posts'}    onClick={() => setTab('posts')}    icon={<FileText size={14} />}       label="我发的活动" count={posts.length} />
+        <TabButton active={tab === 'comments'} onClick={() => setTab('comments')} icon={<MessageSquare size={14} />}  label="留言" count={comments.length} />
+        <TabButton active={tab === 'sent'}     onClick={() => setTab('sent')}     icon={<Send size={14} />}           label="已发出" count={sent.length} />
+        <TabButton active={tab === 'received'} onClick={() => setTab('received')} icon={<Inbox size={14} />}          label="已收到" count={received.length} badge={unreadCount} />
+      </div>
+
+      <div className="min-h-[200px]">
+        {loading ? (
+          <div className="text-center text-stone-400 py-12 text-sm">加载中...</div>
+        ) : tab === 'posts' ? (
+          <PostsList items={posts} onClose={close} />
+        ) : tab === 'comments' ? (
+          <CommentsList items={comments} onClose={close} />
+        ) : tab === 'sent' ? (
+          <SentList items={sent} onClose={close} onRevoke={revokeSent} />
+        ) : (
+          <ReceivedList items={received} onClose={close} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * MyEventsPanel — 独立 modal 版本(/localnews 之前用,Phase 3A.2 已替换为 MyPostsPanel)
+ * 保留兼容性,可能后续 deprecate
+ */
+export function MyEventsPanel({
+  onClose, initialTab = 'posts',
+}: {
+  onClose: () => void;
+  initialTab?: Tab;
+}) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
 
   if (!mounted) return null;
 
@@ -205,27 +251,8 @@ export function MyEventsPanel({
           </button>
         </div>
 
-        {/* tab 行 — 4 tab:我发的活动 / 留言 / 已发出 / 已收到 */}
-        <div className="bg-white border-b border-stone-200 px-3 flex gap-1 overflow-x-auto no-scrollbar">
-          <TabButton active={tab === 'posts'}    onClick={() => setTab('posts')}    icon={<FileText size={14} />}       label="我发的活动" count={posts.length} />
-          <TabButton active={tab === 'comments'} onClick={() => setTab('comments')} icon={<MessageSquare size={14} />}  label="留言" count={comments.length} />
-          <TabButton active={tab === 'sent'}     onClick={() => setTab('sent')}     icon={<Send size={14} />}           label="已发出" count={sent.length} />
-          <TabButton active={tab === 'received'} onClick={() => setTab('received')} icon={<Inbox size={14} />}          label="已收到" count={received.length} badge={unreadCount} />
-        </div>
-
-        {/* 内容 */}
-        <div className="p-3 sm:p-4 min-h-[200px]">
-          {loading ? (
-            <div className="text-center text-stone-400 py-12 text-sm">加载中...</div>
-          ) : tab === 'posts' ? (
-            <PostsList items={posts} onClose={onClose} />
-          ) : tab === 'comments' ? (
-            <CommentsList items={comments} onClose={onClose} />
-          ) : tab === 'sent' ? (
-            <SentList items={sent} onClose={onClose} onRevoke={revokeSent} />
-          ) : (
-            <ReceivedList items={received} onClose={onClose} />
-          )}
+        <div className="p-3 sm:p-4">
+          <MyEventsContent initialTab={initialTab} onItemClick={onClose} />
         </div>
 
         {/* 底部收起 */}
