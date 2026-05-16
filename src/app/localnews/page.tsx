@@ -38,12 +38,11 @@ export default function LocalNewsPage() {
 
   return (
     <main className="min-h-screen">
-      {/* 顶栏:跟 / 二手 / 室友 同款 — 黑堡 wordmark + PlatformTabs + 心愿单 */}
+      {/* 顶栏:跟 / 二手 / 室友 同款 — PlatformTabs(心愿单挪到 filter 行,跟 / 和 /roommates 一致) */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3">
           <PlatformTabs />
           <div className="flex-1" />
-          <EventWishlistButton />
         </div>
       </header>
 
@@ -65,22 +64,25 @@ export default function LocalNewsPage() {
           <MessageCircle size={20} className="text-stone-300 flex-shrink-0" />
         </div>
 
-        {/* 类目筛选 chips */}
-        <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-          {CATEGORIES.map(c => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setCat(c.id)}
-              className={`px-3 py-1.5 rounded-chip text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
-                cat === c.id
-                  ? 'bg-brand text-white'
-                  : 'bg-white text-stone-700 border border-stone-300 hover:bg-stone-100'
-              }`}
-            >
-              {c.label}
-            </button>
-          ))}
+        {/* 类目筛选 chips + 心愿单按钮(同行右对齐,跟 / 和 /roommates 的「我的 / 心愿单」摆位一致) */}
+        <div className="mb-4 flex items-center gap-2">
+          <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar flex-1 min-w-0">
+            {CATEGORIES.map(c => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCat(c.id)}
+                className={`px-3 py-1.5 rounded-chip text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
+                  cat === c.id
+                    ? 'bg-brand text-white'
+                    : 'bg-white text-stone-700 border border-stone-300 hover:bg-stone-100'
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+          <EventWishlistButton className="flex-shrink-0" />
         </div>
 
         {/* 内容 */}

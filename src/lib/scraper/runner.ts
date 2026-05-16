@@ -36,54 +36,67 @@ export async function runScraper(def: SourceDefinition): Promise<ScrapeResult> {
   }
 
   // 写入 DB(每条独立 try,避免一条挂掉整批失败)
+  // Sprint 7 调优:改 upsert — 源站如果改了 imageUrl/时间/地点 我们也要跟进,
+  // 顺便让 prompt 迭代能在下一次运行时立即生效(旧的 if existing continue 会卡住)。
+  // 翻译有成本,加 heuristic:titleOriginal 没变 → 复用旧翻译,跳过 translate 调用。
   let itemsNew = 0;
+  let itemsUpdated = 0;
   for (const raw of rawEvents) {
     try {
-      // 质量门 — < 0.5 直接丢
       if ((raw.qualityScore ?? 0.7) < 0.5) continue;
 
-      // dedup:同源 + 同 sourceUrl 唯一
       const existing = await prisma.event.findUnique({
         where: { source_sourceUrl: { source: def.id, sourceUrl: raw.sourceUrl } },
       });
-      if (existing) continue;
 
-      // 翻译(失败不阻塞,fallback 英文原文)
-      let titleZh = raw.title;
-      let descZh = raw.description ?? '';
-      try {
-        const t = await translateToChineseSummary({
-          title: raw.title,
-          description: raw.description,
-          location: raw.location,
-        });
-        titleZh = t.titleZh || raw.title;
-        descZh = t.descriptionZh || (raw.description ?? '');
-      } catch {
-        /* 翻译失败,保留英文 */
+      // 是否重新翻译:新插入必翻;已存在的看原 title 是否变化
+      const needsTranslate = !existing || existing.titleOriginal !== raw.title;
+
+      let titleZh = existing?.title ?? raw.title;
+      let descZh = existing?.description ?? (raw.description ?? '');
+      if (needsTranslate) {
+        try {
+          const t = await translateToChineseSummary({
+            title: raw.title,
+            description: raw.description,
+            location: raw.location,
+          });
+          titleZh = t.titleZh || raw.title;
+          descZh = t.descriptionZh || (raw.description ?? '');
+        } catch {
+          /* 翻译失败,保留英文/旧值 */
+        }
       }
 
-      await prisma.event.create({
-        data: {
-          source: def.id,
-          sourceUrl: raw.sourceUrl,
-          sourceId: raw.sourceId ?? null,
-          title: titleZh,
-          titleOriginal: raw.title,
-          description: descZh,
-          startAt: raw.startAt ? new Date(raw.startAt) : null,
-          endAt: raw.endAt ? new Date(raw.endAt) : null,
-          location: raw.location ?? null,
-          category: def.category,
-          imageUrl: raw.imageUrl ?? null,
-          qualityScore: raw.qualityScore ?? 0.7,
-          publishedAt: raw.publishedAt ? new Date(raw.publishedAt) : null,
-          status: 'active',
-        },
-      });
-      itemsNew++;
+      const data = {
+        source: def.id,
+        sourceUrl: raw.sourceUrl,
+        sourceId: raw.sourceId ?? null,
+        title: titleZh,
+        titleOriginal: raw.title,
+        description: descZh,
+        startAt: raw.startAt ? new Date(raw.startAt) : null,
+        endAt: raw.endAt ? new Date(raw.endAt) : null,
+        location: raw.location ?? null,
+        category: def.category,
+        imageUrl: raw.imageUrl ?? null,
+        qualityScore: raw.qualityScore ?? 0.7,
+        publishedAt: raw.publishedAt ? new Date(raw.publishedAt) : null,
+        status: 'active',
+      };
+
+      if (existing) {
+        await prisma.event.update({
+          where: { id: existing.id },
+          data: { ...data, scrapedAt: new Date() }, // bump scrapedAt 标识最近一次更新
+        });
+        itemsUpdated++;
+      } else {
+        await prisma.event.create({ data });
+        itemsNew++;
+      }
     } catch {
-      // 单条出错(unique 冲突 / 数据格式不对等),静默跳过
+      // 单条出错(数据格式不对等),静默跳过
     }
   }
 
