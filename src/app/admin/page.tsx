@@ -304,9 +304,10 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     select: { createdAt: true, visitorId: true, path: true },
     take: 50000,
   });
-  const classifyPath = (p: string): 'item' | 'listing' | null => {
+  const classifyPath = (p: string): 'item' | 'listing' | 'event' | null => {
     if (p === '/' || p.startsWith('/item/')) return 'item';
     if (p === '/roommates' || p.startsWith('/roommates')) return 'listing';
+    if (p === '/localnews' || p.startsWith('/localnews')) return 'event';  // Phase 2A
     return null;
   };
 
@@ -321,15 +322,17 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
   };
   const itemBuckets    = buildBuckets();
   const listingBuckets = buildBuckets();
+  const eventBuckets   = buildBuckets();
   const itemVisitors    = new Set<string>();
   const listingVisitors = new Set<string>();
+  const eventVisitors   = new Set<string>();
 
   for (const v of views) {
     const kind = classifyPath(v.path);
     if (!kind) continue;
     const key = cfg.bucketKey(v.createdAt);
-    const m = kind === 'item' ? itemBuckets : listingBuckets;
-    const vset = kind === 'item' ? itemVisitors : listingVisitors;
+    const m = kind === 'item' ? itemBuckets : kind === 'listing' ? listingBuckets : eventBuckets;
+    const vset = kind === 'item' ? itemVisitors : kind === 'listing' ? listingVisitors : eventVisitors;
     const b = m.get(key);
     if (b) {
       b.pageviews += 1;
@@ -345,8 +348,43 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     }));
   const itemSeries    = toSeries(itemBuckets);
   const listingSeries = toSeries(listingBuckets);
+  const eventSeries   = toSeries(eventBuckets);
   const itemTotalPV    = itemSeries.reduce((s, d) => s + d.pageviews, 0);
   const listingTotalPV = listingSeries.reduce((s, d) => s + d.pageviews, 0);
+  const eventTotalPV   = eventSeries.reduce((s, d) => s + d.pageviews, 0);
+
+  // === 黑堡 events 统计(Phase 2A+2C) ===
+  // 活跃 events / 总评论 / 总联系方式 send / scraper 最近运行
+  const [
+    activeEventCount,
+    totalEventComments,
+    totalContactSends,
+    recentScrapeRuns,
+    topHotEvents,
+    sourceBreakdown,
+  ] = await Promise.all([
+    prisma.event.count({ where: { status: 'active' } }),
+    prisma.eventComment.count({ where: { status: 'active' } }),
+    prisma.eventContactSend.count({ where: { status: 'active' } }),
+    prisma.scrapeRun.findMany({
+      orderBy: { startedAt: 'desc' },
+      take: 15,
+    }),
+    // 热度 Top 10 (按 clickCount)
+    prisma.event.findMany({
+      where: { status: 'active', clickCount: { gt: 0 } },
+      orderBy: { clickCount: 'desc' },
+      take: 10,
+      select: { id: true, title: true, source: true, category: true, clickCount: true, startAt: true },
+    }),
+    // 每个源活跃 event 数
+    prisma.event.groupBy({
+      by: ['source'],
+      where: { status: 'active' },
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } },
+    }),
+  ]);
 
   return (
     <main className="max-w-5xl mx-auto p-4 md:p-6 bg-stone-50 min-h-screen">
@@ -360,8 +398,8 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
         </form>
       </header>
 
-      {/* 统计 —— 桌面端两个平台并排 */}
-      <section className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+      {/* 统计 —— 桌面端三个平台并排 */}
+      <section className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-white rounded-lg border border-stone-200 p-3">
           <div className="text-xs font-semibold text-stone-500 uppercase mb-2 px-1">🛒 二手</div>
           <div className="grid grid-cols-3 gap-2">
@@ -376,6 +414,14 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
             <MiniStat label="活跃 listing" value={activeListingCount} />
             <MiniStat label="申请总数" value={applicationCount} />
             <MiniStat label="待处理申请" value={pendingApplicationCount} />
+          </div>
+        </div>
+        <div className="bg-white rounded-lg border border-stone-200 p-3">
+          <div className="text-xs font-semibold text-stone-500 uppercase mb-2 px-1">⛰️ 黑堡本地</div>
+          <div className="grid grid-cols-3 gap-2">
+            <MiniStat label="活跃 events" value={activeEventCount} />
+            <MiniStat label="评论总数" value={totalEventComments} />
+            <MiniStat label="联系方式" value={totalContactSends} />
           </div>
         </div>
       </section>
@@ -419,6 +465,120 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
           totalVisitors={listingVisitors.size}
           barColors={{ pv: ['#fda4af', '#9f1239'], uv: ['#fcd34d', '#b45309'] }}
         />
+        <TrafficChart
+          title="⛰️ 黑堡本地"
+          subtitle="/localnews"
+          period={period}
+          series={eventSeries}
+          totalPageviews={eventTotalPV}
+          totalVisitors={eventVisitors.size}
+          barColors={{ pv: ['#86efac', '#15803d'], uv: ['#fde68a', '#92400e'] }}
+        />
+      </section>
+
+      {/* === 黑堡 scraper 健康监控 === */}
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-3">🔍 Scraper 健康(最近 15 次)</h2>
+        {recentScrapeRuns.length === 0 ? (
+          <EmptyBox text="还没有抓取记录" />
+        ) : (
+          <div className="bg-white rounded-lg border border-stone-200 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-stone-50 text-xs text-stone-500 uppercase">
+                <tr>
+                  <th className="px-3 py-2 text-left">源</th>
+                  <th className="px-3 py-2 text-left">开始时间(ET)</th>
+                  <th className="px-3 py-2 text-right">状态</th>
+                  <th className="px-3 py-2 text-right">发现</th>
+                  <th className="px-3 py-2 text-right">新增</th>
+                  <th className="px-3 py-2 text-left">错误</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentScrapeRuns.map(r => (
+                  <tr key={r.id} className="border-t border-stone-100">
+                    <td className="px-3 py-2 font-mono text-xs">{r.source}</td>
+                    <td className="px-3 py-2 text-xs text-stone-600">
+                      {new Intl.DateTimeFormat('zh-CN', {
+                        timeZone: ET_TZ,
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false,
+                      }).format(r.startedAt)}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {r.status === 'success' && <span className="text-emerald-600 font-medium">✓ 成功</span>}
+                      {r.status === 'failed' && <span className="text-rose-600 font-medium">✗ 失败</span>}
+                      {r.status === 'running' && <span className="text-amber-600 font-medium">运行中</span>}
+                      {r.status === 'skipped' && <span className="text-stone-500">跳过</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-xs">{r.itemsFound}</td>
+                    <td className="px-3 py-2 text-right font-mono text-xs">{r.itemsNew}</td>
+                    <td className="px-3 py-2 text-xs text-rose-600 max-w-[300px] truncate" title={r.errorMsg ?? undefined}>
+                      {r.errorMsg ?? ''}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* === 黑堡 源 + 热门 events 双栏 === */}
+      <section className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 各源 event 数 */}
+        <div>
+          <h2 className="text-lg font-semibold mb-3">📊 各源活跃 events</h2>
+          {sourceBreakdown.length === 0 ? (
+            <EmptyBox text="没有活跃 events" />
+          ) : (
+            <div className="bg-white rounded-lg border border-stone-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <tbody>
+                  {sourceBreakdown.map(s => (
+                    <tr key={s.source} className="border-b border-stone-100 last:border-b-0">
+                      <td className="px-3 py-2 font-mono text-xs">{s.source}</td>
+                      <td className="px-3 py-2 text-right font-mono">{s._count.id}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* 热度 Top 10 */}
+        <div>
+          <h2 className="text-lg font-semibold mb-3">🔥 热门 events Top 10</h2>
+          {topHotEvents.length === 0 ? (
+            <EmptyBox text="还没有点击数据" />
+          ) : (
+            <div className="bg-white rounded-lg border border-stone-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-stone-50 text-xs text-stone-500 uppercase">
+                  <tr>
+                    <th className="px-3 py-2 text-left">标题</th>
+                    <th className="px-3 py-2 text-right">点击</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topHotEvents.map(e => (
+                    <tr key={e.id} className="border-t border-stone-100">
+                      <td className="px-3 py-2 text-xs">
+                        <div className="line-clamp-1">{e.title}</div>
+                        <div className="text-stone-400 text-[10px] mt-0.5">{e.source} · {e.category ?? '—'}</div>
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-xs font-semibold text-rose-600">{e.clickCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* 举报队列 —— 二手 + 室友混合，targetType chip 区分 */}
