@@ -115,11 +115,14 @@ export const hokiesports: SourceDefinition = {
       'schedule.sport',
     ].join(',');
 
+    // sort=-datetime(descending)未来比赛永远在 past 比赛之前(datetime 更大)
+    // 这样 per_page=80 拉到的都是最近的(包含 upcoming + 刚结束的);
+    // 客户端再按 datetime > now 过滤掉 just-completed,剩下 upcoming
     const url =
       `${BASE_URL}` +
       `?filter%5Bsports_hidden_in_schedule_ticker%5D=false` +
       `&per_page=80` +
-      `&sort=datetime` +
+      `&sort=-datetime` +
       `&include=${encodeURIComponent(includes)}` +
       `&page=1`;
 
