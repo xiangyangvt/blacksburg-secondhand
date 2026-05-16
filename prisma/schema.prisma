@@ -279,6 +279,44 @@ model EventClickThrottle {
   @@index([createdAt])
 }
 
+// Phase 2C 评论:每个 event 下的讨论
+// 用 visitorId(hb_vid cookie)做身份 — 无登录系统,但 cookie 1 年内稳定
+model EventComment {
+  id          String   @id @default(cuid())
+  eventId     String
+  visitorId   String   // 跟 hb_vid 对应
+  nickname    String   // 必填,展示用
+  content     String   // ≤ 300 字
+  status      String   @default("active")  // active | hidden | archived
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([eventId, status, createdAt])
+  @@index([visitorId])
+}
+
+// Phase 2C 联系方式发送(Sean 设计:单向无 accept/decline)
+// 配对逻辑:同一 event 内存在 (A→B) 和 (B→A) 两条 = 双方互见联系方式
+// A 不知道 B 是否"拒绝",只感觉"可能没看到" — 低社交压力
+model EventContactSend {
+  id              String   @id @default(cuid())
+  eventId         String
+  fromVisitorId   String   // 发起者
+  fromNickname    String   // 冗余存方便展示(发送时拍快照)
+  fromContactType String   // 'wechat' | 'phone' | 'discord' | 'email' | 'other'
+  fromContact     String   // 联系方式本体(如微信号 / 手机号)
+  fromContactLabel String? // contactType=other 时用户自填的 label(如 'Line')
+  toVisitorId     String   // 目标(目标评论作者)
+  toCommentId     String?  // 关联到具体评论(deep link 用,可空)
+  status          String   @default("active")  // active | archived
+  readAt          DateTime?  // 接收方第一次"我的"展开时记录
+  createdAt       DateTime @default(now())
+
+  @@unique([eventId, fromVisitorId, toVisitorId])  // 同 event 同方向只能发一次
+  @@index([toVisitorId, status, createdAt])
+  @@index([fromVisitorId, status])
+}
+
 // 抓取运行记录 — 每个源每次跑都记一笔,失败排错用
 model ScrapeRun {
   id          String    @id @default(cuid())

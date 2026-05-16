@@ -253,6 +253,41 @@ model EventClickThrottle {
   @@index([createdAt])
 }
 
+// Phase 2C 评论
+model EventComment {
+  id          String   @id @default(cuid())
+  eventId     String
+  visitorId   String
+  nickname    String
+  content     String
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([eventId, status, createdAt])
+  @@index([visitorId])
+}
+
+// Phase 2C 联系方式发送(单向,无 accept/decline)
+model EventContactSend {
+  id              String   @id @default(cuid())
+  eventId         String
+  fromVisitorId   String
+  fromNickname    String
+  fromContactType String
+  fromContact     String
+  fromContactLabel String?
+  toVisitorId     String
+  toCommentId     String?
+  status          String   @default("active")
+  readAt          DateTime?
+  createdAt       DateTime @default(now())
+
+  @@unique([eventId, fromVisitorId, toVisitorId])
+  @@index([toVisitorId, status, createdAt])
+  @@index([fromVisitorId, status])
+}
+
 model ScrapeRun {
   id          String    @id @default(cuid())
   source      String

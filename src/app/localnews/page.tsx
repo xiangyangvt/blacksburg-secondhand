@@ -18,6 +18,7 @@ import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
 import { EventCard, type EventCardData } from '@/components/EventCard';
 import { EventWishlistButton } from '@/components/EventWishlistButton';
+import { MyEventsPanel } from '@/components/MyEventsPanel';
 import { distanceFromBlacksburg, isLocalCore, isWithinNrv } from '@/lib/eventDistance';
 
 // ============ 筛选状态机 ============
@@ -132,6 +133,7 @@ export default function LocalNewsPage() {
   const [events, setEvents] = useState<EventCardData[]>([]);
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [myPanelOpen, setMyPanelOpen] = useState(false);
 
   // localStorage 初始化(SSR-safe:首次 render 用 default,mount 后 hydrate)
   useEffect(() => {
@@ -200,9 +202,10 @@ export default function LocalNewsPage() {
     return CATEGORIES.filter(c => c.id === 'all' || availableCategories.includes(c.id));
   }, [availableCategories]);
 
-  // 我的 button -> 触发 wishlist panel
+  // 我的 button -> 打开 MyEventsPanel(留言 + 已发出 + 已收到 3 tab)
+  // 注:跟「心愿单」按钮分离 — 心愿单是收藏(规划中),我的是社交活动
   const openMyPanel = useCallback(() => {
-    window.dispatchEvent(new Event('hb-open-event-wishlist'));
+    setMyPanelOpen(true);
   }, []);
 
   // 单字段 updater(避免 inline { ...filters, x: v })
@@ -330,6 +333,9 @@ export default function LocalNewsPage() {
           每天早上 7 点自动更新 · 内容版权归各源站所有 · 点卡片展开看详情
         </p>
       </div>
+
+      {/* Phase 2C 我的活动 panel(留言 + 联系方式 3 tab) */}
+      {myPanelOpen && <MyEventsPanel onClose={() => setMyPanelOpen(false)} />}
     </main>
   );
 }

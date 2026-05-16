@@ -13,6 +13,7 @@ import { Calendar, MapPin, ExternalLink, Clock, Heart, Flame } from 'lucide-reac
 import { isEventSaved, toggleSavedEvent, subscribeSavedEvents } from '@/lib/savedEvents';
 import { showSuccess, showWarning } from '@/lib/toast';
 import { parseLocation } from '@/lib/eventLocation';
+import { EventCommentSection } from './EventCommentSection';
 
 export type EventCardData = {
   id: string;
@@ -386,6 +387,9 @@ export function EventCard({
                 查看原站
               </a>
             </div>
+
+            {/* Phase 2C 评论区 — 找搭子/讨论 */}
+            <EventCommentSection eventId={event.id} eventTitle={event.title} />
           </div>
         )}
       </div>
