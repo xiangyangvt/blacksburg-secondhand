@@ -12,7 +12,7 @@
 // 6. 搜索框客户端实时过滤
 // 7. 卡片热度 🔥 icon(按 click 计数梯度)+ 点击触发 /api/events/[id]/click
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Sparkles, MessageCircle, ChevronDown } from 'lucide-react';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
@@ -65,8 +65,9 @@ const LOC_SCOPES: Array<{ id: LocationScope; label: string }> = [
   { id: 'nrv',   label: '整个 NRV' },
 ];
 
+// 默认 sort=date 时按钮显「排序」(更像分类标签);用户选了其他时显具体值
 const SORTS: Array<{ id: Sort; label: string }> = [
-  { id: 'date',     label: '按时间' },
+  { id: 'date',     label: '排序' },
   { id: 'hot',      label: '按热度' },
   { id: 'distance', label: '按距离' },
 ];
@@ -263,8 +264,10 @@ export default function LocalNewsPage() {
           <EventWishlistButton className="flex-shrink-0" />
         </div>
 
-        {/* === 次筛选行:日期 + 地理 + 排序 === */}
-        <div className="mb-4 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+        {/* === 次筛选行:日期 + 地理 + 排序 ===
+            注:不用 overflow-x-auto — 那会截断 absolute 定位的 dropdown 菜单。
+            用 flex-wrap 让 dropdown 在窄屏自然换行,菜单弹出不受 overflow 限制 */}
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
           {/* 日期 dropdown */}
           <FilterDropdown
             label={DATE_RANGES.find(d => d.id === filters.dateRange)!.label}
@@ -341,20 +344,24 @@ function FilterDropdown<T extends string>({
   onChange: (v: T) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // 点外关闭
+  // 点外关闭 — 用 ref.contains 判断而不是 data attr,避免不同 dropdown 互相干扰
+  // pointerdown 比 mousedown 在 iOS 上更可靠
   useEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('[data-filter-dropdown]')) setOpen(false);
+    const handler = (e: PointerEvent | MouseEvent) => {
+      const target = e.target as Node;
+      if (wrapperRef.current && !wrapperRef.current.contains(target)) {
+        setOpen(false);
+      }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
   }, [open]);
 
   return (
-    <div className="relative flex-shrink-0" data-filter-dropdown>
+    <div ref={wrapperRef} className="relative flex-shrink-0">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
