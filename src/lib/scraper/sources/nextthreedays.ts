@@ -14,7 +14,7 @@ const UA = 'Mozilla/5.0 (compatible; BlacksburgLocalBot/1.0; +https://blacksburg
 export const nextthreedays: SourceDefinition = {
   id: 'nextthreedays',
   displayName: 'NextThreeDays',
-  category: 'events',
+  category: 'life',
   robotsAllowed: true, // 公开 events 聚合站,无 robots 禁止;我们每天 1 次抓取,User-Agent 注明
 
   run: async () => {

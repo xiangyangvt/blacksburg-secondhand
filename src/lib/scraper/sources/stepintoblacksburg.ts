@@ -15,7 +15,7 @@ const UA = 'Mozilla/5.0 (compatible; BlacksburgLocalBot/1.0; +https://blacksburg
 export const stepintoblacksburg: SourceDefinition = {
   id: 'stepintoblacksburg',
   displayName: 'StepIntoBlacksburg',
-  category: 'events',
+  category: 'life',
   robotsAllowed: true, // 公开商家协会站,无 robots 禁止;每天 1 次抓取 + 注明 UA
 
   run: async () => {

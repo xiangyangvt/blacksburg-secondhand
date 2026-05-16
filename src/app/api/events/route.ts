@@ -18,7 +18,8 @@ export const dynamic = 'force-dynamic';
 const VID_COOKIE = 'hb_vid';
 const VID_MAX_AGE = 60 * 60 * 24 * 365;
 const POST_PER_DAY_LIMIT = 3;
-const ALLOWED_CATEGORIES = new Set(['events', 'sports', 'discussion', 'other']);
+// Phase 3A.1: 用户发布可选类别(新命名)
+const ALLOWED_CATEGORIES = new Set(['life', 'exercise', 'academic', 'competition', 'discussion', 'other']);
 const ALLOWED_CONTACT_TYPES = new Set(['wechat', 'phone', 'discord', 'email', 'other']);
 
 type EventRow = {
@@ -30,7 +31,8 @@ type EventRow = {
 
 /** 每个 event 取它"语义上"的时间锚点(news/discussion 用发布时间,events/sports 用活动时间) */
 function relevanceTime(e: EventRow): number {
-  if (e.category === 'news' || e.category === 'discussion') {
+  // Phase 3A.1: news 已合并到 discussion;旧数据兜底
+  if (e.category === 'discussion' || e.category === 'news') {
     return (e.publishedAt ?? e.scrapedAt).getTime();
   }
   return (e.startAt ?? e.publishedAt ?? e.scrapedAt).getTime();
@@ -144,8 +146,9 @@ export async function POST(req: NextRequest) {
   if (category === 'other' && !customCat) {
     return NextResponse.json({ ok: false, error: '请填写「其他」类别的具体名称' }, { status: 400 });
   }
-  if (!/^\d{6}$/.test(code)) {
-    return NextResponse.json({ ok: false, error: '识别码必须是 6 位数字' }, { status: 400 });
+  // Phase 3A.1: 跟 二手/室友 同款 — alphanumeric ≥ 6 位(不限数字)
+  if (code.length < 6 || code.length > 50) {
+    return NextResponse.json({ ok: false, error: '识别码至少 6 位' }, { status: 400 });
   }
   if (contactType && !ALLOWED_CONTACT_TYPES.has(contactType)) {
     return NextResponse.json({ ok: false, error: '联系方式类型无效' }, { status: 400 });

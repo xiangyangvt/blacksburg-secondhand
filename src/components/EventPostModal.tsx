@@ -15,11 +15,14 @@ import { showSuccess, showError } from '@/lib/toast';
 import { CONTACT_TYPES, type ContactType } from '@/lib/contactTypes';
 import { getNickname, setNickname as persistNickname, getLastContact, setLastContact } from '@/lib/eventNickname';
 
+// Phase 3A.1: 用户可选 5 大类别 + 自定义
 const CATEGORIES = [
-  { id: 'events',     label: '活动' },
-  { id: 'sports',     label: '体育' },
-  { id: 'discussion', label: '讨论' },
-  { id: 'other',      label: '其他' },
+  { id: 'life',        label: '生活' },
+  { id: 'exercise',    label: '运动' },
+  { id: 'academic',    label: '学术' },
+  { id: 'competition', label: '比赛' },
+  { id: 'discussion',  label: '讨论' },
+  { id: 'other',       label: '其他' },
 ] as const;
 type CatId = typeof CATEGORIES[number]['id'];
 
@@ -39,10 +42,23 @@ export type EventPostInitial = {
   posterContactPublic: boolean;
 };
 
+// 跟二手/室友同款:6 位 alphanumeric(不限数字),默认生成 6 位混合方便记
 function gen6Code(): string {
-  // 100000-999999
-  return String(Math.floor(100000 + Math.random() * 900000));
+  const chars = 'abcdefghijkmnpqrstuvwxyz23456789'; // 去掉容易混淆的 i/l/o/0/1
+  let out = '';
+  for (let i = 0; i < 6; i++) {
+    out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return out;
 }
+
+// 城市预设
+const CITIES = [
+  { id: 'Blacksburg',     label: 'Blacksburg' },
+  { id: 'Christiansburg', label: 'Christiansburg' },
+  { id: 'other',          label: '其他' },
+] as const;
+type CityId = typeof CITIES[number]['id'];
 
 function toLocalDateTimeInput(iso: string | null): string {
   if (!iso) return '';
@@ -66,13 +82,34 @@ export function EventPostModal({
 
   const [title, setTitle] = useState(initial?.title ?? '');
   const [category, setCategory] = useState<CatId>(
-    (initial?.category as CatId) ?? 'events',
+    (initial?.category as CatId) ?? 'life',
   );
   const [customCategory, setCustomCategory] = useState(initial?.customCategory ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [startAt, setStartAt] = useState(toLocalDateTimeInput(initial?.startAt ?? null));
   const [endAt, setEndAt] = useState(toLocalDateTimeInput(initial?.endAt ?? null));
-  const [location, setLocation] = useState(initial?.location ?? '');
+  // 地点拆 venue + city — 编辑模式从 initial.location 解析(lastIndexOf 切城市)
+  const [venue, setVenue] = useState(() => {
+    const loc = initial?.location ?? '';
+    if (!loc) return '';
+    const idx = loc.lastIndexOf(',');
+    return idx < 0 ? '' : loc.slice(0, idx).trim();
+  });
+  const [city, setCity] = useState<CityId>(() => {
+    const loc = initial?.location ?? '';
+    if (!loc) return 'Blacksburg';
+    const idx = loc.lastIndexOf(',');
+    const c = idx < 0 ? loc.trim() : loc.slice(idx + 1).trim();
+    if (c === 'Blacksburg' || c === 'Christiansburg') return c;
+    return 'other';
+  });
+  const [customCity, setCustomCity] = useState(() => {
+    const loc = initial?.location ?? '';
+    const idx = loc.lastIndexOf(',');
+    const c = idx < 0 ? loc.trim() : loc.slice(idx + 1).trim();
+    if (c && c !== 'Blacksburg' && c !== 'Christiansburg') return c;
+    return '';
+  });
   const [nickname, setNick] = useState(initial?.posterNickname ?? '');
   const [contactType, setContactType] = useState<ContactType>(
     (initial?.posterContactType as ContactType) ?? 'wechat',
@@ -129,11 +166,18 @@ export function EventPostModal({
     if (!d) return showError('请填写描述');
     if (!n) return showError('请填写昵称');
     if (category === 'other' && !customCategory.trim()) return showError('请填写「其他」类别名称');
-    if (!isEdit && !/^\d{6}$/.test(code)) return showError('识别码必须是 6 位数字');
+    if (!isEdit && (code.length < 6 || code.length > 50)) return showError('识别码至少 6 位');
     if (contact.trim() && !contactType) return showError('请选联系方式类型');
     if (contactType === 'other' && contact.trim() && !contactLabel.trim()) {
       return showError('请填写「其他」联系方式的具体平台(如 Line)');
     }
+
+    // 拼 location:venue + city → "Venue, City" 让 parseLocation 能切
+    const cityVal = city === 'other' ? customCity.trim() : city;
+    if (city === 'other' && !cityVal) return showError('请填写城市');
+    const locationStr = venue.trim()
+      ? `${venue.trim()}, ${cityVal}`
+      : cityVal;
 
     setSubmitting(true);
     try {
@@ -145,7 +189,7 @@ export function EventPostModal({
         nickname: n,
         startAt: startAt ? new Date(startAt).toISOString() : null,
         endAt: endAt ? new Date(endAt).toISOString() : null,
-        location: location.trim() || null,
+        location: locationStr || null,
         contactType: contact.trim() ? contactType : null,
         contact: contact.trim() || null,
         contactLabel: contactType === 'other' ? contactLabel.trim() : null,
@@ -247,14 +291,14 @@ export function EventPostModal({
             )}
           </Field>
 
-          {/* 时间 */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* 时间 — mobile 堆叠避免 datetime-local 溢出;sm+ 并排 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <Field label="开始时间">
               <input
                 type="datetime-local"
                 value={startAt}
                 onChange={(e) => setStartAt(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+                className="w-full min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
               />
             </Field>
             <Field label="结束时间">
@@ -262,21 +306,42 @@ export function EventPostModal({
                 type="datetime-local"
                 value={endAt}
                 onChange={(e) => setEndAt(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+                className="w-full min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
               />
             </Field>
           </div>
 
-          {/* 地点 */}
+          {/* 地点 — 具体地址 + 城市分开;城市默认 Blacksburg */}
           <Field label="地点">
             <input
               type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              value={venue}
+              onChange={(e) => setVenue(e.target.value)}
               maxLength={80}
-              placeholder="如:Lane Stadium, Blacksburg"
+              placeholder="具体地址(可选,如 Lane Stadium)"
               className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
             />
+            <div className="flex gap-2 mt-2">
+              <select
+                value={city}
+                onChange={(e) => setCity(e.target.value as CityId)}
+                className="px-2.5 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+              >
+                {CITIES.map(c => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+              {city === 'other' && (
+                <input
+                  type="text"
+                  value={customCity}
+                  onChange={(e) => setCustomCity(e.target.value)}
+                  maxLength={40}
+                  placeholder="自填城市名,如 Radford"
+                  className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+                />
+              )}
+            </div>
           </Field>
 
           {/* 描述 */}
@@ -304,8 +369,8 @@ export function EventPostModal({
             />
           </Field>
 
-          {/* 联系方式(可选) */}
-          <Field label="联系方式(可选)">
+          {/* 联系方式(可选) — 默认对公众隐藏 */}
+          <Field label="联系方式(可选 · 默认对公众隐藏,只用于识别发布者)">
             <div className="flex gap-2">
               <select
                 value={contactType}
@@ -348,23 +413,23 @@ export function EventPostModal({
             )}
           </Field>
 
-          {/* 识别码(新发布显示;编辑时填验证) */}
-          <Field label={isEdit ? '识别码(编辑需验证)' : '识别码 — 记好,编辑/删除要用'} required>
+          {/* 识别码(新发布显示;编辑时填验证) — 跟 二手/室友 同款:至少 6 位 alphanumeric */}
+          <Field label={isEdit ? '识别码(编辑需验证)' : '识别码'} required>
             <div className="flex gap-2">
               <input
                 type="text"
-                inputMode="numeric"
                 value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                maxLength={6}
-                placeholder="6 位数字"
-                className="flex-1 px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand font-mono tracking-widest"
+                onChange={(e) => setCode(e.target.value.slice(0, 50))}
+                minLength={6}
+                maxLength={50}
+                placeholder="至少 6 位(数字 / 字母均可)"
+                className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand font-mono"
               />
               {!isEdit && (
                 <button
                   type="button"
                   onClick={copyCode}
-                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-stone-100 text-stone-700 rounded-chip hover:bg-stone-200"
+                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-stone-100 text-stone-700 rounded-chip hover:bg-stone-200 flex-shrink-0"
                   title="复制"
                 >
                   <Copy size={12} />
@@ -373,8 +438,8 @@ export function EventPostModal({
               )}
             </div>
             {!isEdit && (
-              <div className="text-[11px] text-stone-400 mt-1">
-                💡 建议保存到备忘录;丢了可以去 admin 后台找回
+              <div className="text-xs text-stone-600 mt-1.5">
+                ⚠️ 改 / 删活动时要用,记好它。我们用加密保存,自己也看不到 — 丢了无法找回,但可以联系方式找回未删的发布。
               </div>
             )}
           </Field>

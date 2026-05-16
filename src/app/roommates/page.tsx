@@ -296,7 +296,7 @@ function RoommatesContent() {
       </div>
 
       {myPanelOpen && (
-        <MyPostsPanel onClose={() => setMyPanelOpen(false)} />
+        <MyPostsPanel onClose={() => setMyPanelOpen(false)} initialPlatform="listing" />
       )}
 
       {postModalOpen && (

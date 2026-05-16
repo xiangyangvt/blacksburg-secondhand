@@ -99,7 +99,7 @@ function extractCity(loc: string | null | undefined): string {
 export const hokiesports: SourceDefinition = {
   id: 'hokiesports',
   displayName: 'Hokie Sports (VT)',
-  category: 'sports',
+  category: 'competition',
   robotsAllowed: true,
 
   run: async () => {

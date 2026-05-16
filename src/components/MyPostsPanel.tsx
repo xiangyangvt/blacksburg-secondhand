@@ -84,9 +84,10 @@ type SentApplication = {
   updatedAt: string;
 };
 
-type Platform = 'item' | 'listing';
+type Platform = 'item' | 'listing' | 'event';  // Phase 3A.2: 加 event 平台统一
 type ItemTab = 'active' | 'draft';
 type ListingTab = 'mine' | 'inbox' | 'sent';
+type EventTab = 'comments' | 'sent' | 'received';
 
 const GENDER_LABEL: Record<string, string> = {
   F: '女', M: '男', nb: '非二元', unspecified: '未透露',
@@ -102,7 +103,7 @@ const STATUS_META: Record<string, { label: string; cls: string; icon: React.Reac
 /**
  * 渲染内容主体（不含 modal 外壳，方便嵌进 modal 或 standalone 页面）
  */
-function MyPostsBody({ onClose }: { onClose?: () => void }) {
+function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initialPlatform?: Platform }) {
   const t = useT();
   const locale = useLocale();
   const [contactValue, setContactValue] = useState('');
@@ -124,7 +125,7 @@ function MyPostsBody({ onClose }: { onClose?: () => void }) {
   const [sentPendingN, setSentPendingN] = useState(0);
 
   const [loading, setLoading] = useState(false);
-  const [platform, setPlatform] = useState<Platform>('item');
+  const [platform, setPlatform] = useState<Platform>(initialPlatform ?? 'item');
   const [itemTab, setItemTab] = useState<ItemTab>('active');
   const [listingTab, setListingTab] = useState<ListingTab>('mine');
   const [listingStatusTab, setListingStatusTab] = useState<ItemTab>('active'); // 我发的 tab 下的 active/draft
@@ -563,7 +564,13 @@ function MyPostsBody({ onClose }: { onClose?: () => void }) {
 /**
  * 主页 inline 用：modal 外壳 + 内容
  */
-export function MyPostsPanel({ onClose }: { onClose: () => void }) {
+export function MyPostsPanel({
+  onClose,
+  initialPlatform,
+}: {
+  onClose: () => void;
+  initialPlatform?: Platform;
+}) {
   const t = useT();
 
   useEffect(() => {
@@ -595,7 +602,7 @@ export function MyPostsPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="p-4 sm:p-5">
-          <MyPostsBody onClose={onClose} />
+          <MyPostsBody onClose={onClose} initialPlatform={initialPlatform} />
         </div>
 
         <div className="border-t border-stone-200 px-4 py-3 flex justify-center bg-stone-50 rounded-b-card">

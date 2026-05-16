@@ -1,6 +1,7 @@
 // Sprint 7 Phase 1.3:抓取系统通用类型
 
-export type SourceCategory = 'events' | 'sports' | 'news' | 'discussion';
+// Phase 3A.1: 类别 rename — events→life, sports→competition, 新增 exercise/academic
+export type SourceCategory = 'life' | 'exercise' | 'academic' | 'competition' | 'discussion' | 'other';
 
 /** LLM extract 或 API 返回的原始 event(英文,未翻译) */
 export type RawEvent = {

@@ -40,7 +40,7 @@ const CATEGORY_CHIP: Record<string, string> = {
  *   - events/sports 用 startAt(future-based,"今天 19:00" / "明天" / "3 天后")
  *   - news/discussion 用 publishedAt(past-based,"3 小时前" / "昨天" / "3 天前") */
 function formatWhen(e: SavedEvent): string {
-  const isPastBased = e.category === 'news' || e.category === 'discussion';
+  const isPastBased = e.category === 'discussion'; // Phase 3A.1: news 已合并到 discussion
   const time = isPastBased ? e.publishedAt : e.startAt;
   if (!time) return '时间待定';
   const t = new Date(time);

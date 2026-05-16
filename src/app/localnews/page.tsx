@@ -24,7 +24,7 @@ import { distanceFromBlacksburg, isLocalCore, isWithinNrv } from '@/lib/eventDis
 
 // ============ 筛选状态机 ============
 
-type CatId = 'all' | 'events' | 'sports' | 'news' | 'discussion' | 'other';
+type CatId = 'all' | 'life' | 'exercise' | 'academic' | 'competition' | 'discussion' | 'other';
 type DateRange = 'all' | 'today' | '3day' | 'week' | 'month';
 type Sort = 'date' | 'hot' | 'distance';
 type LocationScope = 'all' | 'local' | 'nrv';
@@ -46,12 +46,13 @@ const DEFAULT_FILTERS: Filters = {
 const STORAGE_KEY = 'hb_localnews_filters';
 
 const CATEGORIES: Array<{ id: CatId; label: string }> = [
-  { id: 'all',        label: '全部' },
-  { id: 'events',     label: '活动' },
-  { id: 'sports',     label: '体育' },
-  { id: 'news',       label: '新闻' },
-  { id: 'discussion', label: '讨论' },
-  { id: 'other',      label: '其他' },
+  { id: 'all',         label: '全部' },
+  { id: 'life',        label: '生活' },
+  { id: 'exercise',    label: '运动' },
+  { id: 'academic',    label: '学术' },
+  { id: 'competition', label: '比赛' },
+  { id: 'discussion',  label: '讨论' },
+  { id: 'other',       label: '其他' },
 ];
 
 const DATE_RANGES: Array<{ id: DateRange; label: string }> = [
@@ -88,7 +89,7 @@ function hotScore(e: EventCardData & { clickCount?: number; scrapedAt?: string |
 }
 
 function relevanceTime(e: EventCardData): number | null {
-  const isPastBased = e.category === 'news' || e.category === 'discussion';
+  const isPastBased = e.category === 'discussion'; // 之前 news 也算,rename 后并入 discussion
   const time = isPastBased ? e.publishedAt : e.startAt;
   if (!time) return null;
   const t = new Date(time).getTime();
@@ -110,7 +111,7 @@ function isInDateRange(e: EventCardData, range: DateRange): boolean {
 function isInLocScope(e: EventCardData, scope: LocationScope): boolean {
   if (scope === 'all') return true;
   // 新闻 / 讨论 本身没物理地点,不被地理筛选过滤
-  if (e.category === 'news' || e.category === 'discussion') return true;
+  if (e.category === 'discussion') return true; // 讨论类不限本地(全球 Reddit)
   if (scope === 'local') return isLocalCore(e.location);
   if (scope === 'nrv') return isWithinNrv(e.location);
   return true;

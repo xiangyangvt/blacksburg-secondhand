@@ -64,7 +64,7 @@ function resolveImage(p: string | null | undefined): string | undefined {
 export const gobblerconnect: SourceDefinition = {
   id: 'gobblerconnect',
   displayName: 'GobblerConnect (VT)',
-  category: 'events',
+  category: 'life',
   robotsAllowed: true, // 公开 discovery API,网页本身不登录也能浏览
 
   run: async () => {

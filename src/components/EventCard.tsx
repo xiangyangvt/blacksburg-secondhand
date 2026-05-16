@@ -61,20 +61,31 @@ function getHeatLevel(clickCount: number | undefined, scrapedAt: string | Date |
   return null;
 }
 
+// Phase 3A.1: 类别 rename — events→life, sports→competition + 新 exercise/academic
 const CATEGORY_LABEL: Record<string, string> = {
-  events: '活动',
-  sports: '体育',
-  news: '新闻',
-  discussion: '讨论',
-  other: '其他',
+  life:        '生活',
+  exercise:    '运动',
+  academic:    '学术',
+  competition: '比赛',
+  discussion:  '讨论',
+  other:       '其他',
+  // 旧 ID 兜底(防止有 stale 数据)
+  events: '生活',
+  sports: '比赛',
+  news:   '讨论',
 };
 
 const CATEGORY_COLOR: Record<string, { bg: string; text: string; placeholder: string }> = {
-  events:     { bg: 'bg-cat-home/10',        text: 'text-cat-home',        placeholder: 'bg-cat-home/10 text-cat-home/40' },
-  sports:     { bg: 'bg-cat-transport/10',   text: 'text-cat-transport',   placeholder: 'bg-cat-transport/10 text-cat-transport/40' },
-  news:       { bg: 'bg-cat-electronics/10', text: 'text-cat-electronics', placeholder: 'bg-cat-electronics/10 text-cat-electronics/40' },
-  discussion: { bg: 'bg-cat-books/10',       text: 'text-cat-books',       placeholder: 'bg-cat-books/10 text-cat-books/40' },
-  other:      { bg: 'bg-stone-100',          text: 'text-stone-700',       placeholder: 'bg-stone-100 text-stone-400' },
+  life:        { bg: 'bg-cat-home/10',        text: 'text-cat-home',        placeholder: 'bg-cat-home/10 text-cat-home/40' },
+  exercise:    { bg: 'bg-emerald-100',        text: 'text-emerald-700',     placeholder: 'bg-emerald-50 text-emerald-300' },
+  academic:    { bg: 'bg-cat-books/10',       text: 'text-cat-books',       placeholder: 'bg-cat-books/10 text-cat-books/40' },
+  competition: { bg: 'bg-cat-transport/10',   text: 'text-cat-transport',   placeholder: 'bg-cat-transport/10 text-cat-transport/40' },
+  discussion:  { bg: 'bg-cat-electronics/10', text: 'text-cat-electronics', placeholder: 'bg-cat-electronics/10 text-cat-electronics/40' },
+  other:       { bg: 'bg-stone-100',          text: 'text-stone-700',       placeholder: 'bg-stone-100 text-stone-400' },
+  // 旧 ID 兜底配色
+  events: { bg: 'bg-cat-home/10',        text: 'text-cat-home',        placeholder: 'bg-cat-home/10 text-cat-home/40' },
+  sports: { bg: 'bg-cat-transport/10',   text: 'text-cat-transport',   placeholder: 'bg-cat-transport/10 text-cat-transport/40' },
+  news:   { bg: 'bg-cat-electronics/10', text: 'text-cat-electronics', placeholder: 'bg-cat-electronics/10 text-cat-electronics/40' },
 };
 
 /** 紧凑端相对时间:
@@ -175,7 +186,7 @@ export function EventCard({
   const cat = event.category ?? 'events';
   const colors = CATEGORY_COLOR[cat] ?? CATEGORY_COLOR.events;
   // news/discussion 用 publishedAt(发布时间,过去),events/sports 用 startAt(活动时间,未来)
-  const isPastBased = event.category === 'news' || event.category === 'discussion';
+  const isPastBased = event.category === 'discussion'; // Phase 3A.1: news 已合并到 discussion
   const referenceTime = isPastBased ? event.publishedAt : event.startAt;
   const timeLabel = formatEventTime(referenceTime, isPastBased);
   // 展开端完整时间:past-based 显发布时间日期;future-based 显活动起止

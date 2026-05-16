@@ -203,9 +203,9 @@ export const messages = {
 
   // 我的发布（G4）
   'my.title':              { zh: '我的',                                     en: 'My Posts' },
-  'my.intro':              { zh: '输入你发布时用的联系方式查看所有商品。要看草稿请加输识别码。', en: 'Enter your contact to see your posts. Add your edit code to see drafts too.' },
-  'my.contactLabel':       { zh: '联系方式（如微信号 zhang3）',                en: 'Contact (e.g. wechat zhang3)' },
-  'my.editCodeLabel':      { zh: '识别码（看草稿才需要）',                     en: 'Edit code (only needed for drafts)' },
+  'my.intro':              { zh: '输入你发布时用的联系方式，查看你在二手 / 室友 / 黑堡 三个平台的全部发布。看草稿需加输识别码。', en: 'Enter your contact to see all your posts across 二手 / 室友 / 黑堡. Add your edit code to see drafts too.' },
+  'my.contactLabel':       { zh: '联系方式（如微信号 zhang3 / 手机号 / Discord 等,发布时填的那个）', en: 'Contact (e.g. WeChat zhang3 / phone / Discord — the one you used when posting)' },
+  'my.editCodeLabel':      { zh: '识别码（看草稿才需要,不限数字）',             en: 'Edit code (only needed for drafts, not limited to digits)' },
   'my.lookup':              { zh: '查找',                                    en: 'Look up' },
   'my.tabActive':          { zh: '上架中 ({n})',                              en: 'Active ({n})' },
   'my.tabDraft':           { zh: '草稿 ({n})',                                en: 'Drafts ({n})' },
