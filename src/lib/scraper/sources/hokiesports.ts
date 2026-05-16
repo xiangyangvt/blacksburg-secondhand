@@ -103,8 +103,9 @@ export const hokiesports: SourceDefinition = {
   robotsAllowed: true,
 
   run: async () => {
-    // 拉 upcoming events,按时间升序
-    // include = nested fields(opponent + 各自 logo + schedule + sport)
+    // 拉 events,sort=datetime 升序(让最近的优先 take per_page)
+    // 注:不带 filter[past] — 之前试 past=false 返回 0,API 可能只识别 past=true
+    // (Laravel filter 行为不确定,我们在代码里按 datetime > now 过滤未来)
     const includes = [
       'opponent',
       'opponent.officialLogo',
@@ -117,9 +118,7 @@ export const hokiesports: SourceDefinition = {
     const url =
       `${BASE_URL}` +
       `?filter%5Bsports_hidden_in_schedule_ticker%5D=false` +
-      `&filter%5Bpast%5D=false` +
-      `&filter%5Bneutral_event%5D=false` +
-      `&per_page=30` +
+      `&per_page=80` +
       `&sort=datetime` +
       `&include=${encodeURIComponent(includes)}` +
       `&page=1`;
@@ -133,9 +132,16 @@ export const hokiesports: SourceDefinition = {
     const rows = json.data ?? [];
     if (!Array.isArray(rows)) return [];
 
+    const nowMs = Date.now();
     const events: RawEvent[] = rows
       .filter(e => e.datetime)                                     // 必须有时间
-      .filter(e => e.status !== 'completed')                       // 防 past 漏过来
+      .filter(e => {
+        // 客户端过滤未来 events:datetime > now
+        // 给 30 分钟 buffer 让正在进行的比赛仍能显示
+        const t = new Date(e.datetime!).getTime();
+        return !isNaN(t) && t > nowMs - 30 * 60 * 1000;
+      })
+      .filter(e => e.status !== 'completed')                       // 双保险
       .filter(e => !e.hide_from_all_sports_schedule)               // 站方隐藏的
       .slice(0, 20)
       .map(e => {
