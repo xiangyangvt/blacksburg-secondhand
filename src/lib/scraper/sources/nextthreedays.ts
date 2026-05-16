@@ -29,26 +29,34 @@ export const nextthreedays: SourceDefinition = {
     const html = await res.text();
 
     // LLM extract:把 HTML 里看到的 events 一次性提成 JSON
+    // ⚠️ Output budget:DeepSeek max_tokens=8192,~24K chars JSON;
+    //   每 event ~600 字符(含 description) → 安全容量 ~25 events。
+    //   超过会被截断成 invalid JSON。所以 prompt 里明确限 20 + 短描述。
     const result = await extractJSON<{ events: RawEvent[] }>({
       html,
       sourceHint:
         'This is NextThreeDays.com FeaturedEvents page — a local events aggregator for the New River Valley including Blacksburg, Christiansburg, Floyd, Giles, Pulaski, Radford. Extract individual upcoming events visible on the page.',
       schemaDescription: `{
   "events": Array<{
-    "title": string,           // Event name (English original)
+    "title": string,           // Event name (English original, max 100 chars)
     "sourceUrl": string,       // Full URL to the event detail page (absolute, must start with https://)
-    "description"?: string,    // 1-2 sentences extracted from blurb, English original
+    "description"?: string,    // ONE sentence summary, max 150 chars. Keep it terse.
     "startAt"?: string,        // ISO 8601 with timezone if available, e.g. "2026-05-20T19:00:00-04:00"
     "endAt"?: string,          // ISO 8601
-    "location"?: string,       // Venue + city if shown, e.g. "Champs Sports Grille, Blacksburg"
+    "location"?: string,       // Venue + city, max 80 chars, e.g. "Champs Sports Grille, Blacksburg"
     "imageUrl"?: string,       // Full URL to thumbnail image
     "qualityScore"?: number    // 0-1, your judgment of whether this looks like a real local event vs noise (default 0.8)
   }>
 }`,
       examples: `Example output:
-{"events":[{"title":"Trivia Night at Champs","sourceUrl":"https://www.nextthreedays.com/EventDetails.cfm?ID=12345","description":"Weekly trivia with prizes for the winning team.","startAt":"2026-05-21T19:00:00-04:00","location":"Champs Sports Grille, Blacksburg","imageUrl":"https://www.nextthreedays.com/images/12345.jpg","qualityScore":0.85}]}
+{"events":[{"title":"Trivia Night at Champs","sourceUrl":"https://www.nextthreedays.com/EventDetails.cfm?ID=12345","description":"Weekly trivia with prizes.","startAt":"2026-05-21T19:00:00-04:00","location":"Champs Sports Grille, Blacksburg","imageUrl":"https://www.nextthreedays.com/images/12345.jpg","qualityScore":0.85}]}
 
-Important rules:
+CRITICAL output budget rules (output will be truncated if too long):
+- Extract AT MOST 20 events. If page has more, pick the 20 most upcoming/highest-quality.
+- description MUST be ≤ 150 chars. ONE sentence only. No marketing fluff.
+- Keep titles ≤ 100 chars. Strip "Featured Event:" / venue prefixes if redundant with location.
+
+Other rules:
 - Only extract events explicitly listed on this page. Don't invent.
 - If sourceUrl is relative, make it absolute by prefixing https://www.nextthreedays.com.
 - Skip ads, navigation, "see more" links.
