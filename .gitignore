@@ -41,3 +41,7 @@ next-env.d.ts
 backups/
 
 .claude/
+
+# Playwright
+test-results/
+playwright-report/

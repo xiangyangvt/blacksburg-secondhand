@@ -1,6 +1,6 @@
 # Sprint 7 Phase 3B
 
-最后更新: 2026-05-17 — Vitest 单测落地(42 个 / 全过);Playwright E2E 待启动
+最后更新: 2026-05-17 — Sprint 7 Phase 3B 全 8 章完成(Vitest 42 + Playwright 13)
 
 ## §3 数据模型
 
@@ -40,4 +40,4 @@
 ## §8 测试
 
 - [x] 单元测试 (Vitest/Jest)
-- [ ] E2E (Playwright)
+- [x] E2E (Playwright)

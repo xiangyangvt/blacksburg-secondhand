@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
   // Phase 3B: discussion / news 类目和 reddit 源永久砍掉。query 走这两个类目直接返空
   // (UI 仍可能传旧 chip,server 兜底)
   if (category === 'discussion' || category === 'news') {
-    return NextResponse.json({ items: [], availableCategories: [] });
+    return NextResponse.json({ events: [], availableCategories: [] });
   }
 
   // 过滤:仅 active + qualityScore ≥ 0.5 + 未过期(过期 = endAt 已过 OR 没 endAt 但 startAt 早于 1 天前)
