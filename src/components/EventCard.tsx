@@ -424,7 +424,9 @@ export function EventCard({
     <article
       ref={cardRef}
       onClick={onCardClick}
-      className={`relative bg-white rounded-card shadow-card border overflow-hidden hover:shadow-card-hover transition-all cursor-pointer scroll-mt-44 md:scroll-mt-24 ${
+      className={`relative rounded-card shadow-card border overflow-hidden hover:shadow-card-hover transition-all cursor-pointer scroll-mt-44 md:scroll-mt-24 ${
+        isUserPosted ? colors.tintBg : 'bg-white'
+      } ${
         expanded ? 'border-brand/40 col-span-2 md:col-span-1' : 'border-stone-200'
       }`}
     >
@@ -503,9 +505,9 @@ export function EventCard({
         )}
       </div>
 
-      {/* 文字区:UGC 时按类目 tint 背景,scrape 保持白底
-          Phase 3C 视觉差异化:让用户发的内容在 feed 里一眼可识别 */}
-      <div className={`p-3 md:p-4 space-y-1.5 ${isUserPosted ? colors.tintBg : ''}`}>
+      {/* 文字区 — tint 已在 article 外层设(UGC 时整张卡 tint,grid 拉伸也覆盖);
+          这里透明继承,无白色 strip */}
+      <div className="p-3 md:p-4 space-y-1.5">
         {/* 类目 chip(Lucide icon)+ 状态 + 响应数 + 时间 + 倒计时 + 热度(Phase 2A)
             UGC 时 chip 用白底 + 类目深字(防 chip 和 tint 融成一片);scrape 用类目浅底 + 深字 */}
         <div className="flex items-center gap-1.5 text-xs flex-wrap">
