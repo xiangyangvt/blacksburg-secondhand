@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Copy } from 'lucide-react';
+import { X, Copy, Plus } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { BatchImportPanel } from './BatchImportPanel';
 import { CATEGORIES, CONTACT_TYPES } from '@/lib/utils';
@@ -134,13 +134,14 @@ export function PostModal({
   return (
     <div className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-4">
       <div className="bg-white rounded-card w-full max-w-2xl my-4">
-        <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between rounded-t-card z-10">
+        <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 rounded-t-card z-10">
+          {mode === 'create' && <Plus size={20} className="text-brand" />}
           <h2 className="text-lg font-semibold">
             {mode === 'create' ? t('post.titleCreate') : t('post.titleEdit')}
           </h2>
           <button
             onClick={onClose}
-            className="text-stone-500 hover:text-stone-900 p-1 rounded-full hover:bg-stone-100"
+            className="ml-auto text-stone-500 hover:text-stone-900 p-1 rounded-full hover:bg-stone-100"
             aria-label="关闭"
           ><X size={22} /></button>
         </div>
@@ -184,7 +185,7 @@ export function PostModal({
               onChange={e => setTitle(e.target.value)}
               maxLength={100}
               placeholder={type === 'sell' ? t('post.titlePhSell') : t('post.titlePhBuy')}
-              className="w-full border border-stone-300 rounded px-3 py-2"
+              className="w-full border border-stone-300 rounded-md px-3 py-2"
             />
           </div>
 
@@ -232,7 +233,7 @@ export function PostModal({
                 onChange={e => setCustomTag(e.target.value)}
                 maxLength={20}
                 placeholder={t('post.customTagPh')}
-                className="mt-2 w-full border border-stone-300 rounded px-3 py-2 text-sm"
+                className="mt-2 w-full border border-stone-300 rounded-md px-3 py-2 text-sm"
               />
             )}
           </div>
@@ -245,7 +246,7 @@ export function PostModal({
               rows={4}
               maxLength={2000}
               placeholder={t('post.descPh')}
-              className="w-full border border-stone-300 rounded px-3 py-2"
+              className="w-full border border-stone-300 rounded-md px-3 py-2"
             />
           </div>
 
@@ -260,7 +261,7 @@ export function PostModal({
               <select
                 value={contactType}
                 onChange={e => setContactType(e.target.value as any)}
-                className="border border-stone-300 rounded px-3 py-2"
+                className="border border-stone-300 rounded-md px-3 py-2"
               >
                 {CONTACT_TYPES.map(c => (
                   <option key={c.id} value={c.id}>{t(c.i18nKey)}</option>
@@ -272,7 +273,7 @@ export function PostModal({
                   onChange={e => setCustomLabel(e.target.value)}
                   maxLength={20}
                   placeholder={t('post.customLabelPh')}
-                  className="border border-stone-300 rounded px-3 py-2 flex-1 min-w-[140px]"
+                  className="border border-stone-300 rounded-md px-3 py-2 flex-1 min-w-[140px]"
                 />
               )}
               <input
@@ -283,7 +284,7 @@ export function PostModal({
                   if (!r.ok && r.warning) showWarning(r.warning);
                 }}
                 placeholder={contactPlaceholder(contactType)}
-                className="border border-stone-300 rounded px-3 py-2 flex-1 min-w-[180px]"
+                className="border border-stone-300 rounded-md px-3 py-2 flex-1 min-w-[180px]"
               />
             </div>
           </div>
@@ -305,7 +306,7 @@ export function PostModal({
                 maxLength={50}
                 type="text"
                 placeholder={t('post.editCodePh')}
-                className="flex-1 min-w-0 border border-stone-300 rounded px-3 py-2 font-mono"
+                className="flex-1 min-w-0 border border-stone-300 rounded-md px-3 py-2 font-mono"
               />
               {editCode.length >= 6 && (
                 <button
@@ -318,7 +319,7 @@ export function PostModal({
                       showError('复制失败,请手动选中');
                     }
                   }}
-                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-stone-100 text-stone-700 rounded hover:bg-stone-200 flex-shrink-0"
+                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-stone-100 text-stone-700 rounded-md hover:bg-stone-200 flex-shrink-0"
                   title="复制密码"
                 >
                   <Copy size={12} />
@@ -339,14 +340,14 @@ export function PostModal({
           <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 rounded-b-card">
             <button
               onClick={onClose}
-              className="px-4 py-2 border border-stone-300 rounded hover:bg-stone-100"
+              className="px-6 py-2 border border-stone-300 bg-white text-stone-700 rounded-full hover:bg-stone-50 transition-colors font-medium"
             >
               {t('post.cancel')}
             </button>
             <button
               onClick={submit}
               disabled={submitting}
-              className="px-5 py-2 bg-brand text-white rounded hover:bg-brand-dark disabled:opacity-50"
+              className="px-6 py-2 bg-brand text-white rounded-full hover:bg-brand-dark disabled:opacity-50 transition-colors font-medium"
             >
               {submitting ? t('post.saving') : (mode === 'create' ? t('post.submitCreate') : t('post.submitEdit'))}
             </button>

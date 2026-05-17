@@ -9,7 +9,7 @@
 // - C/D 特有：是否带家具（D 默认勾选）
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Copy } from 'lucide-react';
+import { X, Copy, Plus } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import {
   LISTING_TYPES,
@@ -373,9 +373,10 @@ export function ListingPostModal({
     <div className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-0 sm:p-4">
       <div className="bg-white w-full max-w-2xl sm:rounded-card min-h-screen sm:min-h-0 my-0 sm:my-4">
 
-        <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between sm:rounded-t-card">
-          <h2 className="text-lg font-semibold text-stone-900">{isEdit ? '编辑 listing' : '发布 listing'}</h2>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-100" aria-label="关闭"><X size={22} /></button>
+        <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 sm:rounded-t-card">
+          {!isEdit && <Plus size={20} className="text-brand" />}
+          <h2 className="text-lg font-semibold text-stone-900">{isEdit ? '编辑室友/转租' : '发布室友/转租'}</h2>
+          <button onClick={onClose} className="ml-auto p-1 rounded-full hover:bg-stone-100" aria-label="关闭"><X size={22} /></button>
         </div>
 
         <div className="p-5 space-y-5">
@@ -461,7 +462,7 @@ export function ListingPostModal({
                   type === 'sublet'        ? '例：5/15–8/15 转租 1B1B' :
                                               '例：暑期 2 个月转租，5/20–7/30'
                 }
-                className="w-full border border-stone-300 rounded px-3 py-2"
+                className="w-full border border-stone-300 rounded-md px-3 py-2"
               />
             </div>
             <div>
@@ -476,7 +477,7 @@ export function ListingPostModal({
                     ? '可写：自我介绍、希望对方的性格、生活习惯、为什么找室友等'
                     : '可写：户型细节、家具配置、邻居环境、转租原因等'
                 }
-                className="w-full border border-stone-300 rounded px-3 py-2 leading-relaxed"
+                className="w-full border border-stone-300 rounded-md px-3 py-2 leading-relaxed"
               />
             </div>
           </section>
@@ -500,7 +501,7 @@ export function ListingPostModal({
                 value={housingLayout}
                 onChange={e => setHousingLayout(e.target.value)}
                 placeholder="例：1B1B / 2B1B / Studio"
-                className="w-full border border-stone-300 rounded px-3 py-2"
+                className="w-full border border-stone-300 rounded-md px-3 py-2"
               />
             </div>
 
@@ -513,7 +514,7 @@ export function ListingPostModal({
                   value={currentResidents}
                   onChange={e => setCurrentResidents(e.target.value)}
                   placeholder="例：2"
-                  className="w-32 border border-stone-300 rounded px-3 py-2"
+                  className="w-32 border border-stone-300 rounded-md px-3 py-2"
                 />
                 <span className="ml-2 text-xs text-stone-500">人</span>
               </div>
@@ -556,14 +557,14 @@ export function ListingPostModal({
                       type="date"
                       value={moveInStart}
                       onChange={e => setMoveInStart(e.target.value)}
-                      className="flex-1 border border-stone-300 rounded px-3 py-2"
+                      className="flex-1 border border-stone-300 rounded-md px-3 py-2"
                     />
                     <span className="text-stone-400">至</span>
                     <input
                       type="date"
                       value={moveInEnd}
                       onChange={e => setMoveInEnd(e.target.value)}
-                      className="flex-1 border border-stone-300 rounded px-3 py-2"
+                      className="flex-1 border border-stone-300 rounded-md px-3 py-2"
                     />
                   </div>
                 </details>
@@ -579,14 +580,14 @@ export function ListingPostModal({
                     type="date"
                     value={moveInStart}
                     onChange={e => setMoveInStart(e.target.value)}
-                    className="flex-1 border border-stone-300 rounded px-3 py-2"
+                    className="flex-1 border border-stone-300 rounded-md px-3 py-2"
                   />
                   <span className="text-stone-400">至</span>
                   <input
                     type="date"
                     value={moveInEnd}
                     onChange={e => setMoveInEnd(e.target.value)}
-                    className="flex-1 border border-stone-300 rounded px-3 py-2"
+                    className="flex-1 border border-stone-300 rounded-md px-3 py-2"
                   />
                 </div>
               </div>
@@ -606,7 +607,7 @@ export function ListingPostModal({
                       setBudgetMax(e.target.value);
                     }}
                     placeholder="例：800"
-                    className="w-28 border border-stone-300 rounded px-2 py-2"
+                    className="w-28 border border-stone-300 rounded-md px-2 py-2"
                   />
                   <span className="text-stone-500 text-sm">/月</span>
                 </div>
@@ -619,7 +620,7 @@ export function ListingPostModal({
                     value={budgetMin}
                     onChange={e => setBudgetMin(e.target.value)}
                     placeholder="下限"
-                    className="w-24 border border-stone-300 rounded px-2 py-2"
+                    className="w-24 border border-stone-300 rounded-md px-2 py-2"
                   />
                   <span className="text-stone-400">—</span>
                   <span className="text-stone-500">$</span>
@@ -628,7 +629,7 @@ export function ListingPostModal({
                     value={budgetMax}
                     onChange={e => setBudgetMax(e.target.value)}
                     placeholder="上限"
-                    className="w-24 border border-stone-300 rounded px-2 py-2"
+                    className="w-24 border border-stone-300 rounded-md px-2 py-2"
                   />
                   <span className="text-stone-500 text-sm">/月</span>
                 </div>
@@ -645,7 +646,7 @@ export function ListingPostModal({
                       key={a}
                       type="button"
                       onClick={() => toggleArea(a)}
-                      className={`px-3 py-1.5 text-sm rounded-chip border transition-colors ${
+                      className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
                         active
                           ? 'bg-brand/10 border-brand text-brand font-medium'
                           : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-100'
@@ -663,7 +664,7 @@ export function ListingPostModal({
                   onChange={e => setCustomArea(e.target.value)}
                   maxLength={30}
                   placeholder="例:Patrick Henry Drive / 某个具体街区名"
-                  className="mt-2 w-full border border-stone-300 rounded px-3 py-2 text-sm"
+                  className="mt-2 w-full border border-stone-300 rounded-md px-3 py-2 text-sm"
                 />
               )}
             </div>
@@ -700,14 +701,14 @@ export function ListingPostModal({
           {/* 7. 联系方式 + 密码 */}
           <section className="space-y-3 bg-stone-50 rounded-lg p-3 border border-stone-200">
             <div className="text-xs text-stone-500 uppercase font-semibold">联系方式</div>
-            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2">
               💡 你的联系方式 <strong>默认隐藏</strong>，只在你同意某个申请人后，才双向可见
             </div>
             <div className="flex gap-2">
               <select
                 value={contactType}
                 onChange={e => setContactType(e.target.value)}
-                className="border border-stone-300 rounded px-2 py-2"
+                className="border border-stone-300 rounded-md px-2 py-2"
               >
                 {CONTACT_TYPES.map(c => (
                   <option key={c.id} value={c.id}>
@@ -723,14 +724,14 @@ export function ListingPostModal({
                   if (!r.ok && r.warning) showWarning(r.warning);
                 }}
                 placeholder={contactPlaceholder(contactType)}
-                className="flex-1 border border-stone-300 rounded px-3 py-2"
+                className="flex-1 border border-stone-300 rounded-md px-3 py-2"
               />
               {contactType === 'other' && (
                 <input
                   value={customLabel}
                   onChange={e => setCustomLabel(e.target.value)}
                   placeholder="标签"
-                  className="w-24 border border-stone-300 rounded px-2 py-2"
+                  className="w-24 border border-stone-300 rounded-md px-2 py-2"
                 />
               )}
             </div>
@@ -745,7 +746,7 @@ export function ListingPostModal({
                 onChange={e => setEditCode(e.target.value)}
                 minLength={6}
                 placeholder="例：myroom123"
-                className="flex-1 min-w-0 border border-stone-300 rounded px-3 py-2 font-mono"
+                className="flex-1 min-w-0 border border-stone-300 rounded-md px-3 py-2 font-mono"
               />
               {editCode.length >= 6 && (
                 <button
@@ -758,7 +759,7 @@ export function ListingPostModal({
                       showError('复制失败,请手动选中');
                     }
                   }}
-                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-stone-100 text-stone-700 rounded hover:bg-stone-200 flex-shrink-0"
+                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-stone-100 text-stone-700 rounded-md hover:bg-stone-200 flex-shrink-0"
                   title="复制密码"
                 >
                   <Copy size={12} />
@@ -774,13 +775,13 @@ export function ListingPostModal({
         </div>
 
         <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 sm:rounded-b-card">
-          <button onClick={onClose} className="px-4 py-2 border border-stone-300 rounded hover:bg-stone-100">
+          <button onClick={onClose} className="px-6 py-2 border border-stone-300 bg-white text-stone-700 rounded-full hover:bg-stone-50 transition-colors font-medium">
             取消
           </button>
           <button
             onClick={submit}
             disabled={submitting}
-            className="px-5 py-2 bg-brand text-white rounded hover:bg-brand-dark disabled:opacity-50 font-medium"
+            className="px-6 py-2 bg-brand text-white rounded-full hover:bg-brand-dark disabled:opacity-50 font-medium transition-colors"
           >
             {submitting ? (isEdit ? '保存中…' : '发布中…') : (isEdit ? '保存' : '发布')}
           </button>
@@ -816,7 +817,7 @@ function Pills({
           key={o.v}
           type="button"
           onClick={() => onChange(o.v)}
-          className={`px-3 py-1.5 text-sm rounded-chip border transition-colors ${
+          className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
             value === o.v
               ? 'bg-brand/10 border-brand text-brand font-medium'
               : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-100'

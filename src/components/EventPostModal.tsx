@@ -255,7 +255,7 @@ export function EventPostModal({
         <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 rounded-t-card z-10">
           <Plus size={18} className="text-brand" />
           <h2 className="text-base font-semibold text-stone-900">
-            {isEdit ? '编辑活动' : '发布黑堡本地活动'}
+            {isEdit ? '编辑活动' : '发布活动'}
           </h2>
           <button onClick={onClose} className="ml-auto text-stone-500 hover:text-stone-900 p-1 rounded-full hover:bg-stone-100" aria-label="关闭">
             <X size={20} />
@@ -271,7 +271,7 @@ export function EventPostModal({
               onChange={(e) => setTitle(e.target.value)}
               maxLength={50}
               placeholder="如:周末黑堡公园露营,找搭子"
-              className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+              className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
             />
           </Field>
 
@@ -283,10 +283,10 @@ export function EventPostModal({
                   key={c.id}
                   type="button"
                   onClick={() => setCategory(c.id)}
-                  className={`px-3 py-1.5 rounded-chip text-sm font-medium border ${
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
                     category === c.id
                       ? 'bg-brand text-white border-brand'
-                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-100'
+                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
                   }`}
                 >
                   {c.label}
@@ -300,7 +300,7 @@ export function EventPostModal({
                 onChange={(e) => setCustomCategory(e.target.value)}
                 maxLength={20}
                 placeholder="自填类别名,如:户外 / 美食 / 学习"
-                className="mt-2 w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+                className="mt-2 w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
               />
             )}
           </Field>
@@ -312,7 +312,7 @@ export function EventPostModal({
                 type="datetime-local"
                 value={startAt}
                 onChange={(e) => setStartAt(e.target.value)}
-                className="w-full min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+                className="w-full min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
               />
             </Field>
             <Field label="结束时间">
@@ -320,7 +320,7 @@ export function EventPostModal({
                 type="datetime-local"
                 value={endAt}
                 onChange={(e) => setEndAt(e.target.value)}
-                className="w-full min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+                className="w-full min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
               />
             </Field>
           </div>
@@ -333,13 +333,13 @@ export function EventPostModal({
               onChange={(e) => setVenue(e.target.value)}
               maxLength={80}
               placeholder="具体地址(可选,如 Lane Stadium)"
-              className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+              className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
             />
             <div className="flex gap-2 mt-2">
               <select
                 value={city}
                 onChange={(e) => setCity(e.target.value as CityId)}
-                className="px-2.5 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+                className="px-2.5 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
               >
                 {CITIES.map(c => (
                   <option key={c.id} value={c.id}>{c.label}</option>
@@ -352,7 +352,7 @@ export function EventPostModal({
                   onChange={(e) => setCustomCity(e.target.value)}
                   maxLength={40}
                   placeholder="自填城市名,如 Radford"
-                  className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+                  className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
                 />
               )}
             </div>
@@ -366,7 +366,7 @@ export function EventPostModal({
               maxLength={500}
               rows={4}
               placeholder="活动详情、想找几个人、装备需求等"
-              className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-card focus:outline-none focus:border-brand resize-y"
+              className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand resize-y"
             />
             <div className="text-xs text-stone-400 text-right">{description.length} / 500</div>
           </Field>
@@ -379,7 +379,7 @@ export function EventPostModal({
               onChange={(e) => setNick(e.target.value)}
               maxLength={20}
               placeholder="如何被识别"
-              className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+              className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
             />
           </Field>
 
@@ -389,7 +389,7 @@ export function EventPostModal({
               <select
                 value={contactType}
                 onChange={(e) => setContactType(e.target.value as ContactType)}
-                className="px-2.5 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+                className="px-2.5 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
               >
                 {CONTACT_TYPES.map(t => (
                   <option key={t.id} value={t.id}>{t.label}</option>
@@ -401,7 +401,7 @@ export function EventPostModal({
                 onChange={(e) => setContact(e.target.value)}
                 placeholder={CONTACT_TYPES.find(t => t.id === contactType)?.placeholder}
                 maxLength={80}
-                className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+                className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
               />
             </div>
             {contactType === 'other' && contact && (
@@ -411,7 +411,7 @@ export function EventPostModal({
                 onChange={(e) => setContactLabel(e.target.value)}
                 placeholder="平台名(如 Line / Telegram)"
                 maxLength={20}
-                className="mt-2 w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+                className="mt-2 w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
               />
             )}
             {contact && (
@@ -437,13 +437,13 @@ export function EventPostModal({
                 minLength={6}
                 maxLength={50}
                 placeholder="例：myevent123"
-                className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand font-mono"
+                className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand font-mono"
               />
               {!isEdit && (
                 <button
                   type="button"
                   onClick={copyCode}
-                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-stone-100 text-stone-700 rounded-chip hover:bg-stone-200 flex-shrink-0"
+                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-stone-100 text-stone-700 rounded-md hover:bg-stone-200 flex-shrink-0"
                   title="复制"
                 >
                   <Copy size={12} />
@@ -463,14 +463,14 @@ export function EventPostModal({
         <div className="sticky bottom-0 bg-stone-50 border-t border-stone-200 px-5 py-3 flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-chip hover:bg-stone-100"
+            className="px-6 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-full hover:bg-stone-50 transition-colors"
           >
             取消
           </button>
           <button
             onClick={submit}
             disabled={submitting}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-brand text-white rounded-chip hover:bg-brand-dark active:scale-95 disabled:opacity-50 shadow-card"
+            className="inline-flex items-center gap-1.5 px-6 py-2 text-sm font-medium bg-brand text-white rounded-full hover:bg-brand-dark active:scale-95 disabled:opacity-50 shadow-card transition-colors"
           >
             <Plus size={14} />
             {submitting ? '...' : isEdit ? '保存修改' : '发布'}

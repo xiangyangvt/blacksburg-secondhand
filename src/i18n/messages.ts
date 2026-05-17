@@ -132,7 +132,7 @@ export const messages = {
   'reply.errSend':         { zh: '回复失败',                                en: 'Reply failed' },
 
   // 发布 / 编辑模态框
-  'post.titleCreate':      { zh: '发布新物品',                                en: 'Post New Item' },
+  'post.titleCreate':      { zh: '发布物品',                                  en: 'Post Item' },
   'post.titleEdit':        { zh: '编辑信息',                                en: 'Edit Item' },
   'post.fieldType':        { zh: '这是',                                    en: 'This is' },
   'post.typeSell':         { zh: '📦 出售',                                 en: '📦 For sale' },
