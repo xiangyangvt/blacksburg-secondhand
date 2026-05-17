@@ -8,7 +8,7 @@
 // 提交 POST /api/events;成功后 onCreated(event) 回调让父组件刷新
 // 编辑模式:传 initial,提交走 PATCH /api/events/[id]
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Copy } from 'lucide-react';
 import { showSuccess, showError } from '@/lib/toast';
@@ -18,6 +18,7 @@ import {
   getLastContact, setLastContact,
   setLastEventTemplate,
 } from '@/lib/eventNickname';
+import { SessionTopBar } from './SessionTopBar';
 
 // 跟二手/室友共用 — 三平台都从同一处读取/写入上次用的密码
 const LS_LAST_EDIT_CODE = 'hb_last_edit_code';
@@ -134,6 +135,27 @@ export function EventPostModal({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
+
+  // session 预填:只在首次拿到 session 时跑一次,用户改后不覆盖
+  const sessionPrefilledRef = useRef(false);
+  const handleSessionChange = (s: { email: string; contactValue: string | null; contactType: string | null; nickname: string | null } | null) => {
+    if (isEdit) return;
+    if (sessionPrefilledRef.current) return;
+    if (!s) return;
+    if (s.nickname && !nickname.trim()) {
+      setNick(s.nickname);
+    }
+    const tp = s.contactType;
+    const validTypes = ['wechat', 'phone', 'discord', 'email', 'other'] as const;
+    if (s.contactValue && tp && (validTypes as readonly string[]).includes(tp)) {
+      setContactType(tp as ContactType);
+      setContact(s.contactValue);
+    } else if (s.email) {
+      setContactType('email');
+      setContact(s.email);
+    }
+    sessionPrefilledRef.current = true;
+  };
 
   // 新发布时:hydrate 昵称 + 上次联系方式 + 密码(跟二手/室友共用 hb_last_edit_code)
   useEffect(() => {
@@ -283,6 +305,8 @@ export function EventPostModal({
             <X size={20} />
           </button>
         </div>
+
+        <SessionTopBar onSessionChange={handleSessionChange} />
 
         <div className="p-5 space-y-3">
           {/* 标题 */}

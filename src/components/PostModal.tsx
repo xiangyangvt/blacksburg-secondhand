@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Copy, Plus } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
 import { BatchImportPanel } from './BatchImportPanel';
@@ -10,6 +10,7 @@ import { useT } from '@/i18n/I18nProvider';
 import { showError, showWarning, showSuccess } from '@/lib/toast';
 import { validateContact, contactPlaceholder, validatePriceSoft } from '@/lib/contactValidation';
 import { HelpHint } from './HelpHint';
+import { SessionTopBar } from './SessionTopBar';
 import type { Item } from './ItemCard';
 
 const LS_LAST_CODE        = 'hb_last_edit_code';
@@ -47,6 +48,30 @@ export function PostModal({
   const [photoUrls,    setPhotoUrls]    = useState<string[]>([]);
   const [editCode,     setEditCode]     = useState('');
   const [submitting,   setSubmitting]   = useState(false);
+
+  // session 预填:只在首次拿到 session 时跑一次,用户改了字段不会被反复覆盖
+  const sessionPrefilledRef = useRef(false);
+  const handleSessionChange = (s: { email: string; contactValue: string | null; contactType: string | null; nickname: string | null } | null) => {
+    if (mode !== 'create') return;
+    if (sessionPrefilledRef.current) return;
+    if (!s) return;
+    // session 优先级高于 localStorage,但只在还没改过的字段上预填
+    const tp = s.contactType;
+    if (s.contactValue) {
+      setContactValue(s.contactValue);
+      if (tp === 'wechat' || tp === 'phone' || tp === 'email' || tp === 'other') {
+        setContactType(tp);
+      } else {
+        // session 没绑联系方式类型 → 邮箱兜底
+        setContactType('email');
+        setContactValue(s.email);
+      }
+    } else if (s.email) {
+      setContactType('email');
+      setContactValue(s.email);
+    }
+    sessionPrefilledRef.current = true;
+  };
 
   useEffect(() => {
     if (mode === 'edit' && initialItem) {
@@ -145,6 +170,8 @@ export function PostModal({
             aria-label="关闭"
           ><X size={22} /></button>
         </div>
+
+        <SessionTopBar onSessionChange={handleSessionChange} />
 
         {/* create 模式 + 桌面端才显示 tab；手机端整条 tab 隐藏（批量导入只在电脑上） */}
         {mode === 'create' && (

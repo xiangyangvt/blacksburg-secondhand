@@ -22,6 +22,7 @@ import {
 import { getStoredUtmSource } from '@/lib/utm';
 import { showError, showWarning, showSuccess } from '@/lib/toast';
 import { validateContact, contactPlaceholder } from '@/lib/contactValidation';
+import { SessionTopBar } from './SessionTopBar';
 
 const LS_LAST_CODE      = 'hb_last_edit_code';
 const LS_LAST_CONTACT_T = 'hb_my_contact_type';
@@ -269,6 +270,28 @@ export function ListingPostModal({
     } catch {}
   }, [isEdit]);
 
+  // session 预填:只在首次拿到 session 时跑一次,用户改了字段不会被反复覆盖
+  const sessionPrefilledRef = useRef(false);
+  const handleSessionChange = (s: { email: string; contactValue: string | null; contactType: string | null; nickname: string | null } | null) => {
+    if (isEdit) return;
+    if (sessionPrefilledRef.current) return;
+    if (!s) return;
+    const tp = s.contactType;
+    if (s.contactValue) {
+      setContactValue(s.contactValue);
+      if (tp === 'wechat' || tp === 'phone' || tp === 'email' || tp === 'other') {
+        setContactType(tp);
+      } else {
+        setContactType('email');
+        setContactValue(s.email);
+      }
+    } else if (s.email) {
+      setContactType('email');
+      setContactValue(s.email);
+    }
+    sessionPrefilledRef.current = true;
+  };
+
   const meta = TYPE_META[type];
 
   // 类型切换时：清理不属于当前类型的字段 + 应用默认值（特别是 D 的 furnished=true）
@@ -378,6 +401,8 @@ export function ListingPostModal({
           <h2 className="text-lg font-semibold text-stone-900">{isEdit ? '编辑室友/转租' : '发布室友/转租'}</h2>
           <button onClick={onClose} className="ml-auto p-1 rounded-full hover:bg-stone-100" aria-label="关闭"><X size={22} /></button>
         </div>
+
+        <SessionTopBar onSessionChange={handleSessionChange} />
 
         <div className="p-5 space-y-5">
           {/* 1. 类型 —— 编辑模式只显示当前类型，禁止切换（切换会乱字段语义） */}
