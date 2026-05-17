@@ -326,11 +326,11 @@ export function EventPostModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center overflow-x-hidden overflow-y-auto p-0 sm:p-4"
+      className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center overflow-hidden p-0 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white w-full max-w-2xl sm:rounded-card shadow-overlay min-h-screen sm:min-h-0 my-0 sm:my-4 overflow-x-hidden sm:overflow-hidden"
+        className="bg-white w-full max-w-2xl sm:rounded-card shadow-overlay h-screen sm:h-auto sm:max-h-[calc(100vh-2rem)] my-0 sm:my-4 overflow-x-hidden overflow-y-auto flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 sm:rounded-t-card z-10">
@@ -343,9 +343,10 @@ export function EventPostModal({
           </button>
         </div>
 
-        <SessionTopBar onSessionChange={handleSessionChange} />
+        {/* 注:邮箱登录 UI 暂时下线(链路太长),后端 /api/auth/* 保留可未来再开
+            SessionTopBar 组件本身保留,import 留着 — 但不渲染 */}
 
-        <div className="p-5 space-y-3">
+        <div className="p-5 space-y-3 flex-1">
           {/* Sprint 7 §4.1 字段顺序:标题 / 时间 / 想找几人 / 类目 / 联系方式 / 昵称 / 地点 / 描述 / 密码 */}
 
           {/* 标题 */}
@@ -360,14 +361,16 @@ export function EventPostModal({
             />
           </Field>
 
-          {/* 时间 — mobile 堆叠避免 datetime-local 溢出;sm+ 并排 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {/* 时间 — mobile 堆叠;sm+ 并排
+              用 minmax(0,1fr) 让 grid cell 能 shrink + datetime-local input
+              box-border + max-w-full 强限,防 native 渲染撑破父容器 */}
+          <div className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
             <Field label="开始时间">
               <input
                 type="datetime-local"
                 value={startAt}
                 onChange={(e) => setStartAt(e.target.value)}
-                className="w-full min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
+                className="block w-full max-w-full min-w-0 box-border px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
               />
             </Field>
             <Field label="结束时间">
@@ -375,23 +378,65 @@ export function EventPostModal({
                 type="datetime-local"
                 value={endAt}
                 onChange={(e) => setEndAt(e.target.value)}
-                className="w-full min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
+                className="block w-full max-w-full min-w-0 box-border px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
               />
             </Field>
           </div>
 
-          {/* 想找几人 — Phase 3B 通用化字段。空 = 不限 */}
-          <Field label="想找几人(可选)">
-            <input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={99}
-              value={maxAttendees}
-              onChange={(e) => setMaxAttendees(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
-              placeholder="例:4(留空 = 不限)"
-              className="w-24 px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
-            />
+          {/* 想找几人 — Phase 3B 通用化字段。空(不选) = 不限
+              5 选项:1 / 2 / 3 / 4 / 其他(自填) */}
+          <Field label="想找几人(可选,不选 = 不限)">
+            <div className="flex flex-wrap gap-1.5 items-center">
+              {[1, 2, 3, 4].map(n => {
+                const active = maxAttendees === String(n);
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setMaxAttendees(String(n))}
+                    className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                      active
+                        ? 'bg-brand text-white border-brand'
+                        : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                );
+              })}
+              {/* "其他" chip:点击后填 5 作为起点(用户可在 input 里改成 6/10/任意);
+                  再点一下取消(清空 = 不限) */}
+              {(() => {
+                const isCustom = !!maxAttendees && !['1', '2', '3', '4'].includes(maxAttendees);
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setMaxAttendees(isCustom ? '' : '5')}
+                    className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                      isCustom
+                        ? 'bg-brand text-white border-brand'
+                        : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                    }`}
+                  >
+                    其他
+                  </button>
+                );
+              })()}
+              {/* 自填 input — 仅选了"其他" chip 才显 */}
+              {!!maxAttendees && !['1', '2', '3', '4'].includes(maxAttendees) && (
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={99}
+                  value={maxAttendees}
+                  onChange={(e) => setMaxAttendees(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
+                  placeholder="人数"
+                  autoFocus
+                  className="w-20 px-3 py-1.5 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
+                />
+              )}
+            </div>
           </Field>
 
           {/* 类目 — Sprint 7:自动根据标题关键词猜,用户改后不再覆盖 */}
