@@ -69,6 +69,23 @@ const CITIES = [
 ] as const;
 type CityId = typeof CITIES[number]['id'];
 
+// 类目自动猜:用户输入标题时(仅 create / forceNew 模式 & 用户未手动改过类目)
+// 命中关键词就 set 对应分类。spec §4.1 - 类目要先于联系方式被用户感知
+const CATEGORY_KEYWORDS: Array<{ cat: 'life' | 'exercise' | 'academic' | 'competition'; words: string[] }> = [
+  { cat: 'life',        words: ['麻将', '桌游', '聚餐', '吃饭', '撸串', '火锅', '聚会', 'dinner', 'lunch', 'brunch', 'party'] },
+  { cat: 'exercise',    words: ['球', '跑步', '健身', '游泳', '篮球', '足球', '羽毛球', '乒乓', '瑜伽', '徒步', '骑行', '攀岩', '滑雪', 'gym', 'run', 'hike', 'climb'] },
+  { cat: 'academic',    words: ['作业', '复习', 'study', '写代码', '学习', 'project', 'study group', '讨论作业'] },
+  { cat: 'competition', words: ['比赛', '锦标', '决赛', '联赛', '对抗', '挑战赛'] },
+];
+
+function guessCategory(title: string): 'life' | 'exercise' | 'academic' | 'competition' | null {
+  const t = title.toLowerCase();
+  for (const { cat, words } of CATEGORY_KEYWORDS) {
+    if (words.some(w => t.includes(w.toLowerCase()))) return cat;
+  }
+  return null;
+}
+
 function toLocalDateTimeInput(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -80,13 +97,19 @@ function toLocalDateTimeInput(iso: string | null): string {
 }
 
 export function EventPostModal({
-  initial, onClose, onCreated,
+  initial, onClose, onCreated, forceNew,
 }: {
   initial?: EventPostInitial;
   onClose: () => void;
   onCreated?: () => void;
+  /**
+   * "再发一次" 场景:传 initial 预填字段,但 submit 走 POST(新建 event)而非 PATCH。
+   * 此时 hydrate / 密码生成 / 模板存储行为跟普通 create 一致。
+   */
+  forceNew?: boolean;
 }) {
-  const isEdit = !!initial;
+  // forceNew 时,即使有 initial 也算 create 路径(不走 PATCH;走 POST 新建)
+  const isEdit = !forceNew && !!initial;
   const [mounted, setMounted] = useState(false);
 
   const [title, setTitle] = useState(initial?.title ?? '');
@@ -156,6 +179,20 @@ export function EventPostModal({
     }
     sessionPrefilledRef.current = true;
   };
+
+  // 类目自动猜:仅 create 模式 + 用户未手动改过类目时,根据标题关键词推断
+  // 用户点 chip 选 category 时 set ref = true,之后即使改标题也不再覆盖
+  // forceNew("再发一次") 时,initial.category 已是用户上次选定的 → 视为已 touched 不再自动猜
+  const userTouchedCategoryRef = useRef<boolean>(!!(forceNew && initial?.category));
+  useEffect(() => {
+    if (isEdit) return;
+    if (userTouchedCategoryRef.current) return;
+    const guessed = guessCategory(title);
+    if (guessed && guessed !== category) {
+      setCategory(guessed);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, isEdit]);
 
   // 新发布时:hydrate 昵称 + 上次联系方式 + 密码(跟二手/室友共用 hb_last_edit_code)
   useEffect(() => {
@@ -299,7 +336,7 @@ export function EventPostModal({
         <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 sm:rounded-t-card z-10">
           <Plus size={18} className="text-brand" />
           <h2 className="text-base font-semibold text-stone-900">
-            {isEdit ? '编辑活动' : '发布活动'}
+            {isEdit ? '编辑活动' : forceNew ? '重新发布' : '发布活动'}
           </h2>
           <button onClick={onClose} className="ml-auto text-stone-500 hover:text-stone-900 p-1 rounded-full hover:bg-stone-100" aria-label="关闭">
             <X size={20} />
@@ -309,6 +346,8 @@ export function EventPostModal({
         <SessionTopBar onSessionChange={handleSessionChange} />
 
         <div className="p-5 space-y-3">
+          {/* Sprint 7 §4.1 字段顺序:标题 / 时间 / 想找几人 / 类目 / 联系方式 / 昵称 / 地点 / 描述 / 密码 */}
+
           {/* 标题 */}
           <Field label="标题" required>
             <input
@@ -318,50 +357,6 @@ export function EventPostModal({
               maxLength={50}
               placeholder="如:周末黑堡公园露营,找搭子"
               className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
-            />
-          </Field>
-
-          {/* 类别 */}
-          <Field label="类别" required>
-            <div className="flex flex-wrap gap-1.5">
-              {CATEGORIES.map(c => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCategory(c.id)}
-                  className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-                    category === c.id
-                      ? 'bg-brand text-white border-brand'
-                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
-                  }`}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-            {category === 'other' && (
-              <input
-                type="text"
-                value={customCategory}
-                onChange={(e) => setCustomCategory(e.target.value)}
-                maxLength={20}
-                placeholder="自填类别名,如:户外 / 美食 / 学习"
-                className="mt-2 w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
-              />
-            )}
-          </Field>
-
-          {/* 想找几人 — Phase 3B 通用化字段。空 = 不限 */}
-          <Field label="想找几人(可选)">
-            <input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={99}
-              value={maxAttendees}
-              onChange={(e) => setMaxAttendees(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
-              placeholder="例:4(留空 = 不限)"
-              className="w-24 px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
             />
           </Field>
 
@@ -384,6 +379,106 @@ export function EventPostModal({
               />
             </Field>
           </div>
+
+          {/* 想找几人 — Phase 3B 通用化字段。空 = 不限 */}
+          <Field label="想找几人(可选)">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={99}
+              value={maxAttendees}
+              onChange={(e) => setMaxAttendees(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
+              placeholder="例:4(留空 = 不限)"
+              className="w-24 px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
+            />
+          </Field>
+
+          {/* 类目 — Sprint 7:自动根据标题关键词猜,用户改后不再覆盖 */}
+          <Field label="类别" required>
+            <div className="flex flex-wrap gap-1.5">
+              {CATEGORIES.map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => { userTouchedCategoryRef.current = true; setCategory(c.id); }}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                    category === c.id
+                      ? 'bg-brand text-white border-brand'
+                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                  }`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            {category === 'other' && (
+              <input
+                type="text"
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+                maxLength={20}
+                placeholder="自填类别名,如:户外 / 美食 / 学习"
+                className="mt-2 w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
+              />
+            )}
+          </Field>
+
+          {/* 联系方式(可选) — 默认对公众隐藏 */}
+          <Field label="联系方式(可选 · 默认对公众隐藏,只用于识别发布者)">
+            <div className="flex gap-2">
+              <select
+                value={contactType}
+                onChange={(e) => setContactType(e.target.value as ContactType)}
+                className="px-2.5 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
+              >
+                {CONTACT_TYPES.map(t => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={contact}
+                onChange={(e) => setContact(e.target.value)}
+                placeholder={CONTACT_TYPES.find(t => t.id === contactType)?.placeholder}
+                maxLength={80}
+                className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
+              />
+            </div>
+            {contactType === 'other' && contact && (
+              <input
+                type="text"
+                value={contactLabel}
+                onChange={(e) => setContactLabel(e.target.value)}
+                placeholder="平台名(如 Line / Telegram)"
+                maxLength={20}
+                className="mt-2 w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
+              />
+            )}
+            {contact && (
+              <label className="flex items-center gap-2 mt-2 text-xs text-stone-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={contactPublic}
+                  onChange={(e) => setContactPublic(e.target.checked)}
+                  className="rounded"
+                />
+                公开显示联系方式(否则别人想联系你只能用「发送我的联系方式」单向交换)
+              </label>
+            )}
+          </Field>
+
+          {/* 昵称 — Sprint 7:placeholder 提示已从历史填入,可改 */}
+          <Field label="发布者昵称" required>
+            <input
+              type="text"
+              value={nickname}
+              onChange={(e) => setNick(e.target.value)}
+              maxLength={20}
+              placeholder="已自动从历史填入 / 可改"
+              className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
+            />
+          </Field>
 
           {/* 地点 — 具体地址 + 城市分开;城市默认 Blacksburg */}
           <Field label="地点">
@@ -429,62 +524,6 @@ export function EventPostModal({
               className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand resize-y"
             />
             <div className="text-xs text-stone-400 text-right">{description.length} / 500</div>
-          </Field>
-
-          {/* 昵称 */}
-          <Field label="发布者昵称" required>
-            <input
-              type="text"
-              value={nickname}
-              onChange={(e) => setNick(e.target.value)}
-              maxLength={20}
-              placeholder="如何被识别"
-              className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
-            />
-          </Field>
-
-          {/* 联系方式(可选) — 默认对公众隐藏 */}
-          <Field label="联系方式(可选 · 默认对公众隐藏,只用于识别发布者)">
-            <div className="flex gap-2">
-              <select
-                value={contactType}
-                onChange={(e) => setContactType(e.target.value as ContactType)}
-                className="px-2.5 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
-              >
-                {CONTACT_TYPES.map(t => (
-                  <option key={t.id} value={t.id}>{t.label}</option>
-                ))}
-              </select>
-              <input
-                type="text"
-                value={contact}
-                onChange={(e) => setContact(e.target.value)}
-                placeholder={CONTACT_TYPES.find(t => t.id === contactType)?.placeholder}
-                maxLength={80}
-                className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
-              />
-            </div>
-            {contactType === 'other' && contact && (
-              <input
-                type="text"
-                value={contactLabel}
-                onChange={(e) => setContactLabel(e.target.value)}
-                placeholder="平台名(如 Line / Telegram)"
-                maxLength={20}
-                className="mt-2 w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
-              />
-            )}
-            {contact && (
-              <label className="flex items-center gap-2 mt-2 text-xs text-stone-600 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={contactPublic}
-                  onChange={(e) => setContactPublic(e.target.checked)}
-                  className="rounded"
-                />
-                公开显示联系方式(否则别人想联系你只能用「发送我的联系方式」单向交换)
-              </label>
-            )}
           </Field>
 
           {/* 密码(新发布显示;编辑时填验证) — 跟 二手/室友 同款:至少 6 位 alphanumeric */}

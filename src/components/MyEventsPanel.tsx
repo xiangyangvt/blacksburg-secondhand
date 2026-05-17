@@ -597,9 +597,9 @@ function PostsList({
   };
 
   const onRepost = (p: MyPost) => {
-    // 把 startAt/endAt 各 +7 天(若有)
-    // EventPostModal 收 initial 进编辑模式 — "再发一次"语义 = 把原活动的时间往后推一周 +
-    // 用户可调字段。提交走 PATCH /api/events/[id],保留同一条 event 的响应历史。
+    // Sprint 7 fix: "再发一次" 改走 POST 新建 event(forceNew),不再 PATCH 原 event
+    // 这样原活动的状态/响应历史保留,新发布是真新条目 — 用户预期符合"再发一次"语义
+    // 把 startAt/endAt 各 +7 天(若有)作为默认值
     const shift7d = (iso: string | null): string | null => {
       if (!iso) return null;
       const d = new Date(iso);
@@ -616,7 +616,7 @@ function PostsList({
       startAt: shift7d(p.startAt),
       endAt: shift7d(p.endAt),
       location: p.location,
-      posterNickname: '',     // 让 EventPostModal 自己 hydrate
+      posterNickname: '',     // 让 EventPostModal 自己 hydrate(走 create 路径)
       posterContactType: null,
       posterContact: null,
       posterContactLabel: null,
@@ -777,11 +777,12 @@ function PostsList({
         />
       )}
 
-      {/* 再发一次 — 复用 EventPostModal 编辑模式:同一条 event,时间 +7 天 +
-          用户可改其它字段。保留响应者历史,不新建 event。 */}
+      {/* 再发一次 — Sprint 7:复用 EventPostModal,但走 forceNew 路径 (POST 新建 event)
+          预填字段从 initial 来,submit 走 POST。原 event 状态/响应历史不动。 */}
       {repostInitial && (
         <EventPostModal
           initial={repostInitial}
+          forceNew
           onClose={() => setRepostInitial(null)}
           onCreated={() => { setRepostInitial(null); onRefresh(); }}
         />
