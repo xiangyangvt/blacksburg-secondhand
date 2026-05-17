@@ -58,17 +58,39 @@ const STATUS_BADGE: Record<
   },
 };
 
-/** 格式化时间:"5月20日 周三 19:00" */
+/** 格式化时间:"5月20日 周三 19:00" — 强制 ET (America/New_York) 时区
+ *  edge runtime 默认 UTC,d.getHours() 等会返回 UTC 数值,在微信看卡片显示的时间
+ *  会跟黑堡本地时间差 4-5 小时。用 Intl.DateTimeFormat formatToParts 强制 ET。
+ *  America/New_York 自动跟随夏令时(EST/EDT)。 */
 function formatStartTime(startAtIso: string | null): string {
   if (!startAtIso) return '长期';
   const d = new Date(startAtIso);
   if (isNaN(d.getTime())) return '长期';
-  const month = d.getMonth() + 1;
-  const day = d.getDate();
-  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-  const wd = weekdays[d.getDay()];
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
+
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  const month = get('month');
+  const day = get('day');
+  let hh = get('hour');
+  const mm = get('minute');
+  // hour12: false 在某些 ICU 版本下凌晨可能返回 "24",规范化到 "00"
+  if (hh === '24') hh = '00';
+  const wdEn = get('weekday'); // Sun / Mon / ...
+  const wdMap: Record<string, string> = {
+    Sun: '周日', Mon: '周一', Tue: '周二', Wed: '周三',
+    Thu: '周四', Fri: '周五', Sat: '周六',
+  };
+  const wd = wdMap[wdEn] ?? wdEn;
+
   return `${month}月${day}日 ${wd} ${hh}:${mm}`;
 }
 
