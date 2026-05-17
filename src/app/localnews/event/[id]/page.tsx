@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
+import { expireStaleEvents } from '@/lib/eventArchive';
 import { EventCard, type EventCardData } from '@/components/EventCard';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +27,9 @@ const OG_IMG_VERSION = '1';
 type LoadedEvent = NonNullable<Awaited<ReturnType<typeof loadEvent>>>;
 
 async function loadEvent(id: string) {
+  // §4.6 lazy 归档(节流 5min) — 详情页 SSR 时也跑一次,保证拿到的 status 新鲜
+  await expireStaleEvents();
+
   const ev = await prisma.event.findUnique({
     where: { id },
     select: {

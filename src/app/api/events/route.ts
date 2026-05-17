@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { expireStaleEvents } from '@/lib/eventArchive';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,6 +65,9 @@ export async function GET(req: NextRequest) {
   const category = sp.get('category');
   const limitRaw = sp.get('limit');
   const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 50, 1), 100) : 50;
+
+  // Phase 3B §4.6: lazy 归档过期 events(节流 5min)— 在 list query 前跑一次
+  await expireStaleEvents();
 
   // Phase 3B: discussion / news 类目和 reddit 源永久砍掉。query 走这两个类目直接返空
   // (UI 仍可能传旧 chip,server 兜底)

@@ -39,3 +39,5 @@ next-env.d.ts
 
 # 数据库备份产物（含敏感数据）
 backups/
+
+.claude/

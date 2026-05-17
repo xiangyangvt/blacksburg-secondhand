@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { expireStaleEvents } from '@/lib/eventArchive';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,6 +18,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  // §4.6 lazy 归档(节流 5min)
+  await expireStaleEvents();
+
   const event = await prisma.event.findUnique({
     where: { id: params.id },
     select: {
