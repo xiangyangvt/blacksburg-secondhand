@@ -60,12 +60,13 @@ export function LiveSection({
   events: EventCardData[];
   onSeeAll?: () => void;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  // 默认折叠;用户点开过(localStorage = '0')才展开,折叠状态('1')和未点过(null)都保持折叠
+  const [collapsed, setCollapsed] = useState(true);
   // hydrate 折叠状态
   useEffect(() => {
     try {
       const v = localStorage.getItem(COLLAPSED_KEY);
-      if (v === '1') setCollapsed(true);
+      if (v === '0') setCollapsed(false);
     } catch {
       /* ignore */
     }
