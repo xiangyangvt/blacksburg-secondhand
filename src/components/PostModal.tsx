@@ -157,8 +157,8 @@ export function PostModal({
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-0 sm:p-4">
-      <div className="bg-white w-full max-w-2xl sm:rounded-card min-h-screen sm:min-h-0 my-0 sm:my-4">
+    <div className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-x-hidden overflow-y-auto p-0 sm:p-4">
+      <div className="bg-white w-full max-w-2xl sm:rounded-card min-h-screen sm:min-h-0 my-0 sm:my-4 overflow-x-hidden">
         <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 sm:rounded-t-card z-10">
           {mode === 'create' && <Plus size={20} className="text-brand" />}
           <h2 className="text-lg font-semibold">

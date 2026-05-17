@@ -289,11 +289,11 @@ export function EventPostModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-0 sm:p-4"
+      className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center overflow-x-hidden overflow-y-auto p-0 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white w-full max-w-2xl sm:rounded-card shadow-overlay min-h-screen sm:min-h-0 my-0 sm:my-4 sm:overflow-hidden"
+        className="bg-white w-full max-w-2xl sm:rounded-card shadow-overlay min-h-screen sm:min-h-0 my-0 sm:my-4 overflow-x-hidden sm:overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 sm:rounded-t-card z-10">
@@ -542,8 +542,9 @@ export function EventPostModal({
 }
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  // min-w-0 让 Field 在 grid/flex 中能 shrink — datetime-local native 渲染较宽时不撑破父容器
   return (
-    <div>
+    <div className="min-w-0">
       <label className="block text-xs text-stone-500 mb-1">
         {label}
         {required && <span className="text-rose-500 ml-1">*</span>}
