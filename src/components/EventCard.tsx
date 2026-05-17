@@ -343,7 +343,7 @@ export function EventCard({
         </div>
 
         {/* 标题 */}
-        <h3 className={`font-semibold text-stone-900 leading-tight ${expanded ? 'text-base md:text-lg' : 'line-clamp-2 text-sm md:text-base'}`}>
+        <h3 className={`font-semibold text-stone-900 leading-tight ${expanded ? 'text-lg md:text-xl' : 'line-clamp-2 text-base md:text-lg'}`}>
           {event.title}
         </h3>
 
@@ -365,7 +365,7 @@ export function EventCard({
                 {event.description}
               </p>
             )}
-            <div className="md:hidden text-[11px] text-stone-400 pt-1">点开看详情 →</div>
+            <div className="md:hidden text-xs text-stone-400 pt-1">点开看详情 →</div>
           </>
         )}
 

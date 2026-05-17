@@ -470,9 +470,8 @@ export function EventPostModal({
           <button
             onClick={submit}
             disabled={submitting}
-            className="inline-flex items-center gap-1.5 px-6 py-2 text-sm font-medium bg-brand text-white rounded-full hover:bg-brand-dark active:scale-95 disabled:opacity-50 shadow-card transition-colors"
+            className="px-6 py-2 text-sm font-medium bg-brand text-white rounded-full hover:bg-brand-dark active:scale-95 disabled:opacity-50 shadow-card transition-colors"
           >
-            <Plus size={14} />
             {submitting ? '...' : isEdit ? '保存修改' : '发布'}
           </button>
         </div>
