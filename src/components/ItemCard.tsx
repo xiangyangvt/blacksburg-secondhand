@@ -394,17 +394,18 @@ export function ItemCard({
         <button
           onClick={toggleCart}
           disabled={cartBusy}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs whitespace-nowrap transition-colors disabled:opacity-50 ${
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs whitespace-nowrap transition-colors disabled:opacity-50 ${
             inCart
               ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
-              : 'bg-white border-stone-300 text-stone-700 hover:bg-stone-100'
+              : 'bg-white border-stone-300 text-stone-700 hover:bg-stone-50'
           }`}
         >
           {inCart ? <Check size={13} strokeWidth={2.5} /> : <Heart size={13} />}
           {inCart ? '已在心愿单' : '加入心愿单'}
         </button>
 
-        {/* 分享：内容是「标题 — $价格 + 链接」，方便丢到微信里 */}
+        {/* 分享：内容是「标题 — $价格 + 链接」，方便丢到微信里
+            label 用 t('card.share')(简化到"分享"),className 不覆盖 — 跟 ShareButton 默认纯白 pill 一致 */}
         {origin && (
           <ShareButton
             shareText={buildItemShareText({
@@ -415,8 +416,7 @@ export function ItemCard({
               origin,
               itemId: item.id,
             })}
-            label={t('card.shareItem')}
-            className="!bg-amber-50 !border-amber-300 hover:!bg-amber-100"
+            label={t('card.share')}
           />
         )}
       </div>

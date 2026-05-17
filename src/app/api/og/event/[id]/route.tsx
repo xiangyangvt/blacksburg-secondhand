@@ -72,6 +72,41 @@ function formatStartTime(startAtIso: string | null): string {
   return `${month}月${day}日 ${wd} ${hh}:${mm}`;
 }
 
+/**
+ * 短期倒计时(跟 EventCard.getCountdown 同逻辑):
+ *   - startAt 已过 + endAt 未过 → "进行中"
+ *   - < 1 小时 → "还有 X 分钟"
+ *   - 1h - 24h → "还有 X 小时"
+ *   - > 24h → null(formatStartTime 已经说"X月X日"了,不重复)
+ */
+function getCountdown(
+  startAtIso: string | null,
+  endAtIso: string | null,
+): string | null {
+  if (!startAtIso) return null;
+  const s = new Date(startAtIso);
+  if (isNaN(s.getTime())) return null;
+  const now = Date.now();
+  const diffMs = s.getTime() - now;
+
+  if (diffMs <= 0) {
+    if (endAtIso) {
+      const e = new Date(endAtIso);
+      if (!isNaN(e.getTime()) && e.getTime() > now) return '进行中';
+    }
+    return null;
+  }
+  if (diffMs < 3600e3) {
+    const m = Math.max(1, Math.ceil(diffMs / 60000));
+    return `还有 ${m} 分钟`;
+  }
+  if (diffMs < 24 * 3600e3) {
+    const h = Math.ceil(diffMs / 3600e3);
+    return `还有 ${h} 小时`;
+  }
+  return null;
+}
+
 /** 响应数文案 */
 function formatResponse(
   status: string | null | undefined,
@@ -169,6 +204,7 @@ export async function GET(
     category: string | null;
     customCategory: string | null;
     startAt: string | null;
+    endAt: string | null;
     status: string | null;
     maxAttendees: number | null;
     responseCount: number;
@@ -187,6 +223,7 @@ export async function GET(
           category: json.event.category ?? null,
           customCategory: json.event.customCategory ?? null,
           startAt: json.event.startAt ?? null,
+          endAt: json.event.endAt ?? null,
           status: json.event.status ?? null,
           maxAttendees: json.event.maxAttendees ?? null,
           responseCount: json.event.responseCount ?? 0,
@@ -209,6 +246,7 @@ export async function GET(
         ? event.customCategory
         : CATEGORY_LABEL[cat] ?? '活动';
     const timeText = formatStartTime(event.startAt);
+    const countdown = getCountdown(event.startAt, event.endAt);
     const responseText = formatResponse(
       event.status,
       event.maxAttendees,
@@ -338,13 +376,33 @@ export async function GET(
           >
             <div
               style={{
-                fontSize: 36,
-                fontWeight: 600,
-                color: '#44403c',
                 display: 'flex',
+                alignItems: 'baseline',
+                gap: 16,
               }}
             >
-              {timeText}
+              <div
+                style={{
+                  fontSize: 36,
+                  fontWeight: 600,
+                  color: '#44403c',
+                  display: 'flex',
+                }}
+              >
+                {timeText}
+              </div>
+              {countdown && (
+                <div
+                  style={{
+                    fontSize: 30,
+                    fontWeight: 600,
+                    color: '#7B1113',
+                    display: 'flex',
+                  }}
+                >
+                  · {countdown}
+                </div>
+              )}
             </div>
             {responseText && (
               <div

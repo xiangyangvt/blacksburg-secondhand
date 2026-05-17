@@ -105,7 +105,7 @@ export function ShareButton({
       <button
         type="button"
         onClick={onClick}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700 whitespace-nowrap transition-colors ${className}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-stone-300 bg-white hover:bg-stone-50 text-xs text-stone-700 whitespace-nowrap transition-colors ${className}`}
       >
         {(copied || wechatCopied) ? <Check size={14} className="text-emerald-600" /> : (icon ?? <Share2 size={14} />)}
         <span>{(copied || wechatCopied) ? t('card.shareCopied') : (label ?? t('card.share'))}</span>
