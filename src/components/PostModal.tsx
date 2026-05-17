@@ -158,7 +158,7 @@ export function PostModal({
 
   return (
     <div className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-hidden p-0 sm:p-4">
-      <div className="bg-white w-full max-w-2xl sm:rounded-card h-screen sm:h-auto sm:max-h-[calc(100vh-2rem)] my-0 sm:my-4 overflow-hidden flex flex-col">
+      <div className="bg-white w-full max-w-2xl sm:rounded-card h-[100svh] sm:h-auto sm:max-h-[calc(100vh-2rem)] my-0 sm:my-4 overflow-hidden flex flex-col">
         <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 sm:rounded-t-card z-10">
           {mode === 'create' && <Plus size={20} className="text-brand" />}
           <h2 className="text-lg font-semibold">
@@ -181,7 +181,7 @@ export function PostModal({
           </div>
         )}
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         {mode === 'create' && tab === 'batch' ? (
           <>
             {/* 桌面：批量面板 */}

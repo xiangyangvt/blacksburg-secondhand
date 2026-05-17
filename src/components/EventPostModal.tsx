@@ -330,7 +330,7 @@ export function EventPostModal({
       onClick={onClose}
     >
       <div
-        className="bg-white w-full max-w-2xl sm:rounded-card shadow-overlay h-screen sm:h-auto sm:max-h-[calc(100vh-2rem)] my-0 sm:my-4 overflow-hidden flex flex-col"
+        className="bg-white w-full max-w-2xl sm:rounded-card shadow-overlay h-[100svh] sm:h-auto sm:max-h-[calc(100vh-2rem)] my-0 sm:my-4 overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 sm:rounded-t-card z-10">
@@ -346,7 +346,7 @@ export function EventPostModal({
         {/* 注:邮箱登录 UI 暂时下线(链路太长),后端 /api/auth/* 保留可未来再开
             SessionTopBar 组件本身保留,import 留着 — 但不渲染 */}
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-5 space-y-3">
           {/* Sprint 7 §4.1 字段顺序:标题 / 时间 / 想找几人 / 类目 / 联系方式 / 昵称 / 地点 / 描述 / 密码 */}
 
           {/* 标题 */}
