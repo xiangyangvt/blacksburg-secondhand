@@ -33,9 +33,10 @@ function titleStartsWithEmoji(title: string): boolean {
   if (!title) return false;
   // 取前 2 个 code point(不是 chars,避免 surrogate pair 误判)
   const head = Array.from(title).slice(0, 2).join('');
-  // unicode emoji 主要范围 + Misc Symbols + Dingbats + 国旗(regional indicator)
+  // unicode emoji 主要范围 + Misc Symbols + Dingbats + 国旗(regional indicator) +
+  // 1F000-1F0FF(麻将 🀄 / 扑克 🂠 / 多米诺) + 2300-23FF(Misc Tech 含 ⏰ 等)
   // 注:简单 regex,边角案例不追求完整覆盖
-  return /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}]/u.test(head);
+  return /[\u{1F000}-\u{1FAFF}\u{2300}-\u{27BF}\u{1F1E6}-\u{1F1FF}]/u.test(head);
 }
 
 export function buildEventShareText(

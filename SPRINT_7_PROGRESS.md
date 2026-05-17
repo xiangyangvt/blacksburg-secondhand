@@ -1,6 +1,6 @@
 # Sprint 7 Phase 3B
 
-最后更新: 2026-05-17 23:50 ET — 主体 + 自动归档完成,仅剩测试(用户跳过)
+最后更新: 2026-05-17 — Vitest 单测落地(42 个 / 全过);Playwright E2E 待启动
 
 ## §3 数据模型
 
@@ -39,5 +39,5 @@
 
 ## §8 测试
 
-- [ ] 单元测试 (Vitest/Jest)
+- [x] 单元测试 (Vitest/Jest)
 - [ ] E2E (Playwright)
