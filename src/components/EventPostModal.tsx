@@ -19,6 +19,7 @@ import {
   setLastEventTemplate,
 } from '@/lib/eventNickname';
 import { SessionTopBar } from './SessionTopBar';
+import { ImageUpload } from './ImageUpload';
 
 // 跟二手/室友共用 — 三平台都从同一处读取/写入上次用的密码
 const LS_LAST_EDIT_CODE = 'hb_last_edit_code';
@@ -49,6 +50,7 @@ export type EventPostInitial = {
   posterContactLabel: string | null;
   posterContactPublic: boolean;
   maxAttendees?: number | null;  // Phase 3B
+  photoUrls?: string[];          // Phase 3C 用户上传图(最多 6 张)
 };
 
 // 跟二手/室友同款:6 位 alphanumeric(不限数字),默认生成 6 位混合方便记
@@ -154,6 +156,8 @@ export function EventPostModal({
   const [contactPublic, setContactPublic] = useState(initial?.posterContactPublic ?? false);
   // Phase 3B: 想找几人(空字符串 = 不限);UI 用 string 方便清空,提交时 parse
   const [maxAttendees, setMaxAttendees] = useState<string>(initial?.maxAttendees ? String(initial.maxAttendees) : '');
+  // Phase 3C: 用户上传图(最多 6 张,ImageUpload 默认上限)
+  const [photoUrls, setPhotoUrls] = useState<string[]>(initial?.photoUrls ?? []);
   const [code, setCode] = useState(isEdit ? '' : '');
   const [submitting, setSubmitting] = useState(false);
 
@@ -274,6 +278,7 @@ export function EventPostModal({
         contactLabel: contactType === 'other' ? contactLabel.trim() : null,
         contactPublic,
         maxAttendees: maxAttendees.trim() ? parseInt(maxAttendees, 10) : null,
+        photoUrls,  // Phase 3C: 用户上传图
       };
       if (!isEdit) body.code = code;
 
@@ -569,6 +574,11 @@ export function EventPostModal({
               className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand resize-y"
             />
             <div className="text-xs text-stone-400 text-right">{description.length} / 500</div>
+          </Field>
+
+          {/* 照片(可选)— Phase 3C,跟二手/室友共用 ImageUpload */}
+          <Field label="照片(可选,最多 6 张)">
+            <ImageUpload urls={photoUrls} onChange={setPhotoUrls} />
           </Field>
 
           {/* 密码(新发布显示;编辑时填验证) — 跟 二手/室友 同款:至少 6 位 alphanumeric */}

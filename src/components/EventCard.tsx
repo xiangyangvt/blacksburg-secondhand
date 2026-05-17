@@ -15,6 +15,8 @@ import {
   Utensils, Dumbbell, BookOpen, Trophy, Sparkles, MessageCircle,
   // Phase 3B 响应数 + 状态 badge
   Users, CheckCircle2, XCircle, Hourglass,
+  // Phase 3C 简笔 placeholder 装饰 icon
+  Coffee, ChefHat, Activity, Lightbulb, GraduationCap, Medal, Flag,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { isEventSaved, toggleSavedEvent, subscribeSavedEvents } from '@/lib/savedEvents';
@@ -101,17 +103,90 @@ const CATEGORY_ICON: Record<string, LucideIcon> = {
   news:        MessageCircle,   // 旧
 };
 
-const CATEGORY_COLOR: Record<string, { bg: string; text: string; placeholder: string }> = {
-  life:        { bg: 'bg-cat-home/10',        text: 'text-cat-home',        placeholder: 'bg-cat-home/10 text-cat-home/40' },
-  exercise:    { bg: 'bg-emerald-100',        text: 'text-emerald-700',     placeholder: 'bg-emerald-50 text-emerald-300' },
-  academic:    { bg: 'bg-cat-books/10',       text: 'text-cat-books',       placeholder: 'bg-cat-books/10 text-cat-books/40' },
-  competition: { bg: 'bg-cat-transport/10',   text: 'text-cat-transport',   placeholder: 'bg-cat-transport/10 text-cat-transport/40' },
-  discussion:  { bg: 'bg-cat-electronics/10', text: 'text-cat-electronics', placeholder: 'bg-cat-electronics/10 text-cat-electronics/40' },
-  other:       { bg: 'bg-stone-100',          text: 'text-stone-700',       placeholder: 'bg-stone-100 text-stone-400' },
-  // 旧 ID 兜底配色
-  events: { bg: 'bg-cat-home/10',        text: 'text-cat-home',        placeholder: 'bg-cat-home/10 text-cat-home/40' },
-  sports: { bg: 'bg-cat-transport/10',   text: 'text-cat-transport',   placeholder: 'bg-cat-transport/10 text-cat-transport/40' },
-  news:   { bg: 'bg-cat-electronics/10', text: 'text-cat-electronics', placeholder: 'bg-cat-electronics/10 text-cat-electronics/40' },
+// Phase 3C 类目色重新设计:5 类目色相分散(amber/green/purple/blue/slate),底色淡 / 字色深,对比度 ≥ AA
+// - chipBg/chipText:scrape 白底卡片上的 chip 配色
+// - chipOnTintBg/chipOnTintText:UGC tint 卡片上 chip 用白底 + 类目深字(防 chip 和 tint 融成一片)
+// - imgBg/imgIconColor:无图占位区底色 + 主 icon 颜色(scrape 和 UGC 都用)
+// - tintBg:UGC 卡片文字区背景(非图区,scrape 不用)
+// - decoColor:占位区角落装饰 icon 颜色(同 imgIconColor 但透明度低)
+// - avatarBg:展开态首字母圆圈头像背景(用类目深色)
+const CATEGORY_COLOR: Record<string, {
+  chipBg: string; chipText: string;
+  chipOnTintBg: string; chipOnTintText: string;
+  imgBg: string; imgIconColor: string;
+  tintBg: string;
+  avatarBg: string;
+}> = {
+  life: {
+    chipBg: 'bg-amber-100', chipText: 'text-amber-800',
+    chipOnTintBg: 'bg-white', chipOnTintText: 'text-amber-800',
+    imgBg: 'bg-amber-50', imgIconColor: 'text-amber-600',
+    tintBg: 'bg-amber-50', avatarBg: 'bg-amber-700',
+  },
+  exercise: {
+    chipBg: 'bg-green-100', chipText: 'text-green-800',
+    chipOnTintBg: 'bg-white', chipOnTintText: 'text-green-800',
+    imgBg: 'bg-green-50', imgIconColor: 'text-green-600',
+    tintBg: 'bg-green-50', avatarBg: 'bg-green-700',
+  },
+  academic: {
+    chipBg: 'bg-purple-100', chipText: 'text-purple-800',
+    chipOnTintBg: 'bg-white', chipOnTintText: 'text-purple-800',
+    imgBg: 'bg-purple-50', imgIconColor: 'text-purple-600',
+    tintBg: 'bg-purple-50', avatarBg: 'bg-purple-700',
+  },
+  competition: {
+    chipBg: 'bg-blue-100', chipText: 'text-blue-800',
+    chipOnTintBg: 'bg-white', chipOnTintText: 'text-blue-800',
+    imgBg: 'bg-blue-50', imgIconColor: 'text-blue-600',
+    tintBg: 'bg-blue-50', avatarBg: 'bg-blue-700',
+  },
+  other: {
+    chipBg: 'bg-slate-100', chipText: 'text-slate-800',
+    chipOnTintBg: 'bg-white', chipOnTintText: 'text-slate-800',
+    imgBg: 'bg-slate-50', imgIconColor: 'text-slate-600',
+    tintBg: 'bg-slate-50', avatarBg: 'bg-slate-700',
+  },
+  // discussion 已砍但兜底
+  discussion: {
+    chipBg: 'bg-slate-100', chipText: 'text-slate-800',
+    chipOnTintBg: 'bg-white', chipOnTintText: 'text-slate-800',
+    imgBg: 'bg-slate-50', imgIconColor: 'text-slate-600',
+    tintBg: 'bg-slate-50', avatarBg: 'bg-slate-700',
+  },
+  // 旧 ID 兜底
+  events: {
+    chipBg: 'bg-amber-100', chipText: 'text-amber-800',
+    chipOnTintBg: 'bg-white', chipOnTintText: 'text-amber-800',
+    imgBg: 'bg-amber-50', imgIconColor: 'text-amber-600',
+    tintBg: 'bg-amber-50', avatarBg: 'bg-amber-700',
+  },
+  sports: {
+    chipBg: 'bg-blue-100', chipText: 'text-blue-800',
+    chipOnTintBg: 'bg-white', chipOnTintText: 'text-blue-800',
+    imgBg: 'bg-blue-50', imgIconColor: 'text-blue-600',
+    tintBg: 'bg-blue-50', avatarBg: 'bg-blue-700',
+  },
+  news: {
+    chipBg: 'bg-slate-100', chipText: 'text-slate-800',
+    chipOnTintBg: 'bg-white', chipOnTintText: 'text-slate-800',
+    imgBg: 'bg-slate-50', imgIconColor: 'text-slate-600',
+    tintBg: 'bg-slate-50', avatarBg: 'bg-slate-700',
+  },
+};
+
+// Phase 3C: 无图占位区角落装饰 icon(对角 2 个,opacity 18%,营造"简笔设计"感)
+const CATEGORY_DECO: Record<string, [LucideIcon, LucideIcon]> = {
+  life:        [Coffee, ChefHat],
+  exercise:    [Activity, Medal],
+  academic:    [Lightbulb, GraduationCap],
+  competition: [Medal, Flag],
+  other:       [MapPin, Heart],
+  // 兼容
+  discussion:  [MessageCircle, Sparkles],
+  events:      [Coffee, ChefHat],
+  sports:      [Medal, Flag],
+  news:        [MessageCircle, Sparkles],
 };
 
 /** 紧凑端相对时间:
@@ -252,6 +327,7 @@ export function EventCard({
   const cat = event.category ?? 'events';
   const colors = CATEGORY_COLOR[cat] ?? CATEGORY_COLOR.events;
   const CategoryIcon = CATEGORY_ICON[cat] ?? Sparkles;  // Phase 3B
+  const [DecoA, DecoB] = CATEGORY_DECO[cat] ?? CATEGORY_DECO.other;  // Phase 3C 占位装饰 icon
   // news/discussion 用 publishedAt(发布时间,过去),events/sports 用 startAt(活动时间,未来)
   const isPastBased = event.category === 'discussion'; // Phase 3A.1: news 已合并到 discussion
   const referenceTime = isPastBased ? event.publishedAt : event.startAt;
@@ -367,11 +443,12 @@ export function EventCard({
         <Heart size={15} strokeWidth={2.2} fill={isSaved ? 'currentColor' : 'none'} />
       </button>
 
-      {/* 图片区:紧凑端 4/3(mobile 比 16/9 更适合双列窄卡);展开 16/9 横展 */}
+      {/* 图片区:紧凑端 4/3(mobile 比 16/9 更适合双列窄卡);展开 16/9 横展
+          Phase 3C 无图占位:主类目 icon + 对角装饰 icon(opacity 18% 营造简笔设计感) */}
       <div
         className={`relative overflow-hidden ${
           expanded ? 'aspect-[2/1]' : 'aspect-[4/3] md:aspect-[16/9]'
-        } ${showImage ? 'bg-stone-100' : `${colors.placeholder} flex items-center justify-center`}`}
+        } ${showImage ? 'bg-stone-100' : `${colors.imgBg} flex items-center justify-center`}`}
       >
         {showImage ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -384,7 +461,28 @@ export function EventCard({
             className="w-full h-full object-cover"
           />
         ) : (
-          <Calendar size={expanded ? 64 : 48} strokeWidth={1.2} className="opacity-50" />
+          <>
+            {/* 主 icon 居中 */}
+            <CategoryIcon
+              size={expanded ? 56 : 40}
+              strokeWidth={1.5}
+              className={colors.imgIconColor}
+              aria-hidden
+            />
+            {/* 装饰 icon — 左上 + 右下,opacity 18% */}
+            <DecoA
+              size={expanded ? 28 : 20}
+              strokeWidth={1.5}
+              className={`${colors.imgIconColor} absolute top-2 left-2 opacity-[0.18]`}
+              aria-hidden
+            />
+            <DecoB
+              size={expanded ? 28 : 20}
+              strokeWidth={1.5}
+              className={`${colors.imgIconColor} absolute bottom-2 right-2 opacity-[0.18]`}
+              aria-hidden
+            />
+          </>
         )}
 
         {/* 有图卡:♥ 按钮浮在封面右上,跟 ItemCard / ListingCard 一致 */}
@@ -405,10 +503,15 @@ export function EventCard({
         )}
       </div>
 
-      <div className="p-3 md:p-4 space-y-1.5">
-        {/* 类目 chip(Lucide icon)+ 状态 + 响应数 + 时间 + 倒计时 + 热度(Phase 2A) */}
+      {/* 文字区:UGC 时按类目 tint 背景,scrape 保持白底
+          Phase 3C 视觉差异化:让用户发的内容在 feed 里一眼可识别 */}
+      <div className={`p-3 md:p-4 space-y-1.5 ${isUserPosted ? colors.tintBg : ''}`}>
+        {/* 类目 chip(Lucide icon)+ 状态 + 响应数 + 时间 + 倒计时 + 热度(Phase 2A)
+            UGC 时 chip 用白底 + 类目深字(防 chip 和 tint 融成一片);scrape 用类目浅底 + 深字 */}
         <div className="flex items-center gap-1.5 text-xs flex-wrap">
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${colors.bg} ${colors.text}`}>
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${
+            isUserPosted ? `${colors.chipOnTintBg} ${colors.chipOnTintText}` : `${colors.chipBg} ${colors.chipText}`
+          }`}>
             <CategoryIcon size={11} strokeWidth={2.2} />
             {cat === 'other' && event.customCategory ? event.customCategory : (CATEGORY_LABEL[cat] ?? cat)}
           </span>
@@ -539,13 +642,21 @@ export function EventCard({
               </div>
             )}
 
-            {/* 操作区:跳源(scraped) / 发布者信息(user) + 复制到微信群 */}
+            {/* 操作区:跳源(scraped) / 发布者信息(user) + 复制到微信群
+                Phase 3C: UGC 发布者灰字 → 首字母圆圈头像 + 昵称(社交化) */}
             <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-stone-100 flex-wrap" data-no-toggle>
-              <span className="text-[11px] text-stone-400">
-                {event.source === 'user'
-                  ? <>用户发布{event.posterNickname && <> · {event.posterNickname}</>}</>
-                  : <>来源: {event.source}</>}
-              </span>
+              {event.source === 'user' ? (
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-5 h-5 rounded-full ${colors.avatarBg} text-white flex items-center justify-center text-[10px] font-medium flex-shrink-0`}>
+                    {(event.posterNickname?.trim()?.[0] ?? '匿').toUpperCase()}
+                  </div>
+                  <span className="text-xs text-stone-600">
+                    <span className="font-medium text-stone-800">{event.posterNickname || '匿名'}</span> 发布
+                  </span>
+                </div>
+              ) : (
+                <span className="text-[11px] text-stone-400">来源: {event.source}</span>
+              )}
               <div className="flex items-center gap-2 flex-wrap">
                 <ShareToWechatButton
                   event={{

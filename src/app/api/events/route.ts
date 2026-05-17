@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
   const contactLabel = (body.contactLabel ?? '').toString().trim().slice(0, 20) || null;
   const contactPublic = Boolean(body.contactPublic);
   const photoUrls   = Array.isArray(body.photoUrls)
-    ? body.photoUrls.filter((u: any) => typeof u === 'string').slice(0, 4)
+    ? body.photoUrls.filter((u: any) => typeof u === 'string').slice(0, 6)
     : null;
   // Phase 3B: 想找几人 hint(可选,1-99)。空 / 非数字 / 超界 → null
   const maxAttendeesRaw = body.maxAttendees;

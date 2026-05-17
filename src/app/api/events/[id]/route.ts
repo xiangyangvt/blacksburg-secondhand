@@ -66,7 +66,7 @@ export async function PATCH(
   if ('contactLabel' in body) update.posterContactLabel = body.contactLabel ? String(body.contactLabel).trim().slice(0, 20) : null;
   if ('contactPublic' in body) update.posterContactPublic = Boolean(body.contactPublic);
   if ('photoUrls' in body && Array.isArray(body.photoUrls)) {
-    const urls = body.photoUrls.filter((u: any) => typeof u === 'string').slice(0, 4);
+    const urls = body.photoUrls.filter((u: any) => typeof u === 'string').slice(0, 6);
     update.photoUrls = urls.length > 0 ? JSON.stringify(urls) : null;
     update.imageUrl = urls.length > 0 ? urls[0] : null;
   }

@@ -10,7 +10,7 @@
 //   - 自己评论旁有「删除」(soft delete)
 
 import { useEffect, useState, useCallback } from 'react';
-import { Trash2, Send } from 'lucide-react';
+import { Trash2, Send, Pencil } from 'lucide-react';
 import { showSuccess, showError } from '@/lib/toast';
 import { getNickname, setNickname, subscribeNickname } from '@/lib/eventNickname';
 import { ContactSendModal } from './ContactSendModal';
@@ -53,6 +53,10 @@ export function EventCommentSection({
   const [content, setContent] = useState('');
   const [sendTarget, setSendTarget] = useState<Comment | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // Phase 3C: inline 编辑评论
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // 昵称 hydrate(localStorage)
   useEffect(() => {
@@ -128,6 +132,41 @@ export function EventCommentSection({
     }
   };
 
+  // Phase 3C: 进入 inline 编辑
+  const startEdit = (c: Comment) => {
+    setEditingId(c.id);
+    setEditDraft(c.content);
+    setConfirmDeleteId(null); // 关闭可能的删除确认
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft('');
+  };
+  const saveEdit = async (cid: string) => {
+    const body = editDraft.trim().slice(0, 300);
+    if (!body) { showError('评论内容不能为空'); return; }
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/comments/${cid}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: body }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        showError(data.error || '修改失败');
+        return;
+      }
+      setComments(prev => prev.map(c => c.id === cid ? { ...c, content: data.comment.content } : c));
+      cancelEdit();
+      showSuccess('已修改');
+    } catch {
+      showError('网络故障');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   return (
     <div className="space-y-3" data-no-toggle onClick={(e) => e.stopPropagation()}>
       <div className="flex items-center gap-2 pt-1 border-t border-stone-100">
@@ -155,38 +194,84 @@ export function EventCommentSection({
                 <span className="text-stone-400">{formatWhen(c.createdAt)}</span>
                 {c.isMine && <span className="text-stone-400">· 我</span>}
               </div>
-              <div className="text-stone-700 whitespace-pre-wrap leading-relaxed">{c.content}</div>
-              {/* 操作行 */}
-              <div className="flex items-center gap-2 mt-2">
-                {!c.isMine && (
-                  <button
-                    type="button"
-                    onClick={() => setSendTarget(c)}
-                    className="inline-flex items-center gap-1 text-xs text-brand hover:text-brand-dark font-medium"
-                  >
-                    <Send size={12} />
-                    发送我的联系方式
-                  </button>
-                )}
-                {c.isMine && (
-                  confirmDeleteId === c.id ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs">
-                      <span className="text-stone-500">确认删除?</span>
-                      <button onClick={() => doDelete(c.id)} className="text-rose-600 hover:text-rose-700 font-medium">确认</button>
-                      <button onClick={() => setConfirmDeleteId(null)} className="text-stone-500 hover:text-stone-700">取消</button>
-                    </span>
-                  ) : (
+              {/* Phase 3C: inline 编辑模式 — textarea + 保存/取消;否则显示纯文本 */}
+              {editingId === c.id ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={editDraft}
+                    onChange={(e) => setEditDraft(e.target.value)}
+                    maxLength={300}
+                    rows={3}
+                    autoFocus
+                    className="w-full px-2 py-1.5 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand resize-y"
+                  />
+                  <div className="flex items-center gap-2 text-xs">
                     <button
                       type="button"
-                      onClick={() => setConfirmDeleteId(c.id)}
-                      className="inline-flex items-center gap-1 text-xs text-stone-400 hover:text-rose-600"
+                      onClick={() => saveEdit(c.id)}
+                      disabled={savingEdit || !editDraft.trim()}
+                      className="px-3 py-1 rounded-chip bg-brand text-white hover:bg-brand-dark active:scale-95 transition-all disabled:opacity-50 font-medium"
                     >
-                      <Trash2 size={11} />
-                      删除
+                      {savingEdit ? '保存中…' : '保存'}
                     </button>
-                  )
-                )}
-              </div>
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      className="px-3 py-1 rounded-chip text-stone-600 hover:text-stone-900"
+                    >
+                      取消
+                    </button>
+                    <span className={`ml-auto ${editDraft.length >= 300 ? 'text-rose-600' : 'text-stone-400'}`}>
+                      {editDraft.length} / 300
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-stone-700 whitespace-pre-wrap leading-relaxed">{c.content}</div>
+              )}
+              {/* 操作行 — 编辑模式下不显,保持界面专注 */}
+              {editingId !== c.id && (
+                <div className="flex items-center gap-3 mt-2">
+                  {!c.isMine && (
+                    <button
+                      type="button"
+                      onClick={() => setSendTarget(c)}
+                      className="inline-flex items-center gap-1 text-xs text-brand hover:text-brand-dark font-medium"
+                    >
+                      <Send size={12} />
+                      发送我的联系方式
+                    </button>
+                  )}
+                  {c.isMine && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => startEdit(c)}
+                        className="inline-flex items-center gap-1 text-xs text-stone-400 hover:text-brand"
+                      >
+                        <Pencil size={11} />
+                        修改
+                      </button>
+                      {confirmDeleteId === c.id ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs">
+                          <span className="text-stone-500">确认删除?</span>
+                          <button onClick={() => doDelete(c.id)} className="text-rose-600 hover:text-rose-700 font-medium">确认</button>
+                          <button onClick={() => setConfirmDeleteId(null)} className="text-stone-500 hover:text-stone-700">取消</button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(c.id)}
+                          className="inline-flex items-center gap-1 text-xs text-stone-400 hover:text-rose-600"
+                        >
+                          <Trash2 size={11} />
+                          删除
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

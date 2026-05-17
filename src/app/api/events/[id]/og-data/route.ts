@@ -33,6 +33,8 @@ export async function GET(
       status: true,
       maxAttendees: true,
       source: true,
+      imageUrl: true,   // scrape 单图 / UGC 时 = photoUrls[0]
+      photoUrls: true,  // UGC 多图 JSON 字符串
     },
   });
 
@@ -44,6 +46,16 @@ export async function GET(
   const responseCount = await prisma.eventContactSend.count({
     where: { eventId: params.id, status: { not: 'canceled' } },
   });
+
+  // photoUrls JSON 字符串 parse 成数组,优先 photoUrls[0],fallback imageUrl
+  let firstPhoto: string | null = null;
+  if (event.photoUrls) {
+    try {
+      const arr = JSON.parse(event.photoUrls);
+      if (Array.isArray(arr) && typeof arr[0] === 'string') firstPhoto = arr[0];
+    } catch { /* ignore */ }
+  }
+  if (!firstPhoto && event.imageUrl) firstPhoto = event.imageUrl;
 
   return NextResponse.json(
     {
@@ -59,6 +71,7 @@ export async function GET(
         maxAttendees: event.maxAttendees,
         source: event.source,
         responseCount,
+        coverPhoto: firstPhoto,
       },
     },
     {

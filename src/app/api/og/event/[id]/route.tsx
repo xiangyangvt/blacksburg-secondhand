@@ -208,6 +208,7 @@ export async function GET(
     status: string | null;
     maxAttendees: number | null;
     responseCount: number;
+    coverPhoto: string | null;
   } | null = null;
 
   try {
@@ -227,6 +228,7 @@ export async function GET(
           status: json.event.status ?? null,
           maxAttendees: json.event.maxAttendees ?? null,
           responseCount: json.event.responseCount ?? 0,
+          coverPhoto: json.event.coverPhoto ?? null,
         };
       }
     }
@@ -278,6 +280,40 @@ export async function GET(
             position: 'relative',
           }}
         >
+          {/* Phase 3C: 有照片时,照片作背景 + 半透明白色 overlay 保证文字可读 */}
+          {event.coverPhoto && (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={event.coverPhoto}
+                alt=""
+                width={WIDTH}
+                height={HEIGHT}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  zIndex: 0,
+                }}
+              />
+              {/* 白色半透 overlay,保证下面文字可读 */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  background: 'rgba(255, 255, 255, 0.86)',
+                  zIndex: 1,
+                  display: 'flex',
+                }}
+              />
+            </>
+          )}
           {/* 顶部 brand + status badge */}
           <div
             style={{
@@ -285,6 +321,8 @@ export async function GET(
               alignItems: 'center',
               justifyContent: 'space-between',
               width: '100%',
+              position: 'relative',
+              zIndex: 2,
             }}
           >
             <div
@@ -347,6 +385,8 @@ export async function GET(
               alignItems: 'center',
               marginTop: 24,
               marginBottom: 24,
+              position: 'relative',
+              zIndex: 2,
             }}
           >
             <div
@@ -372,6 +412,8 @@ export async function GET(
               width: '100%',
               borderTop: '2px solid #e7e5e4',
               paddingTop: 28,
+              position: 'relative',
+              zIndex: 2,
             }}
           >
             <div
