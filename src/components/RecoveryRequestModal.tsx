@@ -9,7 +9,7 @@ import { X } from 'lucide-react';
 import { showSuccess, showError } from '@/lib/toast';
 
 export type RecoveryTarget = {
-  type: 'item' | 'listing';
+  type: 'item' | 'listing' | 'event';
   id: string;
   title: string;
   knownContactValue?: string; // 用户从 EditCodePrompt 上下文知道的联系方式(可空)

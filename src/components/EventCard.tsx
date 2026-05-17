@@ -17,7 +17,10 @@ import {
   Users, CheckCircle2, XCircle, Hourglass,
   // Phase 3C 简笔 placeholder 装饰 icon
   Coffee, ChefHat, Activity, Lightbulb, GraduationCap, Medal, Flag,
+  // Phase 3C MoreMenu(修改/删除/举报)
+  Pencil, Trash2,
 } from 'lucide-react';
+import { MoreMenu, type MoreMenuItem } from './MoreMenu';
 import type { LucideIcon } from 'lucide-react';
 import { isEventSaved, toggleSavedEvent, subscribeSavedEvents } from '@/lib/savedEvents';
 import { showSuccess, showWarning } from '@/lib/toast';
@@ -305,10 +308,20 @@ const STATUS_BADGE: Record<string, { label: string; cls: string; icon: LucideIco
 export function EventCard({
   event,
   autoExpand = false,
+  onEdit,
+  onDelete,
+  onReport,
 }: {
   event: EventCardData;
   /** 后续可能从 /localnews?focus=ID 进来时自动展开 */
   autoExpand?: boolean;
+  /** Phase 3C: 跟 ItemCard/ListingCard 一致 — 展开后 ⋯ 菜单的三个 action
+   *  onEdit/onDelete 只对 source==='user' 的 UGC 有意义(scrape 不能改/删);
+   *  onReport 对 UGC + scrape 都能用(任何人可举报)
+   *  父组件(/localnews/page.tsx)处理 EditCodePrompt → 验证密码 → 后续动作 */
+  onEdit?: (event: EventCardData) => void;
+  onDelete?: (event: EventCardData) => void;
+  onReport?: (event: EventCardData) => void;
 }) {
   const [expanded, setExpanded] = useState(autoExpand);
   const [imgFailed, setImgFailed] = useState(false);
@@ -350,6 +363,15 @@ export function EventCard({
   const showResponseChip = isUserPosted;
   // Phase 3B: 主响应按钮可用性 — 非 active 状态置灰不可点
   const canRespond = !event.status || event.status === 'active';
+
+  // Phase 3C: ⋯ 菜单(修改/删除/举报) — 跟 ItemCard/ListingCard 同款
+  //   修改/删除 仅 UGC 才有意义(scrape 不能改);举报对 UGC + scrape 都开
+  //   实际执行由父组件 (/localnews/page.tsx) 通过 EditCodePrompt 验证密码后处理
+  const moreMenuItems: MoreMenuItem[] = [
+    ...(isUserPosted && onEdit   ? [{ icon: <Pencil size={14} />, label: '修改', onClick: () => onEdit(event) }] : []),
+    ...(isUserPosted && onDelete ? [{ icon: <Trash2 size={14} />, label: '删除', onClick: () => onDelete(event), danger: true }] : []),
+    ...(onReport                 ? [{ icon: <Flag   size={14} />, label: '举报', onClick: () => onReport(event) }] : []),
+  ];
 
   // Phase 2A 热度梯度
   const heat = getHeatLevel(event.clickCount, event.scrapedAt);
@@ -551,6 +573,13 @@ export function EventCard({
           {/* Phase 3B 短期倒计时 — < 24h 才显,跟时间标签配对 */}
           {!expanded && countdown && (
             <span className="text-rose-600 font-medium">{countdown}</span>
+          )}
+
+          {/* Phase 3C: ⋯ 菜单(修改/删除/举报)— 仅展开态显,推到行末尾 */}
+          {expanded && moreMenuItems.length > 0 && (
+            <span className="ml-auto" data-no-toggle>
+              <MoreMenu items={moreMenuItems} />
+            </span>
           )}
         </div>
 

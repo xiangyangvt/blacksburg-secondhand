@@ -22,8 +22,8 @@ export function EditCodePrompt({
   action: string; // 已经本地化好的字符串（"编辑" / "标记已售出 / 删除" / ...）
   onConfirm: (code: string) => void | Promise<void>;
   onCancel: () => void;
-  /** UX-5 找回回路:传 'listing' 用于室友页面;默认 'item' 二手 */
-  targetType?: 'item' | 'listing';
+  /** UX-5 找回回路:传 'listing' 用于室友页面;'event' 用于黑堡活动;默认 'item' 二手 */
+  targetType?: 'item' | 'listing' | 'event';
 }) {
   const t = useT();
   const [code, setCode] = useState('');

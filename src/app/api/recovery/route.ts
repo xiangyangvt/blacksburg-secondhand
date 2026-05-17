@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
   const applicantWechat = typeof body.applicantWechat === 'string' ? body.applicantWechat.trim() : '';
   const applicantNote = typeof body.applicantNote === 'string' ? body.applicantNote.trim() || null : null;
 
-  if (!['item', 'listing'].includes(targetType)) {
-    return NextResponse.json({ error: 'targetType 必须是 item 或 listing' }, { status: 400 });
+  if (!['item', 'listing', 'event'].includes(targetType)) {
+    return NextResponse.json({ error: 'targetType 必须是 item / listing / event' }, { status: 400 });
   }
   if (!applicantWechat) {
     return NextResponse.json({ error: '微信号不能为空' }, { status: 400 });

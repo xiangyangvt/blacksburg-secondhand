@@ -199,8 +199,16 @@ export function EventPostModal({
   }, [title, isEdit]);
 
   // 新发布时:hydrate 昵称 + 上次联系方式 + 密码(跟二手/室友共用 hb_last_edit_code)
+  // 编辑模式:也从 LS 读 code 预填(Phase 3C — EditCodePrompt 验证过 code 后写入 LS,
+  //          这里 mount 自动取出来,用户不需要再输一次)
   useEffect(() => {
-    if (isEdit) return;
+    if (isEdit) {
+      try {
+        const saved = localStorage.getItem(LS_LAST_EDIT_CODE);
+        if (saved && saved.length >= 6) setCode(saved);
+      } catch { /* ignore */ }
+      return;
+    }
     const n = getNickname();
     if (n && !nickname) setNick(n);
     const last = getLastContact();

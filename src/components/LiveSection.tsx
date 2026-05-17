@@ -56,9 +56,16 @@ function liveSort(a: EventCardData, b: EventCardData): number {
 export function LiveSection({
   events,
   onSeeAll,
+  onEditEvent,
+  onDeleteEvent,
+  onReportEvent,
 }: {
   events: EventCardData[];
   onSeeAll?: () => void;
+  // Phase 3C: 把 ⋯ 菜单 callback 透传给 EventCard,live 区里的卡也支持修改/删除/举报
+  onEditEvent?: (event: EventCardData) => void;
+  onDeleteEvent?: (event: EventCardData) => void;
+  onReportEvent?: (event: EventCardData) => void;
 }) {
   // 默认折叠;用户点开过(localStorage = '0')才展开,折叠状态('1')和未点过(null)都保持折叠
   const [collapsed, setCollapsed] = useState(true);
@@ -116,7 +123,13 @@ export function LiveSection({
         <div className="px-3 pb-3 pt-1">
           <div className="grid grid-cols-2 md:grid-cols-1 gap-2 md:gap-3">
             {displayed.map(e => (
-              <EventCard key={e.id} event={e} />
+              <EventCard
+                key={e.id}
+                event={e}
+                onEdit={onEditEvent}
+                onDelete={onDeleteEvent}
+                onReport={onReportEvent}
+              />
             ))}
           </div>
           {extra > 0 && (

@@ -19,11 +19,16 @@ import { SearchBox } from '@/components/SearchBox';
 import { EventCard, type EventCardData } from '@/components/EventCard';
 import { EventWishlistButton } from '@/components/EventWishlistButton';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
-import { EventPostModal } from '@/components/EventPostModal';
+import { EventPostModal, type EventPostInitial } from '@/components/EventPostModal';
 import { FabPostButton } from '@/components/FabPostButton';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { LiveSection } from '@/components/LiveSection';
+import { EditCodePrompt } from '@/components/EditCodePrompt';
+import { showSuccess, showError } from '@/lib/toast';
 import { distanceFromBlacksburg, isLocalCore, isWithinNrv } from '@/lib/eventDistance';
+
+// Phase 3C: localStorage key — 跟 EventPostModal 共用
+const LS_LAST_EDIT_CODE = 'hb_last_edit_code';
 
 // ============ 筛选状态机 ============
 
@@ -144,6 +149,93 @@ export default function LocalNewsPage() {
   const [refreshKey, setRefreshKey] = useState(0); // 发布后强制重新 fetch
   const mainListRef = useRef<HTMLDivElement>(null); // Live "看全部" 滚到主列表
 
+  // Phase 3C: ⋯ 菜单 — 修改/删除走 EditCodePrompt 验证密码后才进行
+  const [codePrompt, setCodePrompt] = useState<
+    | { kind: 'edit' | 'delete'; event: EventCardData }
+    | null
+  >(null);
+  // 验证通过后打开 EventPostModal edit mode 用的 initial
+  const [editingInitial, setEditingInitial] = useState<EventPostInitial | null>(null);
+
+  // Phase 3C handlers
+  const handleEditEvent = (event: EventCardData) => setCodePrompt({ kind: 'edit', event });
+  const handleDeleteEvent = (event: EventCardData) => setCodePrompt({ kind: 'delete', event });
+  const handleReportEvent = async (event: EventCardData) => {
+    const reason = prompt(`举报「${event.title}」 — 请说明原因(选填,但会帮我们判断):`);
+    if (reason === null) return; // 用户取消
+    try {
+      const res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetType: 'event', targetId: event.id, reason }),
+      });
+      if (res.ok) showSuccess('已收到举报,我们会查看');
+      else showError('举报失败,请稍后再试');
+    } catch {
+      showError('网络故障,稍后再试');
+    }
+  };
+
+  // Phase 3C: 把 EventCardData 转换成 EventPostModal 用的 EventPostInitial
+  const toEditInitial = (e: EventCardData): EventPostInitial => ({
+    id: e.id,
+    title: e.title,
+    category: e.category ?? 'life',
+    customCategory: e.customCategory ?? null,
+    description: e.description ?? '',
+    startAt: typeof e.startAt === 'string' ? e.startAt : (e.startAt ? e.startAt.toISOString() : null),
+    endAt: typeof e.endAt === 'string' ? e.endAt : (e.endAt ? e.endAt.toISOString() : null),
+    location: e.location ?? null,
+    posterNickname: e.posterNickname ?? '',
+    posterContactType: e.posterContactType ?? null,
+    posterContact: e.posterContact ?? null,
+    posterContactLabel: e.posterContactLabel ?? null,
+    posterContactPublic: !!e.posterContactPublic,
+    maxAttendees: e.maxAttendees ?? null,
+    photoUrls: Array.isArray(e.photoUrls) ? e.photoUrls : [],
+  });
+
+  // EditCodePrompt onConfirm — 根据 kind 走 verify+edit 或 delete
+  const handleCodeConfirm = async (code: string) => {
+    if (!codePrompt) return;
+    const { kind, event } = codePrompt;
+
+    if (kind === 'edit') {
+      const res = await fetch(`/api/events/${event.id}/verify-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.valid) {
+        showError(data.error || '密码错误');
+        return;
+      }
+      // 验证通过 → 把 code 存 LS,EventPostModal mount 时自动预填
+      try { localStorage.setItem(LS_LAST_EDIT_CODE, code); } catch { /* ignore */ }
+      setCodePrompt(null);
+      setEditingInitial(toEditInitial(event));
+      return;
+    }
+
+    if (kind === 'delete') {
+      if (!confirm(`确认删除「${event.title}」?删除后不可恢复。`)) return;
+      const res = await fetch(`/api/events/${event.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        showError(data.error || '删除失败');
+        return;
+      }
+      setCodePrompt(null);
+      setRefreshKey(k => k + 1);
+      showSuccess('已删除');
+    }
+  };
+
   // localStorage 初始化(SSR-safe:首次 render 用 default,mount 后 hydrate)
   useEffect(() => {
     try {
@@ -256,6 +348,9 @@ export default function LocalNewsPage() {
           <LiveSection
             events={events}
             onSeeAll={() => mainListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            onEditEvent={handleEditEvent}
+            onDeleteEvent={handleDeleteEvent}
+            onReportEvent={handleReportEvent}
           />
         )}
 
@@ -335,7 +430,13 @@ export default function LocalNewsPage() {
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
               {visible.map(e => (
-                <EventCard key={e.id} event={e} />
+                <EventCard
+                  key={e.id}
+                  event={e}
+                  onEdit={handleEditEvent}
+                  onDelete={handleDeleteEvent}
+                  onReport={handleReportEvent}
+                />
               ))}
             </div>
           )}
@@ -355,6 +456,30 @@ export default function LocalNewsPage() {
         <EventPostModal
           onClose={() => setPostModalOpen(false)}
           onCreated={() => setRefreshKey(k => k + 1)}
+        />
+      )}
+
+      {/* Phase 3C: 编辑 modal — verify-code 通过后才打开 */}
+      {editingInitial && (
+        <EventPostModal
+          initial={editingInitial}
+          onClose={() => setEditingInitial(null)}
+          onCreated={() => {
+            setEditingInitial(null);
+            setRefreshKey(k => k + 1);
+          }}
+        />
+      )}
+
+      {/* Phase 3C: 修改/删除前的密码 prompt */}
+      {codePrompt && (
+        <EditCodePrompt
+          itemId={codePrompt.event.id}
+          title={codePrompt.event.title}
+          action={codePrompt.kind === 'edit' ? '修改' : '删除'}
+          targetType="event"
+          onCancel={() => setCodePrompt(null)}
+          onConfirm={handleCodeConfirm}
         />
       )}
 
