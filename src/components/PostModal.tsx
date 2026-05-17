@@ -132,9 +132,9 @@ export function PostModal({
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-4">
-      <div className="bg-white rounded-card w-full max-w-2xl my-4">
-        <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 rounded-t-card z-10">
+    <div className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-0 sm:p-4">
+      <div className="bg-white w-full max-w-2xl sm:rounded-card min-h-screen sm:min-h-0 my-0 sm:my-4">
+        <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 sm:rounded-t-card z-10">
           {mode === 'create' && <Plus size={20} className="text-brand" />}
           <h2 className="text-lg font-semibold">
             {mode === 'create' ? t('post.titleCreate') : t('post.titleEdit')}
@@ -337,7 +337,7 @@ export function PostModal({
 
         {/* 单条模式才显示底部固定按钮；批量模式自带提交按钮 */}
         {(!(mode === 'create' && tab === 'batch')) && (
-          <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 rounded-b-card">
+          <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 sm:rounded-b-card">
             <button
               onClick={onClose}
               className="px-6 py-2 border border-stone-300 bg-white text-stone-700 rounded-full hover:bg-stone-50 transition-colors font-medium"

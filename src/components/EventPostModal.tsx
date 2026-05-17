@@ -245,14 +245,14 @@ export function EventPostModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center overflow-y-auto p-3 sm:p-4"
+      className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-0 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white w-full max-w-lg rounded-card shadow-overlay my-2 sm:my-4 overflow-hidden"
+        className="bg-white w-full max-w-2xl sm:rounded-card shadow-overlay min-h-screen sm:min-h-0 my-0 sm:my-4 sm:overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 rounded-t-card z-10">
+        <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 sm:rounded-t-card z-10">
           <Plus size={18} className="text-brand" />
           <h2 className="text-base font-semibold text-stone-900">
             {isEdit ? '编辑活动' : '发布活动'}
@@ -460,7 +460,7 @@ export function EventPostModal({
           </Field>
         </div>
 
-        <div className="sticky bottom-0 bg-stone-50 border-t border-stone-200 px-5 py-3 flex justify-end gap-2">
+        <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 sm:rounded-b-card">
           <button
             onClick={onClose}
             className="px-6 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-full hover:bg-stone-50 transition-colors"
