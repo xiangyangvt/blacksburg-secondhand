@@ -169,7 +169,7 @@ export function InquirySection({
     } catch {}
   };
 
-  // 打开"卖家回复"表单：预填上次用过的识别码
+  // 打开"卖家回复"表单：预填上次用过的密码
   const openReplyForm = (inq: Inquiry) => {
     setReplyingId(inq.id);
     setReplyText(inq.sellerReply ?? '');

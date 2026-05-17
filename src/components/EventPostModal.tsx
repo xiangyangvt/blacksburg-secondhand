@@ -2,7 +2,7 @@
 
 // Phase 3A 用户发布 event 模态框
 //
-// 字段:标题/类别(含 other 自填)/开始时间/结束时间/地点/描述/昵称/联系方式(可选,公开 toggle)/识别码(6 位)
+// 字段:标题/类别(含 other 自填)/开始时间/结束时间/地点/描述/昵称/联系方式(可选,公开 toggle)/密码(6 位)
 // 图片上传 defer 到下个版本
 //
 // 提交 POST /api/events;成功后 onCreated(event) 回调让父组件刷新
@@ -14,6 +14,9 @@ import { X, Plus, Copy } from 'lucide-react';
 import { showSuccess, showError } from '@/lib/toast';
 import { CONTACT_TYPES, type ContactType } from '@/lib/contactTypes';
 import { getNickname, setNickname as persistNickname, getLastContact, setLastContact } from '@/lib/eventNickname';
+
+// 跟二手/室友共用 — 三平台都从同一处读取/写入上次用的密码
+const LS_LAST_EDIT_CODE = 'hb_last_edit_code';
 
 // Phase 3A.1: 用户可选 5 大类别 + 自定义
 const CATEGORIES = [
@@ -117,12 +120,12 @@ export function EventPostModal({
   const [contact, setContact] = useState(initial?.posterContact ?? '');
   const [contactLabel, setContactLabel] = useState(initial?.posterContactLabel ?? '');
   const [contactPublic, setContactPublic] = useState(initial?.posterContactPublic ?? false);
-  const [code, setCode] = useState(isEdit ? '' : gen6Code());
+  const [code, setCode] = useState(isEdit ? '' : '');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
-  // 新发布时:hydrate 昵称 + 上次联系方式
+  // 新发布时:hydrate 昵称 + 上次联系方式 + 密码(跟二手/室友共用 hb_last_edit_code)
   useEffect(() => {
     if (isEdit) return;
     const n = getNickname();
@@ -132,6 +135,13 @@ export function EventPostModal({
       setContactType(last.contactType);
       setContact(last.contact);
       if (last.contactLabel) setContactLabel(last.contactLabel);
+    }
+    // 密码:优先用 localStorage 里二手/室友共用的;否则用 gen6Code() 兜底
+    try {
+      const saved = localStorage.getItem(LS_LAST_EDIT_CODE);
+      setCode(saved && saved.length >= 6 ? saved : gen6Code());
+    } catch {
+      setCode(gen6Code());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -152,7 +162,7 @@ export function EventPostModal({
   const copyCode = async () => {
     try {
       await navigator.clipboard.writeText(code);
-      showSuccess('识别码已复制');
+      showSuccess('密码已复制');
     } catch {
       showError('复制失败');
     }
@@ -166,7 +176,7 @@ export function EventPostModal({
     if (!d) return showError('请填写描述');
     if (!n) return showError('请填写昵称');
     if (category === 'other' && !customCategory.trim()) return showError('请填写「其他」类别名称');
-    if (!isEdit && (code.length < 6 || code.length > 50)) return showError('识别码至少 6 位');
+    if (!isEdit && (code.length < 6 || code.length > 50)) return showError('密码至少 6 位');
     if (contact.trim() && !contactType) return showError('请选联系方式类型');
     if (contactType === 'other' && contact.trim() && !contactLabel.trim()) {
       return showError('请填写「其他」联系方式的具体平台(如 Line)');
@@ -199,7 +209,7 @@ export function EventPostModal({
 
       const url = isEdit ? `/api/events/${initial!.id}` : `/api/events`;
       const method = isEdit ? 'PATCH' : 'POST';
-      if (isEdit) body.code = code; // 编辑也需要识别码
+      if (isEdit) body.code = code; // 编辑也需要密码
 
       const res = await fetch(url, {
         method,
@@ -219,7 +229,11 @@ export function EventPostModal({
           contactLabel: contactType === 'other' ? contactLabel.trim() : undefined,
         });
       }
-      showSuccess(isEdit ? '已更新' : '已发布,记好识别码');
+      // 新发布成功 → 把密码写回共用 LS,下次二手/室友/活动都自动填
+      if (!isEdit) {
+        try { localStorage.setItem(LS_LAST_EDIT_CODE, code); } catch {}
+      }
+      showSuccess(isEdit ? '已更新' : '已发布,记好密码');
       onCreated?.();
       onClose();
     } catch {
@@ -413,8 +427,8 @@ export function EventPostModal({
             )}
           </Field>
 
-          {/* 识别码(新发布显示;编辑时填验证) — 跟 二手/室友 同款:至少 6 位 alphanumeric */}
-          <Field label={isEdit ? '识别码(编辑需验证)' : '识别码'} required>
+          {/* 密码(新发布显示;编辑时填验证) — 跟 二手/室友 同款:至少 6 位 alphanumeric */}
+          <Field label={isEdit ? '密码（编辑需验证）' : '密码'} required>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -422,7 +436,7 @@ export function EventPostModal({
                 onChange={(e) => setCode(e.target.value.slice(0, 50))}
                 minLength={6}
                 maxLength={50}
-                placeholder="至少 6 位(数字 / 字母均可)"
+                placeholder="例：myevent123"
                 className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand font-mono"
               />
               {!isEdit && (
@@ -438,8 +452,9 @@ export function EventPostModal({
               )}
             </div>
             {!isEdit && (
-              <div className="text-xs text-stone-600 mt-1.5">
-                ⚠️ 改 / 删活动时要用,记好它。我们用加密保存,自己也看不到 — 丢了无法找回,但可以联系方式找回未删的发布。
+              <div className="text-xs text-stone-600 mt-1.5 leading-relaxed">
+                ⚠️ "联系方式 + 密码" = 你管理这条发布的凭证。改 / 删 / 查"我的"都要用。<br />
+                我们加密保存,自己也看不到 —— <strong>丢了无法找回</strong>,但可以凭联系方式申请人工找回。
               </div>
             )}
           </Field>

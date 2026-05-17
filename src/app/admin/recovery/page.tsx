@@ -1,4 +1,4 @@
-// 识别码找回管理页 (Sprint 6 UX-5)
+// 密码找回管理页 (Sprint 6 UX-5)
 // 独立子路由 /admin/recovery — 不动 1097 行的 admin/page.tsx
 // Sean 在这里看待处理申请,人工核对后:
 //   1. 复制申请人微信加好友
@@ -42,7 +42,7 @@ export default async function RecoveryAdminPage({
       <header className="bg-white border-b border-stone-200">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-stone-900">识别码找回管理</h1>
+            <h1 className="text-xl font-semibold text-stone-900">密码找回管理</h1>
             <p className="text-xs text-stone-500 mt-0.5">
               共 {pendingCount} 条待处理 ·{' '}
               <a href="/admin" className="text-brand hover:underline">← 回 admin 主页</a>

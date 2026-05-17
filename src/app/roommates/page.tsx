@@ -74,7 +74,7 @@ function RoommatesContent() {
   const [postModalOpen, setPostModalOpen] = useState(false);
   const [applyTarget, setApplyTarget] = useState<Listing | null>(null);
 
-  // 编辑 / 删除 / 举报 三种动作都要识别码先验证
+  // 编辑 / 删除 / 举报 三种动作都要密码先验证
   const [codePrompt, setCodePrompt] = useState<
     | { kind: 'edit';   listing: Listing }
     | { kind: 'delete'; listing: Listing }
@@ -139,12 +139,12 @@ function RoommatesContent() {
   const onApply = (l: Listing) => setApplyTarget(l);
   const onPost = () => setPostModalOpen(true);
 
-  // === 编辑：先识别码验证 → 打开 ListingPostModal edit mode ===
+  // === 编辑：先密码验证 → 打开 ListingPostModal edit mode ===
   const onEditListing = (l: Listing) => setCodePrompt({ kind: 'edit', listing: l });
 
   const handleEditConfirm = async (code: string) => {
     if (!codePrompt || codePrompt.kind !== 'edit') return;
-    // 先验证识别码 —— 错码不让进编辑界面（避免用户填一堆才被告知失败）
+    // 先验证密码 —— 错码不让进编辑界面（避免用户填一堆才被告知失败）
     const res = await fetch(`/api/listings/${codePrompt.listing.id}/verify-code`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -152,7 +152,7 @@ function RoommatesContent() {
     });
     const data = await res.json();
     if (!res.ok || !data.valid) {
-      showError(data.error || '识别码错误');
+      showError(data.error || '密码错误');
       return; // 留在 EditCodePrompt，让用户重试
     }
     // 通过 → 用 GET 不能拿 contactValue（公开 API 擦了）；从 localStorage 取（卖家本人会有）
@@ -165,12 +165,12 @@ function RoommatesContent() {
     setCodePrompt(null);
   };
 
-  // === 删除：先识别码验证 → DELETE 调用 ===
+  // === 删除：先密码验证 → DELETE 调用 ===
   const onDeleteListing = (l: Listing) => setCodePrompt({ kind: 'delete', listing: l });
 
   const handleDeleteConfirm = async (code: string) => {
     if (!codePrompt || codePrompt.kind !== 'delete') return;
-    // 先验证识别码（错码不弹"确认删除"骚扰用户）
+    // 先验证密码（错码不弹"确认删除"骚扰用户）
     const v = await fetch(`/api/listings/${codePrompt.listing.id}/verify-code`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -178,7 +178,7 @@ function RoommatesContent() {
     });
     const vData = await v.json();
     if (!v.ok || !vData.valid) {
-      showError(vData.error || '识别码错误');
+      showError(vData.error || '密码错误');
       return;
     }
     if (!confirm('删除后无法恢复，确定？')) return;
@@ -314,7 +314,7 @@ function RoommatesContent() {
         />
       )}
 
-      {/* 编辑 / 删除：识别码验证 */}
+      {/* 编辑 / 删除：密码验证 */}
       {codePrompt && (
         <EditCodePrompt
           itemId={codePrompt.listing.id}
@@ -326,7 +326,7 @@ function RoommatesContent() {
         />
       )}
 
-      {/* 编辑模态：识别码通过后打开 */}
+      {/* 编辑模态：密码通过后打开 */}
       {editTarget && (
         <ListingPostModal
           mode="edit"

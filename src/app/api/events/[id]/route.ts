@@ -1,4 +1,4 @@
-// PATCH /api/events/[id] — 用户编辑自己发布的 event(需识别码)
+// PATCH /api/events/[id] — 用户编辑自己发布的 event(需密码)
 // DELETE /api/events/[id] — 同上,soft delete
 //
 // 只对 source='user' 的 event 生效;scraped events 不可改
@@ -15,9 +15,9 @@ async function loadAndAuth(id: string, code: string) {
   const ev = await prisma.event.findUnique({ where: { id } });
   if (!ev) return { error: 'event 不存在', status: 404 } as const;
   if (ev.source !== 'user') return { error: '只能修改自己发布的活动', status: 403 } as const;
-  if (!ev.posterCodeHash) return { error: '该活动无识别码,不可修改', status: 403 } as const;
+  if (!ev.posterCodeHash) return { error: '该活动无密码,不可修改', status: 403 } as const;
   const valid = await bcrypt.compare(code, ev.posterCodeHash);
-  if (!valid) return { error: '识别码不正确', status: 403 } as const;
+  if (!valid) return { error: '密码不正确', status: 403 } as const;
   return { ev } as const;
 }
 

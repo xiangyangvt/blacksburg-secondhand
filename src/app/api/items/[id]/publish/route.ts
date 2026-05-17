@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
   const { editCode } = body;
-  if (typeof editCode !== 'string') return err('请提供识别码');
+  if (typeof editCode !== 'string') return err('请提供密码');
 
   const item = await prisma.item.findUnique({ where: { id } });
   if (!item) return err('商品不存在', 404);
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
   if (item.status !== 'draft') return err('只能发布草稿状态的商品');
 
   const ok = await bcrypt.compare(editCode, item.editCodeHash);
-  if (!ok) return err('识别码错误', 401);
+  if (!ok) return err('密码错误', 401);
 
   // 限速：和单条发布一样
   const ip = getClientIp(req);

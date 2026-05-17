@@ -40,6 +40,7 @@ async function fetchUnread(platform: Platform): Promise<number> {
   const contactValue = localStorage.getItem(LS_CONTACT_V);
   const editCode = localStorage.getItem(LS_EDIT_CODE) ?? '';
   if (!contactValue) return 0; // 用户从没 lookup 过，没法监测
+  if (editCode.length < 6) return 0; // 后端要求 ≥6 位密码,本地不满足直接放弃,避免 401 噪音
 
   const lastSeen = getLastSeenAt(platform);
 

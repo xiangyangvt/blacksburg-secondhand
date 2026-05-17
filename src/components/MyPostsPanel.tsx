@@ -150,6 +150,12 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
 
   const lookup = useCallback(async () => {
     if (!contactValue.trim()) return;
+    // 密码强校验:必须 ≥6 位才能查
+    // 之前只校验 contactValue,导致任何知道别人联系方式的人都能看对方的发布
+    if (editCode.length < 6) {
+      showError('请输入密码（≥6 位）');
+      return;
+    }
     setLoading(true);
     try {
       const [itemsRes, listingsRes, sentRes] = await Promise.all([
@@ -192,17 +198,17 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
       setInboxPendingN(listingsData.pendingApplicationCount ?? 0);
       setSentPendingN(sentData.counts?.pending ?? 0);
 
-      // 平台自动选择：哪个有内容就选哪个，item 优先
-      const itemHas    = itemsArr.length > 0;
-      const listingHas = listingsArr.length > 0 || sentArr.length > 0;
-      const nextPlatform: Platform = itemHas ? 'item' : (listingHas ? 'listing' : 'item');
-      setPlatform(nextPlatform);
+      // 缓存联系方式 + 密码,下次自动填 + notifications 复用
+      try {
+        localStorage.setItem(LS_LAST_CONTACT_V, contactValue.trim());
+        localStorage.setItem(LS_LAST_CODE, editCode);
+      } catch {}
 
-      // 子 tab 自动选择
-      if (nextPlatform === 'item') {
-        setItemTab((itemsData.draftCount ?? 0) > 0 ? 'draft' : 'active');
-      } else {
-        // 待处理 inbox > 我发的待处理 > 我的 listing > 我发的申请
+      // 用户原本停留的 platform 在 lookup 后保持不变 —— 不再强制跳到 item
+      // 只调当前 platform 内的子 tab,让它自动定位到有内容的位置
+      if (platform === 'item') {
+        setItemTab((itemsData.draftCount ?? 0) > 0 && (itemsData.activeCount ?? 0) === 0 ? 'draft' : 'active');
+      } else if (platform === 'listing') {
         if ((listingsData.pendingApplicationCount ?? 0) > 0) setListingTab('inbox');
         else if ((sentData.counts?.pending ?? 0) > 0) setListingTab('sent');
         else if (listingsArr.length > 0) setListingTab('mine');
@@ -212,13 +218,14 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
           (listingsData.draftCount ?? 0) > 0 && (listingsData.activeCount ?? 0) === 0 ? 'draft' : 'active'
         );
       }
+      // platform === 'event' 时不动 platform,MyEventsContent 用 contact prop 自刷新
     } finally {
       setLoading(false);
     }
-  }, [contactValue, editCode, t]);
+  }, [contactValue, editCode, platform, t]);
 
   const handlePublishItem = async (item: Item) => {
-    if (editCode.length < 6) { showError('需要识别码'); return; }
+    if (editCode.length < 6) { showError('需要密码'); return; }
     const res = await fetch(`/api/items/${item.id}/publish`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -238,7 +245,7 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
   };
 
   const handlePublishListing = async (listing: ListingWithStatus) => {
-    if (editCode.length < 6) { showError('需要识别码'); return; }
+    if (editCode.length < 6) { showError('需要密码'); return; }
     const res = await fetch(`/api/listings/${listing.id}/publish`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -262,7 +269,7 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
     action: 'approve' | 'reject' | 'cancel',
     rejectReason?: string,
   ) => {
-    if (editCode.length < 6) { showError('需要识别码'); return; }
+    if (editCode.length < 6) { showError('需要密码'); return; }
     const body: any = { action };
     if (action === 'approve' || action === 'reject') {
       body.listingEditCode = editCode;
@@ -312,7 +319,7 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
           type="password"
           value={editCode}
           onChange={e => setEditCode(e.target.value)}
-          placeholder="≥6 位"
+          placeholder="发布时设置的密码"
           className="w-full border border-stone-300 rounded px-3 py-2 mb-3"
         />
 
@@ -536,7 +543,7 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
         />
       )}
 
-      {/* 删除识别码确认 —— item */}
+      {/* 删除密码确认 —— item */}
       {deleteItem && (
         <EditCodePrompt
           itemId={deleteItem.id}
@@ -550,7 +557,7 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
         />
       )}
 
-      {/* 删除识别码确认 —— listing */}
+      {/* 删除密码确认 —— listing */}
       {deleteListing && (
         <EditCodePrompt
           itemId={deleteListing.id}

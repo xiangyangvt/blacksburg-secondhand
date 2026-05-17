@@ -90,7 +90,7 @@ export function ListingApplyModal({
   const submit = async () => {
     if (genderBlocked) return;
     if (!contactValue.trim()) return showError('联系方式不能为空');
-    if (editCode.length < 6) return showError('识别码至少 6 位');
+    if (editCode.length < 6) return showError('密码至少 6 位');
     if (!message.trim()) return showError('消息不能为空');
 
     const payload = {
@@ -243,9 +243,9 @@ export function ListingApplyModal({
             </div>
           </div>
 
-          {/* 识别码 */}
+          {/* 密码 */}
           <div>
-            <Label required>识别码（≥6 位）</Label>
+            <Label required>密码</Label>
             <input
               type="password"
               value={editCode}

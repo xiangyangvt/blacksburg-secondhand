@@ -1,8 +1,8 @@
 // POST /api/applications/by-contact
 // 申请人 B 查自己发出的所有申请的当前状态
-// body { value, editCode? }
+// body { value, editCode }
 //   value     = 申请时填的联系方式
-//   editCode  = 申请时设的识别码（不传也能查，但只看到 contact 一致的所有申请，不能精确到自己；建议传）
+//   editCode  = 申请时设的密码（必传 ≥6 位，hash 精确匹配 —— 仅 contact 无法看别人的申请）
 
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
@@ -16,6 +16,9 @@ export async function POST(req: NextRequest) {
   const value = typeof body.value === 'string' ? body.value.trim() : '';
   const editCode = typeof body.editCode === 'string' ? body.editCode : '';
   if (!value) return NextResponse.json({ error: 'value 不能为空' }, { status: 400 });
+  if (editCode.length < 6) {
+    return NextResponse.json({ error: '请输入密码（≥6 位）' }, { status: 401 });
+  }
 
   const candidates = await prisma.application.findMany({
     where: { contactValue: value },
@@ -32,14 +35,11 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // 如果提供了 editCode，只返回 hash 比对通过的（精确到自己发的）
-  let mine = candidates;
-  if (editCode.length >= 6) {
-    const matched = await Promise.all(
-      candidates.map(async a => (await bcrypt.compare(editCode, a.editCodeHash)) ? a : null)
-    );
-    mine = matched.filter((x): x is (typeof candidates)[number] => x !== null);
-  }
+  // 强校验:必须密码 hash 匹配
+  const matched = await Promise.all(
+    candidates.map(async a => (await bcrypt.compare(editCode, a.editCodeHash)) ? a : null)
+  );
+  const mine = matched.filter((x): x is (typeof candidates)[number] => x !== null);
 
   // 序列化：approved 后才把对方 contact 露出来，否则擦掉
   const serialized = mine.map(a => ({

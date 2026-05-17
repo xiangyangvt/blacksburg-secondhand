@@ -1,6 +1,6 @@
 // POST /api/listings/[id]/verify-code
 // 纯校验端点：body { editCode } → { valid: boolean }
-// 用途：编辑流程在打开编辑表单前先验证识别码，避免"错码也能进编辑界面"的体感 bug
+// 用途：编辑流程在打开编辑表单前先验证密码，避免"错码也能进编辑界面"的体感 bug
 //
 // 设计：限速放宽（5 次/IP/分钟即可，正常流程一次就过），失败时返回 401 但不泄漏额外信息
 
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
 
   const { editCode } = body;
   if (typeof editCode !== 'string' || !editCode) {
-    return NextResponse.json({ valid: false, error: '请输入识别码' }, { status: 400 });
+    return NextResponse.json({ valid: false, error: '请输入密码' }, { status: 400 });
   }
 
   const listing = await prisma.listing.findUnique({ where: { id } });
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
 
   const ok = await bcrypt.compare(editCode, listing.editCodeHash);
   if (!ok) {
-    return NextResponse.json({ valid: false, error: '识别码错误' }, { status: 401 });
+    return NextResponse.json({ valid: false, error: '密码错误' }, { status: 401 });
   }
 
   return NextResponse.json({ valid: true });

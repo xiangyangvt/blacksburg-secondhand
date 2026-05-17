@@ -1,6 +1,6 @@
 'use client';
 
-// 识别码找回回路 (Sprint 6 UX-5):用户提交申请的 modal
+// 密码找回回路 (Sprint 6 UX-5):用户提交申请的 modal
 // 从 EditCodePrompt 内部触发(用户点"申请找回 →" 链接)
 // 流程:用户填微信号 + 帖子细节 → POST /api/recovery → toast 提示"24h 内会加微信"
 
@@ -60,7 +60,7 @@ export function RecoveryRequestModal({
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg w-full max-w-md p-5">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold">申请找回识别码</h3>
+          <h3 className="font-semibold">申请找回密码</h3>
           <button
             onClick={onClose}
             className="text-stone-500 hover:text-stone-900 p-1 rounded-full hover:bg-stone-100"
@@ -71,8 +71,8 @@ export function RecoveryRequestModal({
         </div>
 
         <p className="text-xs text-stone-600 mb-3 leading-relaxed bg-amber-50 border border-amber-200 rounded p-2">
-          你正在申请找回帖子 <strong>「{target.title}」</strong> 的识别码。
-          站长会用你填的微信加你,确认是本人后重置识别码 — 24h 内联系。
+          你正在申请找回帖子 <strong>「{target.title}」</strong> 的密码。
+          站长会用你填的微信加你,确认是本人后重置密码 — 24h 内联系。
           恶意申请会被记录拒绝。
         </p>
 

@@ -255,7 +255,7 @@ export function ItemDetailView({ item }: { item: Item }) {
                 <Flag size={13} />
                 {t('card.report')}
               </button>
-              {/* 卖家入口：识别码删除（编辑请回首页 / 我的发布） */}
+              {/* 卖家入口：密码删除（编辑请回首页 / 我的发布） */}
               <button
                 onClick={() => setCodePrompt('delete')}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-stone-300 bg-white hover:bg-stone-100 text-xs text-stone-700 ml-auto transition-colors"

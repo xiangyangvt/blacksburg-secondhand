@@ -26,11 +26,11 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
   // === 模式 1: A 同意/婉拒（用 listing 的 editCode） ===
   if (action === 'approve' || action === 'reject') {
     const code = body.listingEditCode;
-    if (typeof code !== 'string') return err('请提供 listing 识别码');
+    if (typeof code !== 'string') return err('请提供 listing 密码');
     if (application.status !== 'pending') return err(`当前状态 (${application.status}) 不能改`);
 
     const ok = await bcrypt.compare(code, application.listing.editCodeHash);
-    if (!ok) return err('识别码错误', 401);
+    if (!ok) return err('密码错误', 401);
 
     if (action === 'approve') {
       await prisma.application.update({
@@ -51,11 +51,11 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
   // === 模式 2: B 撤回（仅 pending；用申请人自己的 editCode） ===
   if (action === 'cancel') {
     const code = body.applicantEditCode;
-    if (typeof code !== 'string') return err('请提供你自己的识别码');
+    if (typeof code !== 'string') return err('请提供你自己的密码');
     if (application.status !== 'pending') return err('仅 pending 状态可撤回');
 
     const ok = await bcrypt.compare(code, application.editCodeHash);
-    if (!ok) return err('识别码错误', 401);
+    if (!ok) return err('密码错误', 401);
 
     await prisma.application.update({
       where: { id },
@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
 export async function DELETE(req: NextRequest, ctx: { params: { id: string } }) {
   const { id } = ctx.params;
   const code = req.nextUrl.searchParams.get('listingEditCode') ?? '';
-  if (!code) return err('请提供 listing 识别码');
+  if (!code) return err('请提供 listing 密码');
 
   const application = await prisma.application.findUnique({
     where: { id },
@@ -81,7 +81,7 @@ export async function DELETE(req: NextRequest, ctx: { params: { id: string } }) 
   if (!application) return err('申请不存在', 404);
 
   const ok = await bcrypt.compare(code, application.listing.editCodeHash);
-  if (!ok) return err('识别码错误', 401);
+  if (!ok) return err('密码错误', 401);
 
   await prisma.application.delete({ where: { id } });
   return NextResponse.json({ success: true });

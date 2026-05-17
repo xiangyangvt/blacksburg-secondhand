@@ -255,7 +255,7 @@ export function ListingPostModal({
   const [editCode, setEditCode] = useState(initialEditCode ?? '');
   const [submitting, setSubmitting] = useState(false);
 
-  // 创建模式：从 localStorage 预填联系方式 + 识别码
+  // 创建模式：从 localStorage 预填联系方式 + 密码
   // 编辑模式：上面已经从 initialListing/initialEditCode 取了，不覆盖
   useEffect(() => {
     if (isEdit) return;
@@ -301,7 +301,7 @@ export function ListingPostModal({
     if (meta.showSelfInfo && !posterGender) return showError('请选择你的性别');
     if (!title.trim()) return showError('标题不能为空');
     if (!contactValue.trim()) return showError('联系方式不能为空');
-    if (editCode.length < 6) return showError('识别码至少 6 位');
+    if (editCode.length < 6) return showError('密码至少 6 位');
     if (meta.dateRequiredBoth && (!moveInStart || !moveInEnd)) {
       return showError(`${meta.dateLabel}：起止日期都必填`);
     }
@@ -371,9 +371,9 @@ export function ListingPostModal({
 
   return (
     <div className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-0 sm:p-4">
-      <div className="bg-white w-full max-w-2xl sm:rounded-lg min-h-screen sm:min-h-0 my-0 sm:my-4">
+      <div className="bg-white w-full max-w-2xl sm:rounded-card min-h-screen sm:min-h-0 my-0 sm:my-4">
 
-        <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between rounded-t-lg">
+        <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between sm:rounded-t-card">
           <h2 className="text-lg font-semibold text-stone-900">{isEdit ? '编辑 listing' : '发布 listing'}</h2>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-stone-100" aria-label="关闭"><X size={22} /></button>
         </div>
@@ -697,7 +697,7 @@ export function ListingPostModal({
             )}
           </section>
 
-          {/* 7. 联系方式 + 识别码 */}
+          {/* 7. 联系方式 + 密码 */}
           <section className="space-y-3 bg-stone-50 rounded-lg p-3 border border-stone-200">
             <div className="text-xs text-stone-500 uppercase font-semibold">联系方式</div>
             <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
@@ -737,7 +737,7 @@ export function ListingPostModal({
           </section>
 
           <section>
-            <Label required>识别码（≥6 位，用于以后修改/删除/审批申请）</Label>
+            <Label required>密码</Label>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -753,26 +753,27 @@ export function ListingPostModal({
                   onClick={async () => {
                     try {
                       await navigator.clipboard.writeText(editCode);
-                      showSuccess('识别码已复制');
+                      showSuccess('密码已复制');
                     } catch {
                       showError('复制失败,请手动选中');
                     }
                   }}
                   className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-stone-100 text-stone-700 rounded hover:bg-stone-200 flex-shrink-0"
-                  title="复制识别码"
+                  title="复制密码"
                 >
                   <Copy size={12} />
                   复制
                 </button>
               )}
             </div>
-            <p className="text-xs text-stone-500 mt-1">
-              💡 这不是密码——只是用来证明这条信息是你发的。丢了无法找回；浏览器会本地记住，下次自动填。
-            </p>
+            <div className="text-xs text-stone-600 mt-1.5 leading-relaxed">
+              ⚠️ "联系方式 + 密码" = 你管理这条发布的凭证。改 / 删 / 查"我的"都要用。<br />
+              我们加密保存,自己也看不到 —— <strong>丢了无法找回</strong>,但可以凭联系方式申请人工找回。
+            </div>
           </section>
         </div>
 
-        <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 rounded-b-lg">
+        <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 sm:rounded-b-card">
           <button onClick={onClose} className="px-4 py-2 border border-stone-300 rounded hover:bg-stone-100">
             取消
           </button>

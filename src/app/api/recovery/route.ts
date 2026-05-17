@@ -1,4 +1,4 @@
-// 识别码找回回路 (Sprint 6 UX-5)
+// 密码找回回路 (Sprint 6 UX-5)
 // POST /api/recovery — 用户提交找回申请
 // GET  /api/recovery — admin 列表(需要 admin auth)
 

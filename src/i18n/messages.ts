@@ -123,7 +123,7 @@ export const messages = {
   'reply.btn':             { zh: '📝 卖家回复',                              en: '📝 Seller reply' },
   'reply.label':           { zh: '卖家',                                    en: 'Seller' },
   'reply.placeholder':     { zh: '回复买家（如：这个价格不行，最低 $25）',       en: 'Reply to buyer (e.g., Lowest $25)' },
-  'reply.codePlaceholder': { zh: '商品识别码',                                en: 'Item edit code' },
+  'reply.codePlaceholder': { zh: '商品密码',                                en: 'Item password' },
   'reply.send':            { zh: '发送回复',                                 en: 'Send reply' },
   'reply.cancel':          { zh: '取消',                                    en: 'Cancel' },
   'reply.edit':            { zh: '✏️改',                                    en: '✏️Edit' },
@@ -152,7 +152,7 @@ export const messages = {
   'post.fieldPhotos':      { zh: '商品照片',                                en: 'Photos' },
   'post.fieldContact':     { zh: '联系方式 *',                               en: 'Contact *' },
   'post.customLabelPh':    { zh: '联系方式名称（如 Discord）',                 en: 'Contact label (e.g., Discord)' },
-  'post.fieldEditCode':    { zh: '识别码 *（≥6 位）',                         en: 'Edit code * (≥6 chars)' },
+  'post.fieldEditCode':    { zh: '密码 *',                                   en: 'Password *' },
   'post.editCodePh':       { zh: '例：mychair123',                          en: 'e.g., mychair123' },
   // post.editCodeHelp 已废弃(Sprint 6 UX-7 改用 HelpHint popup,inline 教学一行字)
   'post.cancel':           { zh: '取消',                                    en: 'Cancel' },
@@ -162,21 +162,21 @@ export const messages = {
   'post.errTitle':         { zh: '标题不能为空',                              en: 'Title is required' },
   'post.errPrice':         { zh: '请填价格，或勾选「面议」',                    en: 'Enter a price or check Negotiable' },
   'post.errContact':       { zh: '联系方式不能为空',                          en: 'Contact is required' },
-  'post.errEditCode':      { zh: '识别码至少 6 位',                          en: 'Edit code must be ≥6 chars' },
+  'post.errEditCode':      { zh: '密码至少 6 位',                            en: 'Password must be ≥6 chars' },
   'post.errOpFailed':      { zh: '操作失败',                                en: 'Operation failed' },
 
-  // 识别码弹框（编辑/删除前）
-  'code.promptTitle':      { zh: '输入识别码以{action}',                     en: 'Enter edit code to {action}' },
+  // 密码弹框（编辑/删除前）
+  'code.promptTitle':      { zh: '输入密码以{action}',                       en: 'Enter password to {action}' },
   'code.actionEdit':       { zh: '编辑',                                    en: 'edit' },
   'code.actionDelete':     { zh: '删除',                                    en: 'delete' },
   'code.actionDelInq':     { zh: '删除该条留言',                             en: 'delete this inquiry' },
   'code.itemLabel':        { zh: '商品：',                                   en: 'Item: ' },
-  'code.placeholder':      { zh: '发布时设置的识别码',                         en: 'Edit code you set when posting' },
-  'code.help':             { zh: '浏览器自动填上了你以前用过的识别码。如果不对请手动输入。', en: 'Auto-filled from your previous codes. Edit if wrong.' },
+  'code.placeholder':      { zh: '发布时设置的密码',                         en: 'Password you set when posting' },
+  'code.help':             { zh: '浏览器自动填上了你以前用过的密码。如果不对请手动输入。', en: 'Auto-filled from your previous password. Edit if wrong.' },
   'code.cancel':           { zh: '取消',                                    en: 'Cancel' },
   'code.verifying':        { zh: '验证中…',                                 en: 'Verifying…' },
   'code.confirm':          { zh: '确定',                                    en: 'Confirm' },
-  'code.errWrong':         { zh: '识别码错误',                              en: 'Wrong edit code' },
+  'code.errWrong':         { zh: '密码错误',                                en: 'Wrong password' },
   'code.confirmDelete':    { zh: '确定删除这条信息？此操作不可恢复。',                en: 'Delete this post? This cannot be undone.' },
 
   // 图片上传
@@ -203,9 +203,9 @@ export const messages = {
 
   // 我的发布（G4）
   'my.title':              { zh: '我的',                                     en: 'My Posts' },
-  'my.intro':              { zh: '输入你发布时用的联系方式，查看你在二手 / 室友 / 黑堡 三个平台的全部发布。看草稿需加输识别码。', en: 'Enter your contact to see all your posts across 二手 / 室友 / 黑堡. Add your edit code to see drafts too.' },
+  'my.intro':              { zh: '输入你发布时用的联系方式和密码，查看你在二手 / 室友 / 黑堡 三个平台的全部发布。', en: 'Enter the contact and password you used when posting to see all your posts across 二手 / 室友 / 黑堡.' },
   'my.contactLabel':       { zh: '联系方式（如微信号 zhang3 / 手机号 / Discord 等,发布时填的那个）', en: 'Contact (e.g. WeChat zhang3 / phone / Discord — the one you used when posting)' },
-  'my.editCodeLabel':      { zh: '识别码（看草稿才需要,不限数字）',             en: 'Edit code (only needed for drafts, not limited to digits)' },
+  'my.editCodeLabel':      { zh: '密码 *',                                   en: 'Password *' },
   'my.lookup':              { zh: '查找',                                    en: 'Look up' },
   'my.tabActive':          { zh: '上架中 ({n})',                              en: 'Active ({n})' },
   'my.tabDraft':           { zh: '草稿 ({n})',                                en: 'Drafts ({n})' },

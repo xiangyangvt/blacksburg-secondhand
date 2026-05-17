@@ -70,13 +70,13 @@ export function RecoveryAdminPanel({
   };
 
   const generateAndCopyCode = async (id: string) => {
-    // 生成 8 位随机识别码
+    // 生成 8 位随机密码
     const newCode = Math.random().toString(36).substring(2, 6) + Math.random().toString(36).substring(2, 6);
     try {
       await navigator.clipboard.writeText(newCode);
-      showSuccess(`新识别码已复制: ${newCode}`, { duration: 8000 });
+      showSuccess(`新密码已复制: ${newCode}`, { duration: 8000 });
     } catch {
-      prompt('复制下面的新识别码,微信发给申请人:', newCode);
+      prompt('复制下面的新密码,微信发给申请人:', newCode);
     }
     await updateItem(id, { status: 'resolved', resolvedEditCode: newCode });
   };
@@ -157,7 +157,7 @@ export function RecoveryAdminPanel({
                 )}
                 {item.resolvedEditCode && (
                   <div>
-                    <span className="text-stone-500">已发出新识别码:</span>{' '}
+                    <span className="text-stone-500">已发出新密码:</span>{' '}
                     <span className="font-mono select-all bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded">{item.resolvedEditCode}</span>
                   </div>
                 )}
@@ -177,7 +177,7 @@ export function RecoveryAdminPanel({
                     disabled={busy === item.id}
                     className="px-3 py-1.5 text-sm bg-emerald-50 text-emerald-700 rounded border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50"
                   >
-                    生成新识别码 + 标 resolved
+                    生成新密码 + 标 resolved
                   </button>
                   <button
                     onClick={() => updateItem(item.id, { status: 'rejected' })}
@@ -203,7 +203,7 @@ export function RecoveryAdminPanel({
                     disabled={busy === item.id}
                     className="px-3 py-1.5 text-sm bg-emerald-50 text-emerald-700 rounded border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50"
                   >
-                    生成新识别码 + 标 resolved
+                    生成新密码 + 标 resolved
                   </button>
                   <button
                     onClick={() => updateItem(item.id, { status: 'rejected' })}

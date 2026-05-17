@@ -360,7 +360,7 @@ export function BatchImportPanel({
           )}
         </div>
 
-        <label className="block text-xs text-stone-600 mb-1">识别码（≥6 位，所有商品共用）</label>
+        <label className="block text-xs text-stone-600 mb-1">密码</label>
         <input
           value={editCode}
           onChange={e => setEditCode(e.target.value)}
@@ -368,6 +368,7 @@ export function BatchImportPanel({
           placeholder="例：mychair123"
           className="w-full border border-stone-300 rounded px-3 py-2 text-sm"
         />
+        <p className="text-xs text-stone-500 mt-1">本次导入的所有商品共用一个密码</p>
       </section>
 
       <button

@@ -4,8 +4,9 @@
 //   - limit（可选，默认 200，上限 200）：cap 数量
 //
 // POST /api/items/by-contact  body { value, editCode }
-//   返回 active + 该 editCode 下的 draft（私有，需要识别码验证）
-//   用于 G4「我发的」页查看自己的草稿
+//   私有查询：必须提供 editCode (≥6 位)，只返回该 editCode 精确匹配的 active + draft
+//   "联系方式 + 密码" 一起作为身份凭证。仅知道联系方式不能看到对方的发布
+//   用于「我的」页面 lookup
 
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
@@ -55,8 +56,12 @@ export async function POST(req: NextRequest) {
   const value = typeof body.value === 'string' ? body.value.trim() : '';
   const editCode = typeof body.editCode === 'string' ? body.editCode : '';
   if (!value) return NextResponse.json({ error: 'value 不能为空' }, { status: 400 });
+  if (editCode.length < 6) {
+    return NextResponse.json({ error: '请输入密码（≥6 位）' }, { status: 401 });
+  }
 
-  // active 永远返回；draft 仅当 editCode 比对通过才返回
+  // 强校验:必须密码 hash 精确匹配,active+draft 都按密码过滤
+  // "联系方式 + 密码" 一起作为身份凭证 —— 仅知道联系方式不能看到对方发布
   const all = await prisma.item.findMany({
     where: {
       contactValue: value,
@@ -70,21 +75,17 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  let drafts: typeof all = [];
-  if (editCode.length >= 6) {
-    // 对每条 draft 比对 hash —— 慢但可控（草稿数有 50 上限）
-    const draftCandidates = all.filter(it => it.status === 'draft');
-    const matches = await Promise.all(
-      draftCandidates.map(async it => (await bcrypt.compare(editCode, it.editCodeHash)) ? it : null)
-    );
-    drafts = matches.filter((x): x is (typeof all)[number] => x !== null);
-  }
+  // 对每条比对 hash —— 慢但可控（合理上限内）
+  const matched = await Promise.all(
+    all.map(async it => (await bcrypt.compare(editCode, it.editCodeHash)) ? it : null)
+  );
+  const mine = matched.filter((x): x is (typeof all)[number] => x !== null);
 
-  const actives = all.filter(it => it.status === 'active');
-  const merged = [...actives, ...drafts];
+  const actives = mine.filter(it => it.status === 'active');
+  const drafts  = mine.filter(it => it.status === 'draft');
 
   return NextResponse.json({
-    items: merged.map(serialize),
+    items: [...actives, ...drafts].map(serialize),
     activeCount: actives.length,
     draftCount: drafts.length,
   });

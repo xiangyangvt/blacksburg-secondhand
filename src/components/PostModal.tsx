@@ -133,8 +133,8 @@ export function PostModal({
 
   return (
     <div className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-y-auto p-4">
-      <div className="bg-white rounded-lg w-full max-w-2xl my-4">
-        <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between rounded-t-lg z-10">
+      <div className="bg-white rounded-card w-full max-w-2xl my-4">
+        <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center justify-between rounded-t-card z-10">
           <h2 className="text-lg font-semibold">
             {mode === 'create' ? t('post.titleCreate') : t('post.titleEdit')}
           </h2>
@@ -291,9 +291,9 @@ export function PostModal({
           <div className="border-t border-stone-200 pt-4">
             <div className="flex items-center gap-1.5 mb-1">
               <Label>{t('post.fieldEditCode')}</Label>
-              <HelpHint label="什么是识别码?">
-                <p><strong>识别码 = 这个帖子的钥匙</strong>。改 / 删 / 标已售时要输入。</p>
-                <p>我们用加密保存,我们自己也看不到 —— 丢了无法找回,但只要联系方式还能用,你可以申请找回未售出的帖子。</p>
+              <HelpHint label="什么是密码?">
+                <p><strong>"联系方式 + 密码" = 你管理这条发布的凭证。</strong></p>
+                <p>改 / 删 / 查"我的"都要用。我们加密保存,自己也看不到 —— 丢了无法找回,但可以凭联系方式申请人工找回。</p>
                 <p className="text-stone-500">✓ 这台设备会自动记住,下次发布预填。换设备或清浏览器缓存就要重新设。</p>
               </HelpHint>
             </div>
@@ -313,21 +313,22 @@ export function PostModal({
                   onClick={async () => {
                     try {
                       await navigator.clipboard.writeText(editCode);
-                      showSuccess('识别码已复制');
+                      showSuccess('密码已复制');
                     } catch {
                       showError('复制失败,请手动选中');
                     }
                   }}
                   className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium bg-stone-100 text-stone-700 rounded hover:bg-stone-200 flex-shrink-0"
-                  title="复制识别码"
+                  title="复制密码"
                 >
                   <Copy size={12} />
                   复制
                 </button>
               )}
             </div>
-            <div className="text-xs text-stone-600 mt-1.5">
-              ⚠️ 改 / 删 / 标已售时要用,记住它
+            <div className="text-xs text-stone-600 mt-1.5 leading-relaxed">
+              ⚠️ "联系方式 + 密码" = 你管理这条发布的凭证。改 / 删 / 查"我的"都要用。<br />
+              我们加密保存,自己也看不到 —— <strong>丢了无法找回</strong>,但可以凭联系方式申请人工找回。
             </div>
           </div>
         </div>
@@ -335,7 +336,7 @@ export function PostModal({
 
         {/* 单条模式才显示底部固定按钮；批量模式自带提交按钮 */}
         {(!(mode === 'create' && tab === 'batch')) && (
-          <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 rounded-b-lg">
+          <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 rounded-b-card">
             <button
               onClick={onClose}
               className="px-4 py-2 border border-stone-300 rounded hover:bg-stone-100"

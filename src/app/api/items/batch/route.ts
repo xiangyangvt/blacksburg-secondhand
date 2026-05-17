@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const { editCode, items, utmSource } = body;
   const cleanedUtm = typeof utmSource === 'string' && utmSource ? utmSource.slice(0, 64) : null;
 
-  if (typeof editCode !== 'string' || editCode.length < 6) return err('识别码至少 6 位');
+  if (typeof editCode !== 'string' || editCode.length < 6) return err('密码至少 6 位');
   if (!Array.isArray(items) || items.length === 0) return err('items 必须是非空数组');
   if (items.length > MAX_BATCH) return err(`单次最多 ${MAX_BATCH} 条`);
 

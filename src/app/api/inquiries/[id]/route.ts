@@ -24,7 +24,7 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
     const targetHash = inquiry.item?.editCodeHash ?? inquiry.listing?.editCodeHash;
     if (!targetHash) return err('父对象不存在', 404);
     const ok = await bcrypt.compare(replyCode, targetHash);
-    if (!ok) return err('识别码错误', 401);
+    if (!ok) return err('密码错误', 401);
 
     const reply = body.sellerReply.trim();
     if (reply.length > 500) return err('回复最多 500 字');

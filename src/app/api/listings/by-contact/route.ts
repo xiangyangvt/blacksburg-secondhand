@@ -1,7 +1,8 @@
 // 卖家自查 listing：复用 /my 面板的查询模式
 //   GET  ?value=xxx                  → 公开查询（只 active；不含 applications）
 //   POST { value, editCode, withApplications? }
-//                                    → 私有查询（active + 该 editCode 的 draft）
+//                                    → 私有查询：必须密码精确匹配,active + draft 都按密码过滤
+//     "联系方式 + 密码" 一起作为身份凭证 —— 仅知道联系方式不能看到对方 listing
 //     withApplications=true → 每条 listing 额外带 applications 数组（用于"申请收件"）
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -55,6 +56,9 @@ export async function POST(req: NextRequest) {
   const editCode = typeof body.editCode === 'string' ? body.editCode : '';
   const withApps = body.withApplications === true;
   if (!value) return NextResponse.json({ error: 'value 不能为空' }, { status: 400 });
+  if (editCode.length < 6) {
+    return NextResponse.json({ error: '请输入密码（≥6 位）' }, { status: 401 });
+  }
 
   const all = await prisma.listing.findMany({
     where: {
@@ -70,16 +74,14 @@ export async function POST(req: NextRequest) {
     } : undefined,
   });
 
-  let drafts: typeof all = [];
-  if (editCode.length >= 6) {
-    const draftCandidates = all.filter(l => l.status === 'draft');
-    const matches = await Promise.all(
-      draftCandidates.map(async l => (await bcrypt.compare(editCode, l.editCodeHash)) ? l : null)
-    );
-    drafts = matches.filter((x): x is (typeof all)[number] => x !== null);
-  }
+  // 强校验:active + draft 都按密码精确匹配过滤
+  const matched = await Promise.all(
+    all.map(async l => (await bcrypt.compare(editCode, l.editCodeHash)) ? l : null)
+  );
+  const mine = matched.filter((x): x is (typeof all)[number] => x !== null);
 
-  const actives = all.filter(l => l.status === 'active');
+  const actives = mine.filter(l => l.status === 'active');
+  const drafts  = mine.filter(l => l.status === 'draft');
   const merged = [...actives, ...drafts];
 
   // 统计待处理申请数

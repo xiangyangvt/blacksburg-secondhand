@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
   }
   // Phase 3A.1: 跟 二手/室友 同款 — alphanumeric ≥ 6 位(不限数字)
   if (code.length < 6 || code.length > 50) {
-    return NextResponse.json({ ok: false, error: '识别码至少 6 位' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: '密码至少 6 位' }, { status: 400 });
   }
   if (contactType && !ALLOWED_CONTACT_TYPES.has(contactType)) {
     return NextResponse.json({ ok: false, error: '联系方式类型无效' }, { status: 400 });
@@ -199,7 +199,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: `今天已发布 ${recent} 条,明天再来吧` }, { status: 429 });
   }
 
-  // 识别码 hash
+  // 密码 hash
   const posterCodeHash = await bcrypt.hash(code, 10);
 
   // 时间 parse

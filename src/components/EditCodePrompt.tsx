@@ -57,13 +57,13 @@ export function EditCodePrompt({
       <div className="bg-white rounded-lg w-full max-w-sm p-5">
         <div className="flex items-center gap-1.5 mb-2">
           <h3 className="font-semibold">{t('code.promptTitle', { action })}</h3>
-          <HelpHint label="忘了识别码怎么办?">
-            <p>识别码是发布时自己设的密码替代品,我们加密保存,看不到。</p>
+          <HelpHint label="忘了密码怎么办?">
+            <p>密码是发布时自己设的,我们加密保存,看不到。</p>
             <p>如果丢了:</p>
             <ul className="list-disc list-inside text-stone-600 space-y-1">
               <li>这台设备上次发的会自动预填</li>
               <li>换设备或清浏览器缓存需要重新设</li>
-              <li>用联系方式可以在「我发的」找回未售出的帖子</li>
+              <li>用联系方式 + 密码可以在「我的」找回未售出的帖子,如果连密码都忘了请走人工找回</li>
             </ul>
           </HelpHint>
         </div>

@@ -1,4 +1,4 @@
-// PATCH 编辑 / DELETE 软删 单条 listing（需识别码）
+// PATCH 编辑 / DELETE 软删 单条 listing（需密码）
 
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
   const { editCode, ...updates } = body;
-  if (typeof editCode !== 'string') return err('请提供识别码');
+  if (typeof editCode !== 'string') return err('请提供密码');
 
   const listing = await prisma.listing.findUnique({ where: { id } });
   if (!listing || (listing.status !== 'active' && listing.status !== 'draft')) {
@@ -21,7 +21,7 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
   }
 
   const ok = await bcrypt.compare(editCode, listing.editCodeHash);
-  if (!ok) return err('识别码错误', 401);
+  if (!ok) return err('密码错误', 401);
 
   // 完整字段校验（PATCH 允许部分字段，但每个传入的字段都要合法）
   // 这里采取的策略：合并旧值 + 新值后整体校验
@@ -62,13 +62,13 @@ export async function DELETE(req: NextRequest, ctx: { params: { id: string } }) 
   const { id } = ctx.params;
   const sp = req.nextUrl.searchParams;
   const editCode = sp.get('editCode') ?? '';
-  if (!editCode) return err('请提供识别码');
+  if (!editCode) return err('请提供密码');
 
   const listing = await prisma.listing.findUnique({ where: { id } });
   if (!listing || listing.status === 'deleted') return err('listing 不存在', 404);
 
   const ok = await bcrypt.compare(editCode, listing.editCodeHash);
-  if (!ok) return err('识别码错误', 401);
+  if (!ok) return err('密码错误', 401);
 
   await prisma.listing.update({ where: { id }, data: { status: 'deleted' } });
 

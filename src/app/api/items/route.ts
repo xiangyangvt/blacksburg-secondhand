@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
   const desiredStatus: 'active' | 'draft' = status === 'draft' ? 'draft' : 'active';
   const cleanedUtm = typeof utmSource === 'string' && utmSource ? utmSource.slice(0, 64) : null;
 
-  if (typeof editCode !== 'string' || editCode.length < 6) return err('识别码至少 6 位');
+  if (typeof editCode !== 'string' || editCode.length < 6) return err('密码至少 6 位');
 
   const fieldErr = validateItemFields(rest);
   if (fieldErr) return err(fieldErr);

@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
 
   const { editCode } = body;
   if (typeof editCode !== 'string' || !editCode) {
-    return NextResponse.json({ valid: false, error: '请输入识别码' }, { status: 400 });
+    return NextResponse.json({ valid: false, error: '请输入密码' }, { status: 400 });
   }
 
   const item = await prisma.item.findUnique({ where: { id } });
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
 
   const ok = await bcrypt.compare(editCode, item.editCodeHash);
   if (!ok) {
-    return NextResponse.json({ valid: false, error: '识别码错误' }, { status: 401 });
+    return NextResponse.json({ valid: false, error: '密码错误' }, { status: 401 });
   }
 
   return NextResponse.json({ valid: true });

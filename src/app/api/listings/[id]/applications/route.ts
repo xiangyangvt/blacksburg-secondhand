@@ -1,5 +1,5 @@
 // POST /api/listings/[id]/applications
-// B 给某个 listing 发申请联系；用自己的识别码 + 可选附上自己的 listing
+// B 给某个 listing 发申请联系；用自己的密码 + 可选附上自己的 listing
 
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
   if (typeof contactValue !== 'string' || !contactValue.trim()) return err('联系方式不能为空');
   if (typeof message !== 'string' || !message.trim()) return err('消息不能为空');
   if (message.length > 500) return err('消息最多 500 字');
-  if (typeof editCode !== 'string' || editCode.length < 6) return err('识别码至少 6 位');
+  if (typeof editCode !== 'string' || editCode.length < 6) return err('密码至少 6 位');
 
   // listing 必须存在且活跃
   const listing = await prisma.listing.findUnique({ where: { id } });

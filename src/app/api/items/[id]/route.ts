@@ -12,7 +12,7 @@ import { schedulePendingCloudinaryDeletion } from '@/lib/uploader';
 const VALID_CATEGORIES = CATEGORIES.map(c => c.id);
 const VALID_CONTACT_TYPES = CONTACT_TYPES.map(c => c.id);
 
-// PATCH /api/items/[id]  编辑（需要识别码）
+// PATCH /api/items/[id]  编辑（需要密码）
 export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
   const { id } = ctx.params;
   let body: any;
@@ -20,13 +20,13 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
   const { editCode, ...updates } = body;
-  if (typeof editCode !== 'string') return err('请提供识别码');
+  if (typeof editCode !== 'string') return err('请提供密码');
 
   const item = await prisma.item.findUnique({ where: { id } });
   if (!item || item.status !== 'active') return err('商品不存在', 404);
 
   const ok = await bcrypt.compare(editCode, item.editCodeHash);
-  if (!ok) return err('识别码错误', 401);
+  if (!ok) return err('密码错误', 401);
 
   // 允许更新的字段
   const data: any = {};
@@ -97,13 +97,13 @@ export async function DELETE(req: NextRequest, ctx: { params: { id: string } }) 
   const { id } = ctx.params;
   const sp = req.nextUrl.searchParams;
   const editCode = sp.get('editCode') ?? '';
-  if (!editCode) return err('请提供识别码');
+  if (!editCode) return err('请提供密码');
 
   const item = await prisma.item.findUnique({ where: { id } });
   if (!item || item.status !== 'active') return err('商品不存在', 404);
 
   const ok = await bcrypt.compare(editCode, item.editCodeHash);
-  if (!ok) return err('识别码错误', 401);
+  if (!ok) return err('密码错误', 401);
 
   // 软删
   await prisma.item.update({ where: { id }, data: { status: 'deleted' } });
