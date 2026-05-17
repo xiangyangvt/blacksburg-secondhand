@@ -19,12 +19,12 @@ import { getNickname, setNickname as persistNickname, getLastContact, setLastCon
 const LS_LAST_EDIT_CODE = 'hb_last_edit_code';
 
 // Phase 3A.1: 用户可选 5 大类别 + 自定义
+// Phase 3B: 移除 discussion(Event 通用化后只保留组活动 / 求助场景)
 const CATEGORIES = [
   { id: 'life',        label: '生活' },
   { id: 'exercise',    label: '运动' },
   { id: 'academic',    label: '学术' },
   { id: 'competition', label: '比赛' },
-  { id: 'discussion',  label: '讨论' },
   { id: 'other',       label: '其他' },
 ] as const;
 type CatId = typeof CATEGORIES[number]['id'];
@@ -43,6 +43,7 @@ export type EventPostInitial = {
   posterContact: string | null;
   posterContactLabel: string | null;
   posterContactPublic: boolean;
+  maxAttendees?: number | null;  // Phase 3B
 };
 
 // 跟二手/室友同款:6 位 alphanumeric(不限数字),默认生成 6 位混合方便记
@@ -84,9 +85,12 @@ export function EventPostModal({
   const [mounted, setMounted] = useState(false);
 
   const [title, setTitle] = useState(initial?.title ?? '');
-  const [category, setCategory] = useState<CatId>(
-    (initial?.category as CatId) ?? 'life',
-  );
+  const [category, setCategory] = useState<CatId>(() => {
+    const c = initial?.category;
+    // Phase 3B: 砍 discussion,旧数据编辑时若是 discussion 降级到 life
+    const valid = CATEGORIES.some(cat => cat.id === c);
+    return valid ? (c as CatId) : 'life';
+  });
   const [customCategory, setCustomCategory] = useState(initial?.customCategory ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [startAt, setStartAt] = useState(toLocalDateTimeInput(initial?.startAt ?? null));
@@ -120,6 +124,8 @@ export function EventPostModal({
   const [contact, setContact] = useState(initial?.posterContact ?? '');
   const [contactLabel, setContactLabel] = useState(initial?.posterContactLabel ?? '');
   const [contactPublic, setContactPublic] = useState(initial?.posterContactPublic ?? false);
+  // Phase 3B: 想找几人(空字符串 = 不限);UI 用 string 方便清空,提交时 parse
+  const [maxAttendees, setMaxAttendees] = useState<string>(initial?.maxAttendees ? String(initial.maxAttendees) : '');
   const [code, setCode] = useState(isEdit ? '' : '');
   const [submitting, setSubmitting] = useState(false);
 
@@ -204,6 +210,7 @@ export function EventPostModal({
         contact: contact.trim() || null,
         contactLabel: contactType === 'other' ? contactLabel.trim() : null,
         contactPublic,
+        maxAttendees: maxAttendees.trim() ? parseInt(maxAttendees, 10) : null,
       };
       if (!isEdit) body.code = code;
 
@@ -303,6 +310,20 @@ export function EventPostModal({
                 className="mt-2 w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
               />
             )}
+          </Field>
+
+          {/* 想找几人 — Phase 3B 通用化字段。空 = 不限 */}
+          <Field label="想找几人(可选)">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={99}
+              value={maxAttendees}
+              onChange={(e) => setMaxAttendees(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
+              placeholder="例:4(留空 = 不限)"
+              className="w-24 px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
+            />
           </Field>
 
           {/* 时间 — mobile 堆叠避免 datetime-local 溢出;sm+ 并排 */}

@@ -144,7 +144,7 @@ export function EventCommentSection({
         <div className="text-xs text-stone-400 py-2">加载中...</div>
       ) : comments.length === 0 ? (
         <div className="text-xs text-stone-400 py-2">
-          还没有评论 · 第一个留言找搭子去吧 👀
+          还没有评论 · 第一个留言找搭子去吧
         </div>
       ) : (
         <div className="space-y-2.5">

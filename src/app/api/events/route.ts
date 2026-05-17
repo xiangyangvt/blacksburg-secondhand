@@ -120,6 +120,18 @@ export async function GET(req: NextRequest) {
     .map(r => CATEGORY_OLD_TO_NEW[r.category as string] ?? (r.category as string));
   const availableCategories = Array.from(new Set(availableCategoriesRaw));
 
+  // Phase 3B: 批量算响应数 — EventContactSend 中 status != canceled 的数(每个 event)
+  // 注:status='archived' 也算响应(读过 = 不删数据;响应数语义上指"曾发送过联系方式的独立人数")
+  const eventIds = sorted.map(e => e.id);
+  const responseRows = eventIds.length > 0
+    ? await prisma.eventContactSend.groupBy({
+        by: ['eventId'],
+        where: { eventId: { in: eventIds }, status: { not: 'canceled' } },
+        _count: { id: true },
+      })
+    : [];
+  const responseCountMap = new Map(responseRows.map(r => [r.eventId, r._count.id]));
+
   // Strip 敏感字段 — posterCodeHash / posterVisitorId 不能返客户端
   // 同时把 photoUrls 从 JSON string parse 成数组方便前端用
   const safe = sorted.map((e: any) => {
@@ -128,7 +140,7 @@ export async function GET(req: NextRequest) {
     if (pu) {
       try { photoUrls = JSON.parse(pu); } catch { photoUrls = []; }
     }
-    return { ...rest, photoUrls };
+    return { ...rest, photoUrls, responseCount: responseCountMap.get(e.id) ?? 0 };
   });
 
   return NextResponse.json({
@@ -164,6 +176,13 @@ export async function POST(req: NextRequest) {
   const photoUrls   = Array.isArray(body.photoUrls)
     ? body.photoUrls.filter((u: any) => typeof u === 'string').slice(0, 4)
     : null;
+  // Phase 3B: 想找几人 hint(可选,1-99)。空 / 非数字 / 超界 → null
+  const maxAttendeesRaw = body.maxAttendees;
+  const maxAttendees: number | null = (() => {
+    const n = typeof maxAttendeesRaw === 'number' ? maxAttendeesRaw : parseInt(maxAttendeesRaw, 10);
+    if (!Number.isFinite(n) || n < 1 || n > 99) return null;
+    return Math.floor(n);
+  })();
 
   if (!title) return NextResponse.json({ ok: false, error: '请填写标题' }, { status: 400 });
   if (!description) return NextResponse.json({ ok: false, error: '请填写描述' }, { status: 400 });
@@ -245,6 +264,7 @@ export async function POST(req: NextRequest) {
       posterContact: contact,
       posterContactLabel: contactType === 'other' ? contactLabel : null,
       posterContactPublic: contactPublic,
+      maxAttendees,
     },
   });
 

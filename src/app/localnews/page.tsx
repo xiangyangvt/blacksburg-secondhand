@@ -13,7 +13,7 @@
 // 7. 卡片热度 🔥 icon(按 click 计数梯度)+ 点击触发 /api/events/[id]/click
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { ChevronDown, Plus } from 'lucide-react';
+import { ChevronDown, Plus, Leaf } from 'lucide-react';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
 import { EventCard, type EventCardData } from '@/components/EventCard';
@@ -26,7 +26,8 @@ import { distanceFromBlacksburg, isLocalCore, isWithinNrv } from '@/lib/eventDis
 
 // ============ 筛选状态机 ============
 
-type CatId = 'all' | 'life' | 'exercise' | 'academic' | 'competition' | 'discussion' | 'other';
+// Phase 3B: 移除 'discussion'(Event 通用化后类目仅用于组活动 / 求助)
+type CatId = 'all' | 'life' | 'exercise' | 'academic' | 'competition' | 'other';
 type DateRange = 'all' | 'today' | '3day' | 'week' | 'month';
 type Sort = 'date' | 'hot' | 'distance';
 type LocationScope = 'all' | 'local' | 'nrv';
@@ -53,7 +54,6 @@ const CATEGORIES: Array<{ id: CatId; label: string }> = [
   { id: 'exercise',    label: '运动' },
   { id: 'academic',    label: '学术' },
   { id: 'competition', label: '比赛' },
-  { id: 'discussion',  label: '讨论' },
   { id: 'other',       label: '其他' },
 ];
 
@@ -443,7 +443,7 @@ function SkeletonGrid() {
 function EmptyState({ cat, hasFilters }: { cat: CatId; hasFilters: boolean }) {
   return (
     <div className="text-center py-20 text-stone-500">
-      <div className="text-5xl mb-4 opacity-40">🌱</div>
+      <Leaf size={48} strokeWidth={1.5} className="mx-auto mb-4 text-stone-300" />
       <div className="mb-2">
         {hasFilters
           ? '没有匹配当前筛选的内容'

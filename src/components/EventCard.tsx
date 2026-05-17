@@ -9,13 +9,19 @@
 // 这些都是 thumbnail 不需要 next 优化;onError 失败时 fallback 到类型色占位
 
 import { useState, useRef, useEffect } from 'react';
-import { Calendar, MapPin, ExternalLink, Clock, Heart, Flame } from 'lucide-react';
+import {
+  Calendar, MapPin, ExternalLink, Clock, Heart, Flame, Send,
+  // Phase 3B 类目 Lucide icon(替代 emoji,UI 高级感)
+  Utensils, Dumbbell, BookOpen, Trophy, Sparkles, MessageCircle,
+  // Phase 3B 响应数 + 状态 badge
+  Users, CheckCircle2, XCircle, Hourglass,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { isEventSaved, toggleSavedEvent, subscribeSavedEvents } from '@/lib/savedEvents';
 import { showSuccess, showWarning } from '@/lib/toast';
 import { parseLocation } from '@/lib/eventLocation';
 import { EventCommentSection } from './EventCommentSection';
 import { ContactSendModal } from './ContactSendModal';
-import { Send } from 'lucide-react';
 
 export type EventCardData = {
   id: string;
@@ -41,15 +47,20 @@ export type EventCardData = {
   posterContactLabel?: string | null;
   posterContactPublic?: boolean | null;
   photoUrls?: string[];
+  // Phase 3B:Event 通用化
+  maxAttendees?: number | null;
+  status?: string;                  // active | fulfilled | canceled | expired | hidden | deleted
+  responseCount?: number;           // EventContactSend 中 status != canceled 的数(server 注入)
 };
 
 // Phase 2A:热度梯度。clicks/hour 阈值。
-// 设计:新鲜内容(scrape 1 小时内 1 次点击就 = 1.0 clicks/hr → 🔥)
+// 设计:新鲜内容(scrape 1 小时内 1 次点击就 = 1.0 clicks/hr → 高热)
 // 老内容需要更多 clicks 才能上热度,自然降权
+// double:渲染 2 个 Flame icon(高热)
 const HEAT_LEVELS = [
-  { min: 5, color: 'text-rose-600',  fill: true,  label: '🔥🔥' },  // 高热
-  { min: 1.5, color: 'text-rose-500', fill: true,  label: '🔥' },    // 中热
-  { min: 0.5, color: 'text-orange-500', fill: false, label: '🔥' },  // 微热
+  { min: 5,   color: 'text-rose-600',   fill: true,  double: true  },
+  { min: 1.5, color: 'text-rose-500',   fill: true,  double: false },
+  { min: 0.5, color: 'text-orange-500', fill: false, double: false },
 ] as const;
 
 function getHeatLevel(clickCount: number | undefined, scrapedAt: string | Date | null | undefined) {
@@ -73,6 +84,20 @@ const CATEGORY_LABEL: Record<string, string> = {
   events: '生活',
   sports: '比赛',
   news:   '讨论',
+};
+
+// Phase 3B: 类目 Lucide icon — 替代 emoji,UI 高级感更强
+// emoji 字典只在 share text(复制到微信群)里保留,因为微信只能渲染 emoji
+const CATEGORY_ICON: Record<string, LucideIcon> = {
+  life:        Utensils,        // 生活/聚餐
+  exercise:    Dumbbell,        // 运动
+  academic:    BookOpen,        // 学术
+  competition: Trophy,          // 比赛
+  discussion:  MessageCircle,   // 讨论(已砍但兜底)
+  other:       Sparkles,        // 其他
+  events:      Utensils,        // 旧
+  sports:      Trophy,          // 旧
+  news:        MessageCircle,   // 旧
 };
 
 const CATEGORY_COLOR: Record<string, { bg: string; text: string; placeholder: string }> = {
@@ -161,6 +186,46 @@ function formatEventFullTime(startAt: string | Date | null, endAt: string | Date
   return `${dateStr} ${startTime}`;
 }
 
+/**
+ * Phase 3B 短期倒计时:仅在 startAt 距现在 < 24h 时返回 "还有 X 小时/分钟" 或 "进行中"
+ * 配合 formatEventTime("今天 19:00")使用,给紧迫感
+ */
+function getCountdown(startAt: string | Date | null, endAt: string | Date | null): string | null {
+  if (!startAt) return null;
+  const s = typeof startAt === 'string' ? new Date(startAt) : startAt;
+  if (isNaN(s.getTime())) return null;
+  const now = Date.now();
+  const diffMs = s.getTime() - now;
+
+  // 已过 startAt:活动可能正在进行 — 检查 endAt
+  if (diffMs <= 0) {
+    if (endAt) {
+      const e = typeof endAt === 'string' ? new Date(endAt) : endAt;
+      if (!isNaN(e.getTime()) && e.getTime() > now) return '进行中';
+    }
+    return null; // 已结束,不显倒计时(API 会自动归档为 expired)
+  }
+  // < 1 小时:分钟级
+  if (diffMs < 3600e3) {
+    const m = Math.max(1, Math.ceil(diffMs / 60000));
+    return `还有 ${m} 分钟`;
+  }
+  // < 24 小时:小时级
+  if (diffMs < 24 * 3600e3) {
+    const h = Math.ceil(diffMs / 3600e3);
+    return `还有 ${h} 小时`;
+  }
+  return null; // > 24h: timeLabel 已经显"明天/X 天后",不重复
+}
+
+// Phase 3B 状态 badge 元数据
+const STATUS_BADGE: Record<string, { label: string; cls: string; icon: LucideIcon } | null> = {
+  active:    null,
+  fulfilled: { label: '已结清', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
+  canceled:  { label: '已取消', cls: 'bg-rose-50 text-rose-700 border-rose-200',           icon: XCircle },
+  expired:   { label: '已过期', cls: 'bg-stone-100 text-stone-500 border-stone-200',       icon: Hourglass },
+};
+
 export function EventCard({
   event,
   autoExpand = false,
@@ -185,6 +250,7 @@ export function EventCard({
 
   const cat = event.category ?? 'events';
   const colors = CATEGORY_COLOR[cat] ?? CATEGORY_COLOR.events;
+  const CategoryIcon = CATEGORY_ICON[cat] ?? Sparkles;  // Phase 3B
   // news/discussion 用 publishedAt(发布时间,过去),events/sports 用 startAt(活动时间,未来)
   const isPastBased = event.category === 'discussion'; // Phase 3A.1: news 已合并到 discussion
   const referenceTime = isPastBased ? event.publishedAt : event.startAt;
@@ -193,6 +259,20 @@ export function EventCard({
   const fullTimeLabel = isPastBased
     ? formatEventFullTime(event.publishedAt, null)
     : formatEventFullTime(event.startAt, event.endAt);
+  // Phase 3B: user-posted event 无 startAt → 显"长期"占位
+  const isUserPosted = event.source === 'user';
+  const longTermLabel = isUserPosted && !event.startAt ? '长期' : null;
+  // Phase 3B: 短期倒计时(< 24h)
+  const countdown = getCountdown(event.startAt, event.endAt);
+  // Phase 3B: 状态 badge
+  const statusBadge = event.status && STATUS_BADGE[event.status]
+    ? STATUS_BADGE[event.status]
+    : null;
+  // Phase 3B: 响应数(仅 user-posted 显)
+  const responseCount = event.responseCount ?? 0;
+  const showResponseChip = isUserPosted;
+  // Phase 3B: 主响应按钮可用性 — 非 active 状态置灰不可点
+  const canRespond = !event.status || event.status === 'active';
 
   // Phase 2A 热度梯度
   const heat = getHeatLevel(event.clickCount, event.scrapedAt);
@@ -325,20 +405,46 @@ export function EventCard({
       </div>
 
       <div className="p-3 md:p-4 space-y-1.5">
-        {/* 类型 chip + 相对时间 + 热度 🔥(Phase 2A) */}
+        {/* 类目 chip(Lucide icon)+ 状态 + 响应数 + 时间 + 倒计时 + 热度(Phase 2A) */}
         <div className="flex items-center gap-1.5 text-xs flex-wrap">
-          <span className={`px-2 py-0.5 rounded-full font-medium ${colors.bg} ${colors.text}`}>
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${colors.bg} ${colors.text}`}>
+            <CategoryIcon size={11} strokeWidth={2.2} />
             {cat === 'other' && event.customCategory ? event.customCategory : (CATEGORY_LABEL[cat] ?? cat)}
           </span>
-          {/* 热度 🔥 — 紧凑端在 chip 旁边,展开端也显;颜色梯度按 clicks/hour */}
+
+          {/* Phase 3B 状态 badge — active 不显 */}
+          {statusBadge && (
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border font-medium ${statusBadge.cls}`}>
+              <statusBadge.icon size={11} strokeWidth={2.2} />
+              {statusBadge.label}
+            </span>
+          )}
+
+          {/* Phase 3B 响应数 chip(user-posted 才显) */}
+          {showResponseChip && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
+              <Users size={11} strokeWidth={2.2} />
+              {event.maxAttendees
+                ? `想找 ${event.maxAttendees} · 已 ${responseCount} 响应`
+                : `已 ${responseCount} 响应`}
+            </span>
+          )}
+
+          {/* 热度 — 紧凑端在 chip 旁边,展开端也显;颜色梯度按 clicks/hour */}
           {heat && (
             <span className={`inline-flex items-center gap-0.5 font-semibold ${heat.color}`} title={`热度 · ${event.clickCount ?? 0} 次点击`}>
               <Flame size={12} strokeWidth={2.4} fill={heat.fill ? 'currentColor' : 'none'} />
-              {heat.label.length > 2 && <Flame size={12} strokeWidth={2.4} fill="currentColor" />}
+              {heat.double && <Flame size={12} strokeWidth={2.4} fill="currentColor" />}
             </span>
           )}
-          {timeLabel && !expanded && (
-            <span className="text-stone-600">{timeLabel}</span>
+
+          {/* 时间标签 / "长期" — 紧凑端显;展开端独立时间行 */}
+          {!expanded && (timeLabel || longTermLabel) && (
+            <span className="text-stone-600">{timeLabel ?? longTermLabel}</span>
+          )}
+          {/* Phase 3B 短期倒计时 — < 24h 才显,跟时间标签配对 */}
+          {!expanded && countdown && (
+            <span className="text-rose-600 font-medium">{countdown}</span>
           )}
         </div>
 
@@ -372,10 +478,13 @@ export function EventCard({
         {/* 展开:完整时间 + 地点 + 描述 + 原标题 + 跳源按钮 */}
         {expanded && (
           <div className="space-y-2 pt-1">
-            {fullTimeLabel && (
+            {(fullTimeLabel || longTermLabel) && (
               <div className="flex items-start gap-1.5 text-sm text-stone-700">
                 <Clock size={14} strokeWidth={2} className="flex-shrink-0 mt-0.5" />
-                <span>{fullTimeLabel}</span>
+                <span>
+                  {fullTimeLabel ?? longTermLabel}
+                  {countdown && <span className="ml-2 text-rose-600 font-medium">· {countdown}</span>}
+                </span>
               </div>
             )}
             {(locCity || locVenue) && (
@@ -449,11 +558,17 @@ export function EventCard({
               ) : (
                 <button
                   type="button"
-                  onClick={() => setSendToPosterOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-chip text-sm font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card"
+                  onClick={() => canRespond && setSendToPosterOpen(true)}
+                  disabled={!canRespond}
+                  title={canRespond ? '' : '活动已结束 / 已结清 / 已取消'}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-chip text-sm font-medium transition-all shadow-card ${
+                    canRespond
+                      ? 'bg-brand text-white hover:bg-brand-dark active:scale-95'
+                      : 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                  }`}
                 >
                   <Send size={13} />
-                  发送我的联系方式
+                  发送联系方式
                 </button>
               )}
             </div>

@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 
-const ALLOWED_CATEGORIES = new Set(['events', 'sports', 'discussion', 'other']);
+// Phase 3A.1 重命名 + Phase 3B 移除 discussion(跟 POST /api/events 保持一致)
+const ALLOWED_CATEGORIES = new Set(['life', 'exercise', 'academic', 'competition', 'other']);
 const ALLOWED_CONTACT_TYPES = new Set(['wechat', 'phone', 'discord', 'email', 'other']);
 
 async function loadAndAuth(id: string, code: string) {
@@ -68,6 +69,27 @@ export async function PATCH(
     const urls = body.photoUrls.filter((u: any) => typeof u === 'string').slice(0, 4);
     update.photoUrls = urls.length > 0 ? JSON.stringify(urls) : null;
     update.imageUrl = urls.length > 0 ? urls[0] : null;
+  }
+  // Phase 3B: 想找几人
+  if ('maxAttendees' in body) {
+    const raw = body.maxAttendees;
+    if (raw === null || raw === '') {
+      update.maxAttendees = null;
+    } else {
+      const n = typeof raw === 'number' ? raw : parseInt(raw, 10);
+      if (!Number.isFinite(n) || n < 1 || n > 99) {
+        return NextResponse.json({ ok: false, error: '想找几人需在 1-99 之间' }, { status: 400 });
+      }
+      update.maxAttendees = Math.floor(n);
+    }
+  }
+  // Phase 3B: 状态切换(active / fulfilled / canceled),发起人可改;expired/hidden/deleted 不通过此 endpoint
+  if ('status' in body) {
+    const s = String(body.status);
+    if (!['active', 'fulfilled', 'canceled'].includes(s)) {
+      return NextResponse.json({ ok: false, error: '状态无效' }, { status: 400 });
+    }
+    update.status = s;
   }
 
   const updated = await prisma.event.update({
