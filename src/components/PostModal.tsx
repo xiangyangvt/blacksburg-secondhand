@@ -158,7 +158,7 @@ export function PostModal({
 
   return (
     <div className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-hidden p-0 sm:p-4">
-      <div className="bg-white w-full max-w-2xl sm:rounded-card h-screen sm:h-auto sm:max-h-[calc(100vh-2rem)] my-0 sm:my-4 overflow-x-hidden overflow-y-auto flex flex-col">
+      <div className="bg-white w-full max-w-2xl sm:rounded-card h-screen sm:h-auto sm:max-h-[calc(100vh-2rem)] my-0 sm:my-4 overflow-hidden flex flex-col">
         <div className="sticky top-0 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 sm:rounded-t-card z-10">
           {mode === 'create' && <Plus size={20} className="text-brand" />}
           <h2 className="text-lg font-semibold">
@@ -181,6 +181,7 @@ export function PostModal({
           </div>
         )}
 
+        <div className="flex-1 min-h-0 overflow-y-auto">
         {mode === 'create' && tab === 'batch' ? (
           <>
             {/* 桌面：批量面板 */}
@@ -361,10 +362,12 @@ export function PostModal({
           </div>
         </div>
         )}
+        </div>
 
-        {/* 单条模式才显示底部固定按钮；批量模式自带提交按钮 */}
+        {/* 单条模式才显示底部固定按钮;批量模式自带提交按钮
+            footer 是 flex item,modal overflow-hidden + flex-col 让它自然贴底 */}
         {(!(mode === 'create' && tab === 'batch')) && (
-          <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 sm:rounded-b-card">
+          <div className="bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 sm:rounded-b-card shrink-0">
             <button
               onClick={onClose}
               className="px-6 py-2 border border-stone-300 bg-white text-stone-700 rounded-full hover:bg-stone-50 transition-colors font-medium"

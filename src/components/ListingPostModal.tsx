@@ -394,7 +394,7 @@ export function ListingPostModal({
 
   return (
     <div className="fixed inset-0 z-40 bg-black/50 flex items-start sm:items-center justify-center overflow-hidden p-0 sm:p-4">
-      <div className="bg-white w-full max-w-2xl sm:rounded-card h-screen sm:h-auto sm:max-h-[calc(100vh-2rem)] my-0 sm:my-4 overflow-x-hidden overflow-y-auto flex flex-col">
+      <div className="bg-white w-full max-w-2xl sm:rounded-card h-screen sm:h-auto sm:max-h-[calc(100vh-2rem)] my-0 sm:my-4 overflow-hidden flex flex-col">
 
         <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-5 py-3 flex items-center gap-2 sm:rounded-t-card">
           {!isEdit && <Plus size={20} className="text-brand" />}
@@ -404,7 +404,7 @@ export function ListingPostModal({
 
         {/* 邮箱登录 UI 暂下线;backend /api/auth/* 保留 */}
 
-        <div className="p-5 space-y-5">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
           {/* 1. 类型 —— 编辑模式只显示当前类型，禁止切换（切换会乱字段语义） */}
           <section>
             <Label required>这是哪种？</Label>
@@ -799,7 +799,7 @@ export function ListingPostModal({
           </section>
         </div>
 
-        <div className="sticky bottom-0 bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 sm:rounded-b-card">
+        <div className="bg-white border-t border-stone-200 px-5 py-3 flex justify-end gap-2 sm:rounded-b-card shrink-0">
           <button onClick={onClose} className="px-6 py-2 border border-stone-300 bg-white text-stone-700 rounded-full hover:bg-stone-50 transition-colors font-medium">
             取消
           </button>
