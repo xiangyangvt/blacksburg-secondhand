@@ -22,6 +22,7 @@ import { showSuccess, showWarning } from '@/lib/toast';
 import { parseLocation } from '@/lib/eventLocation';
 import { EventCommentSection } from './EventCommentSection';
 import { ContactSendModal } from './ContactSendModal';
+import { ShareToWechatButton } from './ShareToWechatButton';
 
 export type EventCardData = {
   id: string;
@@ -538,39 +539,51 @@ export function EventCard({
               </div>
             )}
 
-            {/* 操作区:跳源(scraped) / 发布者信息(user) */}
-            <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-stone-100" data-no-toggle>
+            {/* 操作区:跳源(scraped) / 发布者信息(user) + 复制到微信群 */}
+            <div className="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-stone-100 flex-wrap" data-no-toggle>
               <span className="text-[11px] text-stone-400">
                 {event.source === 'user'
                   ? <>用户发布{event.posterNickname && <> · {event.posterNickname}</>}</>
                   : <>来源: {event.source}</>}
               </span>
-              {event.source !== 'user' ? (
-                <a
-                  href={event.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-chip text-sm font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card no-underline"
-                >
-                  <ExternalLink size={13} />
-                  查看原站
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => canRespond && setSendToPosterOpen(true)}
-                  disabled={!canRespond}
-                  title={canRespond ? '' : '活动已结束 / 已结清 / 已取消'}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-chip text-sm font-medium transition-all shadow-card ${
-                    canRespond
-                      ? 'bg-brand text-white hover:bg-brand-dark active:scale-95'
-                      : 'bg-stone-200 text-stone-400 cursor-not-allowed'
-                  }`}
-                >
-                  <Send size={13} />
-                  发送联系方式
-                </button>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                <ShareToWechatButton
+                  event={{
+                    id: event.id,
+                    title: event.title,
+                    category: event.category,
+                    status: event.status,
+                    maxAttendees: event.maxAttendees,
+                    responseCount: event.responseCount,
+                  }}
+                />
+                {event.source !== 'user' ? (
+                  <a
+                    href={event.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-chip text-sm font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card no-underline"
+                  >
+                    <ExternalLink size={13} />
+                    查看原站
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => canRespond && setSendToPosterOpen(true)}
+                    disabled={!canRespond}
+                    title={canRespond ? '' : '活动已结束 / 已结清 / 已取消'}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-chip text-sm font-medium transition-all shadow-card ${
+                      canRespond
+                        ? 'bg-brand text-white hover:bg-brand-dark active:scale-95'
+                        : 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <Send size={13} />
+                    发送联系方式
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Phase 2C 评论区 — 找搭子/讨论 */}
