@@ -270,7 +270,10 @@ model Event {
   // Phase 3 chat 用,Phase 1 留空。pgvector 类型在 SQLite 不支持,先省略字段
   // Postgres 上来时通过 raw SQL migrate 加 embedding 列
 
-  status          String    @default("active")  // active | hidden | expired | deleted
+  status          String    @default("active")  // active | fulfilled | canceled | expired | hidden | deleted
+
+  // Phase 3B: 想找几人 hint(可空 = 不限)
+  maxAttendees    Int?
 
   @@unique([source, sourceUrl])
   @@index([startAt])
@@ -321,9 +324,15 @@ model EventContactSend {
   fromContactLabel String? // contactType=other 时用户自填的 label(如 'Line')
   toVisitorId     String   // 目标(目标评论作者)
   toCommentId     String?  // 关联到具体评论(deep link 用,可空)
-  status          String   @default("active")  // active | archived
+  status          String   @default("active")  // active | archived | canceled(响应者撤回)
   readAt          DateTime?  // 接收方第一次"我的"展开时记录
   createdAt       DateTime @default(now())
+
+  // Phase 3B: 响应活动 / 求助场景独立字段
+  // nickname: 响应者填的昵称(独立于 fromNickname,后者来自评论上下文)
+  // note: "我有车" / "我能搬重物" 等一行话备注
+  nickname        String?
+  note            String?
 
   @@unique([eventId, fromVisitorId, toVisitorId])  // 同 event 同方向只能发一次
   @@index([toVisitorId, status, createdAt])
@@ -362,4 +371,36 @@ model RecoveryRequest {
 
   @@index([status, createdAt])
   @@index([targetId])
+}
+
+// ====== Sprint 7 Phase 3B: Magic-link 邮箱登录 ======
+// 不强制登录,只作为"自动预填"通道 — 识别码方案仍保留
+
+// 单次使用 token,15 分钟过期。用户邮箱填 → 发链接 → 点链接 → 写 UserSession
+model MagicLinkToken {
+  id         String    @id @default(cuid())
+  email      String
+  token      String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email])
+  @@index([token])
+}
+
+// 长期 session(30 天),cookie 里只存 sessionToken
+// 表里冗余存 contactValue/contactType/nickname 让发布表单一查就能预填
+model UserSession {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  email        String
+  contactValue String?
+  contactType  String?
+  nickname     String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([sessionToken])
+  @@index([email])
 }

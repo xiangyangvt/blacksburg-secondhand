@@ -19,7 +19,8 @@ const VID_COOKIE = 'hb_vid';
 const VID_MAX_AGE = 60 * 60 * 24 * 365;
 const POST_PER_DAY_LIMIT = 3;
 // Phase 3A.1: 用户发布可选类别(新命名)
-const ALLOWED_CATEGORIES = new Set(['life', 'exercise', 'academic', 'competition', 'discussion', 'other']);
+// Phase 3B: 移除 'discussion' — Event 通用化后只保留组活动 / 求助场景
+const ALLOWED_CATEGORIES = new Set(['life', 'exercise', 'academic', 'competition', 'other']);
 const ALLOWED_CONTACT_TYPES = new Set(['wechat', 'phone', 'discord', 'email', 'other']);
 
 type EventRow = {
@@ -64,13 +65,21 @@ export async function GET(req: NextRequest) {
   const limitRaw = sp.get('limit');
   const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 50, 1), 100) : 50;
 
+  // Phase 3B: discussion / news 类目和 reddit 源永久砍掉。query 走这两个类目直接返空
+  // (UI 仍可能传旧 chip,server 兜底)
+  if (category === 'discussion' || category === 'news') {
+    return NextResponse.json({ items: [], availableCategories: [] });
+  }
+
   // 过滤:仅 active + qualityScore ≥ 0.5 + 未过期(过期 = endAt 已过 OR 没 endAt 但 startAt 早于 1 天前)
-  // 新闻/讨论没有 startAt/endAt — 走 startAt:null 分支保留下来,后续靠 publishedAt 排序
+  // Phase 3B: 永远排除 reddit_vt / reddit_nrv source(数据 hard delete 可能滞后于上线)
   const oneDayAgo = new Date(Date.now() - 86400000);
 
   const baseWhere: any = {
     status: 'active',
     qualityScore: { gte: 0.5 },
+    source: { notIn: ['reddit_vt', 'reddit_nrv'] },
+    category: { notIn: ['discussion', 'news'] },
     OR: [
       { endAt: { gte: new Date() } },
       { endAt: null, startAt: { gte: oneDayAgo } },

@@ -244,7 +244,10 @@ model Event {
   customCategory      String?
   photoUrls           String?
 
-  status          String    @default("active")
+  status          String    @default("active")  // active | fulfilled | canceled | expired | hidden | deleted
+
+  // Phase 3B: 想找几人 hint(可空 = 不限)
+  maxAttendees    Int?
 
   @@unique([source, sourceUrl])
   @@index([startAt])
@@ -291,9 +294,13 @@ model EventContactSend {
   fromContactLabel String?
   toVisitorId     String
   toCommentId     String?
-  status          String   @default("active")
+  status          String   @default("active")  // active | archived | canceled
   readAt          DateTime?
   createdAt       DateTime @default(now())
+
+  // Phase 3B: 响应活动 / 求助场景独立字段
+  nickname        String?
+  note            String?
 
   @@unique([eventId, fromVisitorId, toVisitorId])
   @@index([toVisitorId, status, createdAt])
@@ -330,4 +337,32 @@ model RecoveryRequest {
 
   @@index([status, createdAt])
   @@index([targetId])
+}
+
+// ====== Sprint 7 Phase 3B: Magic-link 邮箱登录 ======
+
+model MagicLinkToken {
+  id         String    @id @default(cuid())
+  email      String
+  token      String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email])
+  @@index([token])
+}
+
+model UserSession {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  email        String
+  contactValue String?
+  contactType  String?
+  nickname     String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([sessionToken])
+  @@index([email])
 }
