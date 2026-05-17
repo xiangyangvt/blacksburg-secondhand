@@ -38,6 +38,7 @@ export function ContactSendModal({
   const [contactType, setContactType] = useState<ContactType>('wechat');
   const [contact, setContact] = useState('');
   const [contactLabel, setContactLabel] = useState('');
+  const [note, setNote] = useState('');  // Phase 3B: 一行话备注(我有车 / 我能搬重物 …)
   const [submitting, setSubmitting] = useState(false);
 
   // hydrate nickname + last contact
@@ -86,6 +87,7 @@ export function ContactSendModal({
           contactType,
           contact: contact.trim(),
           contactLabel: contactType === 'other' ? contactLabel.trim() : undefined,
+          note: note.trim() || undefined,  // Phase 3B
         }),
       });
       const data = await res.json();
@@ -188,10 +190,23 @@ export function ContactSendModal({
                 onChange={(e) => setContactLabel(e.target.value)}
                 placeholder="如 Line / Telegram / Instagram"
                 maxLength={20}
-                className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-chip focus:outline-none focus:border-brand"
+                className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
               />
             </div>
           )}
+
+          {/* Phase 3B: 一行话备注(可选) */}
+          <div>
+            <label className="block text-xs text-stone-500 mb-1">一行话(可选)</label>
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="我有车 / 我能搬重物 / 我会打麻将 ..."
+              maxLength={80}
+              className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
+            />
+          </div>
         </div>
 
         {/* 底部按钮 */}

@@ -13,7 +13,11 @@ import { createPortal } from 'react-dom';
 import { X, Plus, Copy } from 'lucide-react';
 import { showSuccess, showError } from '@/lib/toast';
 import { CONTACT_TYPES, type ContactType } from '@/lib/contactTypes';
-import { getNickname, setNickname as persistNickname, getLastContact, setLastContact } from '@/lib/eventNickname';
+import {
+  getNickname, setNickname as persistNickname,
+  getLastContact, setLastContact,
+  setLastEventTemplate,
+} from '@/lib/eventNickname';
 
 // 跟二手/室友共用 — 三平台都从同一处读取/写入上次用的密码
 const LS_LAST_EDIT_CODE = 'hb_last_edit_code';
@@ -239,6 +243,17 @@ export function EventPostModal({
       // 新发布成功 → 把密码写回共用 LS,下次二手/室友/活动都自动填
       if (!isEdit) {
         try { localStorage.setItem(LS_LAST_EDIT_CODE, code); } catch {}
+        // Phase 3B: 存模板供"再发一次"
+        setLastEventTemplate({
+          title: t,
+          category,
+          customCategory: category === 'other' ? customCategory.trim() : null,
+          description: d,
+          startAt: startAt ? new Date(startAt).toISOString() : null,
+          endAt: endAt ? new Date(endAt).toISOString() : null,
+          location: locationStr || null,
+          maxAttendees: maxAttendees.trim() ? parseInt(maxAttendees, 10) : null,
+        });
       }
       showSuccess(isEdit ? '已更新' : '已发布,记好密码');
       onCreated?.();

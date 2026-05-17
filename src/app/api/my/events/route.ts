@@ -64,8 +64,9 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
       take: 100,
     }),
+    // Phase 3B: sent 不过滤 status,让响应者自己看到自己已撤回的(canceled)用于"重发"
     prisma.eventContactSend.findMany({
-      where: { fromVisitorId: { in: vidArray }, status: 'active' },
+      where: { fromVisitorId: { in: vidArray } },
       orderBy: { createdAt: 'desc' },
       take: 100,
     }),
@@ -135,6 +136,8 @@ export async function GET(req: NextRequest) {
     myContactType: s.fromContactType,
     myContact: s.fromContact,
     myContactLabel: s.fromContactLabel,
+    note: s.note,        // Phase 3B
+    status: s.status,    // Phase 3B: active | canceled | archived(前端按状态显示)
   }));
 
   // === 3. received ===(别人发给我的)
@@ -146,10 +149,11 @@ export async function GET(req: NextRequest) {
     eventId: r.eventId,
     matched: sentKeys.has(`${r.eventId}|${r.fromVisitorId}`),
     event: eventMap.get(r.eventId) ?? null,
-    fromNickname: r.fromNickname,
+    fromNickname: r.nickname || r.fromNickname,  // Phase 3B 优先用响应活动时填的
     fromContactType: r.fromContactType,
     fromContact: r.fromContact,
     fromContactLabel: r.fromContactLabel,
+    note: r.note,        // Phase 3B
     isUnread: !r.readAt,
   }));
 
@@ -163,7 +167,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // 我发的活动 — strip posterCodeHash/posterVisitorId,加 commentCount
+  // 我发的活动 — strip posterCodeHash/posterVisitorId,加 commentCount + 响应者列表
   // 先批量查 commentCount(posts 内 join)
   const postIds = myPosts.map(p => p.id);
   const commentCounts = postIds.length > 0
@@ -175,16 +179,65 @@ export async function GET(req: NextRequest) {
     : [];
   const ccMap = new Map(commentCounts.map(c => [c.eventId, c._count.id]));
 
+  // Phase 3B: 我发起的活动的响应者列表 + 反向 reveal 状态
+  // responder 发送给 poster 一条 (from=responder, to=poster)
+  // poster 回赠 = (from=poster, to=responder) 也存在 → 视为已 reveal(双方互见联系方式)
+  const sendsToMe = postIds.length > 0
+    ? await prisma.eventContactSend.findMany({
+        where: {
+          eventId: { in: postIds },
+          toVisitorId: { in: vidArray },  // 收件人是我(poster)
+          // 包括 canceled 用于展示"对方撤回了",前端按 status 过滤
+        },
+        orderBy: { createdAt: 'asc' },
+      })
+    : [];
+  const sendsFromMeToResponder = postIds.length > 0
+    ? await prisma.eventContactSend.findMany({
+        where: {
+          eventId: { in: postIds },
+          fromVisitorId: { in: vidArray },  // 我作为 poster 回赠的(reveal)
+          status: 'active',
+        },
+        select: { eventId: true, toVisitorId: true },
+      })
+    : [];
+  const revealedKey = new Set(sendsFromMeToResponder.map(s => `${s.eventId}|${s.toVisitorId}`));
+
+  // 按 event 分组响应者
+  const respondersByEvent = new Map<string, any[]>();
+  for (const s of sendsToMe) {
+    const list = respondersByEvent.get(s.eventId) ?? [];
+    const isRevealed = revealedKey.has(`${s.eventId}|${s.fromVisitorId}`);
+    list.push({
+      id: s.id,
+      // 响应者的 visitorId 不直接暴露;reveal 时前端把 send.id 回传 server,
+      // server 反查 fromVisitorId 创建反向 send。前端拿到响应者的 contact 直接显示。
+      nickname: s.nickname || s.fromNickname,
+      note: s.note,
+      contactType: s.fromContactType,
+      contact: s.fromContact,
+      contactLabel: s.fromContactLabel,
+      status: s.status,  // active | canceled | archived
+      revealed: isRevealed,  // poster 是否已回赠
+      createdAt: s.createdAt,
+    });
+    respondersByEvent.set(s.eventId, list);
+  }
+
   const postsResult = myPosts.map((p: any) => {
     const { posterCodeHash, posterVisitorId, photoUrls: pu, ...rest } = p;
     let photoUrls: string[] = [];
     if (pu) {
       try { photoUrls = JSON.parse(pu); } catch { photoUrls = []; }
     }
+    const responders = respondersByEvent.get(p.id) ?? [];
     return {
       ...rest,
       photoUrls,
       commentCount: ccMap.get(p.id) ?? 0,
+      responders,
+      responseCount: responders.filter(r => r.status !== 'canceled').length,
     };
   });
 

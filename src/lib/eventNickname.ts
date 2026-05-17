@@ -66,3 +66,37 @@ export function setLastContact(v: SavedContactInput): void {
   try { localStorage.setItem(CONTACT_KEY, JSON.stringify(v)); }
   catch { /* */ }
 }
+
+// Phase 3B: "再发一次" 用的模板缓存 — 保存最近一次成功发布的 event 字段
+const EVENT_TEMPLATE_KEY = 'hb_event_last_template';
+
+export type SavedEventTemplate = {
+  title: string;
+  category: string;
+  customCategory: string | null;
+  description: string;
+  // 时间是相对的:发起人按周重发时通常 +7 天,所以存 ISO 字符串但调用方 + 7 天后再用
+  startAt: string | null;
+  endAt: string | null;
+  location: string | null;
+  maxAttendees: number | null;
+};
+
+export function getLastEventTemplate(): SavedEventTemplate | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(EVENT_TEMPLATE_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    if (v && typeof v.title === 'string') return v;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function setLastEventTemplate(v: SavedEventTemplate): void {
+  if (typeof window === 'undefined') return;
+  try { localStorage.setItem(EVENT_TEMPLATE_KEY, JSON.stringify(v)); }
+  catch { /* */ }
+}

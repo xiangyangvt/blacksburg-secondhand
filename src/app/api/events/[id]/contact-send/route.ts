@@ -33,6 +33,7 @@ export async function POST(
   const contactType    = (body.contactType    ?? '').toString();
   const contact        = (body.contact        ?? '').toString().trim().slice(0, 80);
   const contactLabel   = (body.contactLabel   ?? '').toString().trim().slice(0, 20) || null;
+  const note           = (body.note           ?? '').toString().trim().slice(0, 80) || null;  // Phase 3B
 
   if (!nickname)    return NextResponse.json({ ok: false, error: '请填写昵称' }, { status: 400 });
   if (!ALLOWED_CONTACT_TYPES.has(contactType)) {
@@ -91,10 +92,18 @@ export async function POST(
     if (!ev) return NextResponse.json({ ok: false, error: 'event 不存在' }, { status: 404 });
   }
 
-  // 创建(unique 约束在 DB 层自动防重复)
+  // Phase 3B: 如已存在但被撤回(canceled),允许重发 — 用 upsert
+  // unique 约束 (eventId, fromVisitorId, toVisitorId) 单方向只能一条
   try {
-    const send = await prisma.eventContactSend.create({
-      data: {
+    const send = await prisma.eventContactSend.upsert({
+      where: {
+        eventId_fromVisitorId_toVisitorId: {
+          eventId,
+          fromVisitorId,
+          toVisitorId,
+        },
+      },
+      create: {
         eventId,
         fromVisitorId,
         fromNickname: nickname,
@@ -103,6 +112,20 @@ export async function POST(
         fromContactLabel: contactLabel,
         toVisitorId,
         toCommentId: resolvedCommentId,
+        nickname,
+        note,
+      },
+      update: {
+        // 只在原 status=canceled(撤回过)时允许重发,其它情况通过下面 update 后再校验
+        fromNickname: nickname,
+        fromContactType: contactType,
+        fromContact: contact,
+        fromContactLabel: contactLabel,
+        toCommentId: resolvedCommentId,
+        nickname,
+        note,
+        status: 'active',
+        readAt: null,
       },
     });
 
@@ -110,10 +133,6 @@ export async function POST(
     if (!existing) setVisitorCookie(res, fromVisitorId);
     return res;
   } catch (e: any) {
-    // unique 冲突 → 已经发过
-    if (e?.code === 'P2002') {
-      return NextResponse.json({ ok: false, error: '已经向 TA 发过联系方式了' }, { status: 409 });
-    }
     return NextResponse.json({ ok: false, error: '发送失败' }, { status: 500 });
   }
 }
