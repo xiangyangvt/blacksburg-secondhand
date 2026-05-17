@@ -22,6 +22,7 @@ import { MyPostsPanel } from '@/components/MyPostsPanel';
 import { EventPostModal } from '@/components/EventPostModal';
 import { FabPostButton } from '@/components/FabPostButton';
 import { ScrollToTop } from '@/components/ScrollToTop';
+import { LiveSection } from '@/components/LiveSection';
 import { distanceFromBlacksburg, isLocalCore, isWithinNrv } from '@/lib/eventDistance';
 
 // ============ 筛选状态机 ============
@@ -141,6 +142,7 @@ export default function LocalNewsPage() {
   const [myPanelOpen, setMyPanelOpen] = useState(false);
   const [postModalOpen, setPostModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0); // 发布后强制重新 fetch
+  const mainListRef = useRef<HTMLDivElement>(null); // Live "看全部" 滚到主列表
 
   // localStorage 初始化(SSR-safe:首次 render 用 default,mount 后 hydrate)
   useEffect(() => {
@@ -248,6 +250,15 @@ export default function LocalNewsPage() {
       <div className="max-w-6xl mx-auto px-3 md:px-4 py-4">
         {/* Phase 3「问黑堡本地」chat 入口暂时隐藏 — RAG chatbot 上线时再放开 */}
 
+        {/* === Phase 3B.3 Live 区:近 24h 活动顶部 sticky 区(空时不渲染) ===
+            数据源 = 全部 events(LiveSection 内部过滤);只在筛选 chips 上方 */}
+        {!loading && (
+          <LiveSection
+            events={events}
+            onSeeAll={() => mainListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          />
+        )}
+
         {/* === 主筛选行:类别 chips + 心愿单 === */}
         <div className="mb-2 flex items-center gap-2">
           <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar flex-1 min-w-0">
@@ -316,17 +327,19 @@ export default function LocalNewsPage() {
         )}
 
         {/* 内容 */}
-        {loading ? (
-          <SkeletonGrid />
-        ) : visible.length === 0 ? (
-          <EmptyState hasFilters={filters.dateRange !== 'all' || filters.locScope !== 'all' || !!q.trim()} cat={filters.cat} />
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
-            {visible.map(e => (
-              <EventCard key={e.id} event={e} />
-            ))}
-          </div>
-        )}
+        <div ref={mainListRef} className="scroll-mt-24">
+          {loading ? (
+            <SkeletonGrid />
+          ) : visible.length === 0 ? (
+            <EmptyState hasFilters={filters.dateRange !== 'all' || filters.locScope !== 'all' || !!q.trim()} cat={filters.cat} />
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
+              {visible.map(e => (
+                <EventCard key={e.id} event={e} />
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* 角注 */}
         <p className="text-xs text-stone-400 mt-8 text-center">

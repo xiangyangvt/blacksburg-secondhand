@@ -15,9 +15,18 @@
 import { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { X, ChevronUp, MessageSquare, Send, Inbox, Check, Copy, Undo2, FileText } from 'lucide-react';
-import { contactTypeLabel } from '@/lib/contactTypes';
+import {
+  X, ChevronUp, ChevronDown, MessageSquare, Send, Inbox, Check, Copy, Undo2, FileText,
+  CheckCircle2, XCircle, Hourglass, Users, UserPlus, RefreshCw, MapPin,
+} from 'lucide-react';
+import { contactTypeLabel, CONTACT_TYPES, type ContactType } from '@/lib/contactTypes';
 import { showSuccess, showError } from '@/lib/toast';
+import {
+  getNickname, setNickname as persistNickname,
+  getLastContact, setLastContact,
+} from '@/lib/eventNickname';
+import { EditCodePrompt } from './EditCodePrompt';
+import { EventPostModal, type EventPostInitial } from './EventPostModal';
 
 type EventInfo = {
   id: string;
@@ -47,6 +56,8 @@ type SentItem = {
   myContactType: string;
   myContact: string;
   myContactLabel: string | null;
+  note?: string | null;          // Phase 3B 一行话备注
+  status?: string;               // Phase 3B: active | canceled | archived
 };
 
 type ReceivedItem = {
@@ -59,10 +70,24 @@ type ReceivedItem = {
   fromContactType: string;
   fromContact: string;
   fromContactLabel: string | null;
+  note?: string | null;          // Phase 3B
   isUnread: boolean;
 };
 
 type Tab = 'posts' | 'comments' | 'sent' | 'received';
+
+// Phase 3B: 响应者(我发起的活动下,别人发我联系方式)
+type Responder = {
+  id: string;
+  nickname: string;
+  note: string | null;
+  contactType: string;
+  contact: string;
+  contactLabel: string | null;
+  status: string;       // active | canceled | archived
+  revealed: boolean;    // 我(poster)是否已回赠
+  createdAt: string;
+};
 
 type MyPost = {
   id: string;
@@ -74,8 +99,12 @@ type MyPost = {
   endAt: string | null;
   location: string | null;
   scrapedAt: string;
-  status: string;
+  status: string;       // active | fulfilled | canceled | expired | hidden | deleted
   commentCount: number;
+  maxAttendees?: number | null;
+  photoUrls?: string[];
+  responders?: Responder[];      // Phase 3B
+  responseCount?: number;
 };
 
 function formatWhen(iso: string): string {
@@ -139,6 +168,8 @@ export function MyEventsContent({
   const [received, setReceived] = useState<ReceivedItem[]>([]);
   const [posts, setPosts] = useState<MyPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const refresh = () => setRefreshTick(t => t + 1);
 
   useEffect(() => {
     let cancel = false;
@@ -157,21 +188,22 @@ export function MyEventsContent({
       })
       .finally(() => { if (!cancel) setLoading(false); });
     return () => { cancel = true; };
-  }, [contact]);
+  }, [contact, refreshTick]);
 
-  // 撤回 sent
+  // Phase 3B: soft cancel(PATCH 而非 DELETE)
   const revokeSent = async (item: SentItem) => {
     try {
       const res = await fetch(
         `/api/events/${item.eventId}/contact-send/${item.id}`,
-        { method: 'DELETE' },
+        { method: 'PATCH' },
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         showError(data.error || '撤回失败');
         return;
       }
-      setSent(prev => prev.filter(s => s.id !== item.id));
+      // 不再 filter — soft cancel,sent 数组里要保留显示"已撤回"
+      setSent(prev => prev.map(s => s.id === item.id ? { ...s, status: 'canceled' } : s));
       showSuccess('已撤回');
     } catch {
       showError('网络故障');
@@ -195,7 +227,7 @@ export function MyEventsContent({
         {loading ? (
           <div className="text-center text-stone-400 py-12 text-sm">加载中...</div>
         ) : tab === 'posts' ? (
-          <PostsList items={posts} onClose={close} />
+          <PostsList items={posts} onClose={close} onRefresh={refresh} />
         ) : tab === 'comments' ? (
           <CommentsList items={comments} onClose={close} />
         ) : tab === 'sent' ? (
@@ -353,55 +385,86 @@ function SentList({
   }
   return (
     <div className="space-y-2">
-      {items.map(s => (
-        <div key={s.id} className="bg-white rounded-card border border-stone-200 p-3">
-          <div className="flex items-center gap-2 mb-1">
-            <EventCardLink ev={s.event} onClose={onClose} />
-            {s.matched && (
-              <span className="ml-auto inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
-                <Check size={12} />
-                已互换
-              </span>
-            )}
-          </div>
-          <div className="text-xs text-stone-500">
-            发给 <span className="font-medium text-stone-700">{s.target?.nickname ?? '(评论已删除)'}</span>
-            {s.target && <span className="text-stone-400"> · 「{s.target.content.slice(0, 30)}{s.target.content.length > 30 ? '...' : ''}」</span>}
-          </div>
-          <div className="text-xs text-stone-500 mt-1">
-            你发了:{contactTypeLabel(s.myContactType, s.myContactLabel)} · <span className="font-mono text-stone-700">{s.myContact}</span>
-          </div>
-          <div className="text-xs text-stone-400 mt-1 flex items-center gap-2 flex-wrap">
-            <span>{formatWhen(s.createdAt)}</span>
-            {!s.matched && <span className="text-stone-400">· 等待 TA 回赠</span>}
-            {/* 撤回按钮 — 二步确认避免误删 */}
-            <span className="ml-auto">
-              {confirmId === s.id ? (
-                <span className="inline-flex items-center gap-1.5 text-xs">
-                  <span className="text-stone-500">确认撤回?</span>
-                  <button
-                    onClick={async () => { await onRevoke(s); setConfirmId(null); }}
-                    className="text-rose-600 hover:text-rose-700 font-medium"
-                  >确认</button>
-                  <button
-                    onClick={() => setConfirmId(null)}
-                    className="text-stone-500 hover:text-stone-700"
-                  >取消</button>
+      {items.map(s => {
+        const isCanceled = s.status === 'canceled';
+        return (
+          <div
+            key={s.id}
+            className={`rounded-card border p-3 ${
+              isCanceled ? 'bg-stone-50 border-stone-200 opacity-80' : 'bg-white border-stone-200'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <EventCardLink ev={s.event} onClose={onClose} />
+              {/* Phase 3B 状态 chip(active=绿;canceled=灰) */}
+              {isCanceled ? (
+                <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-stone-100 text-stone-500 border border-stone-200">
+                  <Undo2 size={11} />
+                  已撤回
                 </span>
               ) : (
-                <button
-                  onClick={() => setConfirmId(s.id)}
-                  className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-rose-600"
-                  title="撤回:对方下次打开「我的」时就看不到了"
-                >
-                  <Undo2 size={11} />
-                  撤回
-                </button>
+                <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Check size={11} />
+                  已发送
+                </span>
               )}
-            </span>
+              {s.matched && !isCanceled && (
+                <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                  <Check size={12} />
+                  已互换
+                </span>
+              )}
+            </div>
+            {s.target && (
+              <div className="text-xs text-stone-500">
+                发给 <span className="font-medium text-stone-700">{s.target.nickname}</span>
+                <span className="text-stone-400"> · 「{s.target.content.slice(0, 30)}{s.target.content.length > 30 ? '...' : ''}」</span>
+              </div>
+            )}
+            {!s.target && (
+              <div className="text-xs text-stone-500">发给活动发起人</div>
+            )}
+            {/* Phase 3B note — 一行话备注 */}
+            {s.note && (
+              <div className="text-xs text-stone-600 mt-1 italic">「{s.note}」</div>
+            )}
+            <div className="text-xs text-stone-500 mt-1">
+              你发了:{contactTypeLabel(s.myContactType, s.myContactLabel)} · <span className="font-mono text-stone-700">{s.myContact}</span>
+            </div>
+            <div className="text-xs text-stone-400 mt-1 flex items-center gap-2 flex-wrap">
+              <span>{formatWhen(s.createdAt)}</span>
+              {!s.matched && !isCanceled && <span className="text-stone-400">· 等待 TA 回赠</span>}
+              {/* 撤回按钮 — 二步确认避免误删,canceled 状态不显 */}
+              {!isCanceled && (
+                <span className="ml-auto">
+                  {confirmId === s.id ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs">
+                      <span className="text-stone-500">确认撤回?</span>
+                      <button
+                        onClick={async () => { await onRevoke(s); setConfirmId(null); }}
+                        className="text-rose-600 hover:text-rose-700 font-medium"
+                      >确认</button>
+                      <button
+                        onClick={() => setConfirmId(null)}
+                        className="text-stone-500 hover:text-stone-700"
+                      >取消</button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmId(s.id)}
+                      className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-rose-600"
+                      title="撤回:对方下次打开「我的」时就看不到了"
+                    >
+                      <Undo2 size={11} />
+                      撤回
+                    </button>
+                  )}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -426,6 +489,9 @@ function ReceivedList({ items, onClose }: { items: ReceivedItem[]; onClose: () =
           <div className="text-xs text-stone-600 mb-1">
             <span className="font-medium text-stone-800">{r.fromNickname}</span> 想跟你一起去
           </div>
+          {r.note && (
+            <div className="text-xs text-stone-600 mb-1 italic">「{r.note}」</div>
+          )}
           <div className="text-sm bg-stone-50 rounded-lg p-2 mt-1 border border-stone-200 flex items-start gap-2">
             <div className="flex-1 min-w-0">
               <div className="text-xs text-stone-500 mb-0.5">{contactTypeLabel(r.fromContactType, r.fromContactLabel)}</div>
@@ -461,41 +527,514 @@ const CATEGORY_LABEL_SHORT: Record<string, string> = {
   other: '其他',
 };
 
-function PostsList({ items, onClose }: { items: MyPost[]; onClose: () => void }) {
+// Phase 3B: 状态 badge(active 不显示)
+const STATUS_META: Record<string, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
+  fulfilled: { label: '已结清', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', Icon: CheckCircle2 },
+  canceled:  { label: '已取消', cls: 'bg-rose-50 text-rose-700 border-rose-200',           Icon: XCircle },
+  expired:   { label: '已过期', cls: 'bg-stone-100 text-stone-500 border-stone-200',       Icon: Hourglass },
+};
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function PostsList({
+  items, onClose, onRefresh,
+}: {
+  items: MyPost[];
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  // 操作弹窗 — 一次只可能开一个
+  const [codePrompt, setCodePrompt] = useState<{
+    post: MyPost;
+    nextStatus: 'fulfilled' | 'canceled';
+    label: string;
+  } | null>(null);
+  // "再发一次"弹窗 — 用 EventPostModal 编辑
+  const [repostInitial, setRepostInitial] = useState<EventPostInitial | null>(null);
+
   if (items.length === 0) {
     return <EmptyHint icon={<FileText size={40} />} text="还没发过活动" hint="在 /localnews 顶部点「+ 发布」分享给社区" />;
   }
+
+  const onChangeStatus = async (post: MyPost, code: string, nextStatus: 'fulfilled' | 'canceled') => {
+    try {
+      const res = await fetch(`/api/events/${post.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, status: nextStatus }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        showError(data.error || '操作失败');
+        return;
+      }
+      showSuccess(nextStatus === 'fulfilled' ? '已标记为已结清' : '已取消活动');
+      setCodePrompt(null);
+      onRefresh();
+    } catch {
+      showError('网络故障');
+    }
+  };
+
+  const onRepost = (p: MyPost) => {
+    // 把 startAt/endAt 各 +7 天(若有)
+    // EventPostModal 收 initial 进编辑模式 — "再发一次"语义 = 把原活动的时间往后推一周 +
+    // 用户可调字段。提交走 PATCH /api/events/[id],保留同一条 event 的响应历史。
+    const shift7d = (iso: string | null): string | null => {
+      if (!iso) return null;
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return null;
+      d.setDate(d.getDate() + 7);
+      return d.toISOString();
+    };
+    setRepostInitial({
+      id: p.id,
+      title: p.title,
+      category: p.category ?? 'life',
+      customCategory: p.customCategory ?? null,
+      description: p.description ?? '',
+      startAt: shift7d(p.startAt),
+      endAt: shift7d(p.endAt),
+      location: p.location,
+      posterNickname: '',     // 让 EventPostModal 自己 hydrate
+      posterContactType: null,
+      posterContact: null,
+      posterContactLabel: null,
+      posterContactPublic: false,
+      maxAttendees: p.maxAttendees ?? null,
+    });
+  };
+
+  const onCopyAllPublic = async (p: MyPost) => {
+    const revealed = (p.responders ?? []).filter(r => r.revealed && r.status !== 'canceled');
+    if (revealed.length === 0) {
+      showError('还没有已公开联系方式的响应者');
+      return;
+    }
+    const text = revealed.map(r =>
+      `${r.nickname} · ${contactTypeLabel(r.contactType, r.contactLabel)}: ${r.contact}`,
+    ).join('\n');
+    const ok = await copyToClipboard(text);
+    if (ok) showSuccess(`已复制 ${revealed.length} 条联系方式`);
+    else showError('复制失败,请手动选中复制');
+  };
+
   return (
     <div className="space-y-2">
       {items.map(p => {
         const catLabel = p.category === 'other'
           ? (p.customCategory || '其他')
           : (CATEGORY_LABEL_SHORT[p.category ?? ''] ?? '活动');
+        const isExpanded = expandedId === p.id;
+        const isActive = p.status === 'active' || !p.status;
+        const statusMeta = !isActive ? STATUS_META[p.status] ?? null : null;
+        const responders = p.responders ?? [];
+        const respCount = p.responseCount ?? responders.filter(r => r.status !== 'canceled').length;
+        const wanted = p.maxAttendees;
         return (
-          <div key={p.id} className="bg-white rounded-card border border-stone-200 p-3">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-brand/10 text-brand">
-                {catLabel}
-              </span>
-              <Link
-                href={`/localnews?focus=${p.id}`}
-                onClick={onClose}
-                className="flex-1 min-w-0 text-sm font-medium text-stone-900 hover:text-brand truncate"
-              >
-                {p.title}
-              </Link>
-            </div>
-            {p.description && (
-              <div className="text-xs text-stone-600 line-clamp-2 mt-1">{p.description}</div>
+          <div key={p.id} className="bg-white rounded-card border border-stone-200 overflow-hidden">
+            {/* 头部 — 永远显示(点 toggle expand) */}
+            <button
+              type="button"
+              onClick={() => setExpandedId(prev => prev === p.id ? null : p.id)}
+              className="w-full text-left p-3 hover:bg-stone-50 transition-colors"
+            >
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-brand/10 text-brand">
+                  {catLabel}
+                </span>
+                {statusMeta && (
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${statusMeta.cls}`}>
+                    <statusMeta.Icon size={11} strokeWidth={2.2} />
+                    {statusMeta.label}
+                  </span>
+                )}
+                {/* 响应数 chip */}
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-stone-100 text-stone-700">
+                  <Users size={11} strokeWidth={2.2} />
+                  {wanted ? `想找 ${wanted} · 已 ${respCount} 响应` : `已 ${respCount} 响应`}
+                </span>
+                <span className="ml-auto text-stone-400">
+                  {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </span>
+              </div>
+              <div className="text-sm font-medium text-stone-900 truncate">{p.title}</div>
+              {!isExpanded && p.description && (
+                <div className="text-xs text-stone-600 line-clamp-2 mt-1">{p.description}</div>
+              )}
+              <div className="flex items-center gap-2 text-xs text-stone-400 mt-1.5 flex-wrap">
+                <span>{formatWhen(p.scrapedAt)}发布</span>
+                {p.commentCount > 0 && <span>· {p.commentCount} 条评论</span>}
+                {p.location && (
+                  <span className="inline-flex items-center gap-1 truncate">
+                    · <MapPin size={11} />{p.location}
+                  </span>
+                )}
+              </div>
+            </button>
+
+            {/* 展开 — 响应者列表 + 操作按钮 */}
+            {isExpanded && (
+              <div className="border-t border-stone-100 px-3 py-3 space-y-3">
+                {/* 跳详情 link */}
+                <div>
+                  <Link
+                    href={`/localnews?focus=${p.id}`}
+                    onClick={onClose}
+                    className="text-xs text-brand hover:text-brand-dark underline"
+                  >
+                    查看活动详情 →
+                  </Link>
+                </div>
+
+                {p.description && (
+                  <div className="text-xs text-stone-700 whitespace-pre-wrap leading-relaxed">{p.description}</div>
+                )}
+
+                {/* 响应者列表 */}
+                <ResponderList
+                  postId={p.id}
+                  responders={responders}
+                  onAfterReveal={onRefresh}
+                />
+
+                {/* 顶层操作按钮 */}
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  {isActive && (
+                    <>
+                      <button
+                        onClick={() => setCodePrompt({ post: p, nextStatus: 'fulfilled', label: '标记已结清' })}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-chip text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition-all shadow-card"
+                      >
+                        <CheckCircle2 size={13} />
+                        标记已结清
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!confirm('确定取消活动?对方还能看到「已取消」状态。')) return;
+                          setCodePrompt({ post: p, nextStatus: 'canceled', label: '取消活动' });
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-chip text-xs font-medium bg-white border border-stone-300 text-rose-600 hover:bg-rose-50 active:scale-95 transition-all"
+                      >
+                        <XCircle size={13} />
+                        取消活动
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => onRepost(p)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-chip text-xs font-medium bg-white border border-stone-300 text-stone-700 hover:bg-stone-100 active:scale-95 transition-all"
+                  >
+                    <RefreshCw size={13} />
+                    再发一次
+                  </button>
+                  {isActive && responders.some(r => r.revealed && r.status !== 'canceled') && (
+                    <button
+                      onClick={() => onCopyAllPublic(p)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-chip text-xs font-medium bg-white border border-stone-300 text-stone-700 hover:bg-stone-100 active:scale-95 transition-all"
+                    >
+                      <Copy size={13} />
+                      复制所有公开联系方式
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
-            <div className="flex items-center gap-3 text-xs text-stone-400 mt-1.5 flex-wrap">
-              <span>{formatWhen(p.scrapedAt)}发布</span>
-              {p.commentCount > 0 && <span>· {p.commentCount} 条评论</span>}
-              {p.location && <span className="truncate">· {p.location}</span>}
-            </div>
           </div>
         );
       })}
+
+      {/* 改状态 — 密码弹窗 */}
+      {codePrompt && (
+        <EditCodePrompt
+          itemId={codePrompt.post.id}
+          title={codePrompt.post.title}
+          action={codePrompt.label}
+          onCancel={() => setCodePrompt(null)}
+          onConfirm={async (code) => {
+            await onChangeStatus(codePrompt.post, code, codePrompt.nextStatus);
+          }}
+        />
+      )}
+
+      {/* 再发一次 — 复用 EventPostModal 编辑模式:同一条 event,时间 +7 天 +
+          用户可改其它字段。保留响应者历史,不新建 event。 */}
+      {repostInitial && (
+        <EventPostModal
+          initial={repostInitial}
+          onClose={() => setRepostInitial(null)}
+          onCreated={() => { setRepostInitial(null); onRefresh(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Phase 3B 响应者列表 — poster 视角看到的"谁想跟我一起"
+function ResponderList({
+  postId, responders, onAfterReveal,
+}: {
+  postId: string;
+  responders: Responder[];
+  onAfterReveal: () => void;
+}) {
+  // 按 createdAt 倒序
+  const sorted = useMemo(
+    () => [...responders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [responders],
+  );
+  const [revealId, setRevealId] = useState<string | null>(null);
+
+  if (sorted.length === 0) {
+    return (
+      <div className="text-xs text-stone-400 bg-stone-50 rounded-lg border border-stone-200 py-4 text-center">
+        还没人响应,耐心等等
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-medium text-stone-700">
+        响应者({sorted.filter(r => r.status !== 'canceled').length})
+      </div>
+      {sorted.map(r => (
+        <ResponderRow
+          key={r.id}
+          postId={postId}
+          responder={r}
+          openReveal={revealId === r.id}
+          onOpenReveal={() => setRevealId(r.id)}
+          onCloseReveal={() => setRevealId(null)}
+          onAfterReveal={() => { setRevealId(null); onAfterReveal(); }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ResponderRow({
+  postId, responder, openReveal, onOpenReveal, onCloseReveal, onAfterReveal,
+}: {
+  postId: string;
+  responder: Responder;
+  openReveal: boolean;
+  onOpenReveal: () => void;
+  onCloseReveal: () => void;
+  onAfterReveal: () => void;
+}) {
+  const r = responder;
+  const isCanceled = r.status === 'canceled';
+
+  if (isCanceled) {
+    return (
+      <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-400">
+        <span className="font-medium">{r.nickname}</span> · 对方撤回了
+        <span className="ml-2 text-stone-300">{formatWhen(r.createdAt)}</span>
+      </div>
+    );
+  }
+
+  if (r.revealed) {
+    return (
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-2.5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-sm font-medium text-stone-900">{r.nickname}</span>
+          <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700">
+            <Check size={11} />已回赠
+          </span>
+          <span className="ml-auto text-[11px] text-stone-400">{formatWhen(r.createdAt)}</span>
+        </div>
+        {r.note && <div className="text-xs text-stone-600 mb-1 italic">「{r.note}」</div>}
+        <div className="flex items-center gap-2 bg-white border border-stone-200 rounded-md px-2 py-1.5">
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] text-stone-500">{contactTypeLabel(r.contactType, r.contactLabel)}</div>
+            <div className="font-mono text-sm text-stone-900 break-all">{r.contact}</div>
+          </div>
+          <button
+            onClick={() => copyText(r.contact)}
+            className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-chip bg-stone-100 border border-stone-300 text-stone-700 hover:bg-stone-200 active:scale-95 transition-all"
+            title="复制联系方式"
+          >
+            <Copy size={11} />
+            复制
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // active + 未 reveal — 显示昵称 + note + 按钮"公开我联系方式给 ta"
+  return (
+    <div className="rounded-lg border border-stone-200 bg-white p-2.5">
+      <div className="flex items-center gap-2 mb-1 flex-wrap">
+        <span className="text-sm font-medium text-stone-900">{r.nickname}</span>
+        <span className="text-[11px] text-stone-400">想跟你一起去</span>
+        <span className="ml-auto text-[11px] text-stone-400">{formatWhen(r.createdAt)}</span>
+      </div>
+      {r.note && <div className="text-xs text-stone-600 mb-2 italic">「{r.note}」</div>}
+      {openReveal ? (
+        <RevealForm
+          postId={postId}
+          responderSendId={r.id}
+          onCancel={onCloseReveal}
+          onSuccess={onAfterReveal}
+        />
+      ) : (
+        <button
+          onClick={onOpenReveal}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-chip text-xs font-medium bg-brand text-white hover:bg-brand-dark active:scale-95 transition-all shadow-card"
+        >
+          <UserPlus size={12} />
+          公开我联系方式给 ta
+        </button>
+      )}
+    </div>
+  );
+}
+
+function RevealForm({
+  postId, responderSendId, onCancel, onSuccess,
+}: {
+  postId: string;
+  responderSendId: string;
+  onCancel: () => void;
+  onSuccess: () => void;
+}) {
+  const [nickname, setNick] = useState('');
+  const [contactType, setContactType] = useState<ContactType>('wechat');
+  const [contact, setContact] = useState('');
+  const [contactLabel, setContactLabel] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // hydrate
+  useEffect(() => {
+    const n = getNickname();
+    if (n) setNick(n);
+    const last = getLastContact();
+    if (last) {
+      setContactType(last.contactType);
+      setContact(last.contact);
+      if (last.contactLabel) setContactLabel(last.contactLabel);
+    }
+  }, []);
+
+  const submit = async () => {
+    const n = nickname.trim();
+    const c = contact.trim();
+    if (!n) return showError('请填写昵称');
+    if (!c) return showError('请填写联系方式');
+    if (contactType === 'other' && !contactLabel.trim()) {
+      return showError('请填写「其他」联系方式平台名');
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/events/${postId}/reveal-to-responder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          responderSendId,
+          nickname: n,
+          contactType,
+          contact: c,
+          contactLabel: contactType === 'other' ? contactLabel.trim() : null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        showError(data.error || '回赠失败');
+        return;
+      }
+      persistNickname(n);
+      setLastContact({
+        contactType,
+        contact: c,
+        contactLabel: contactType === 'other' ? contactLabel.trim() : undefined,
+      });
+      showSuccess('已回赠你的联系方式');
+      onSuccess();
+    } catch {
+      showError('网络故障');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 bg-stone-50 rounded-md p-2 border border-stone-200">
+      <input
+        type="text"
+        value={nickname}
+        onChange={(e) => setNick(e.target.value)}
+        maxLength={20}
+        placeholder="你的昵称(对方看得到)"
+        className="w-full px-2.5 py-1.5 text-xs bg-white border border-stone-300 rounded focus:outline-none focus:border-brand"
+      />
+      <div className="flex gap-1.5">
+        <select
+          value={contactType}
+          onChange={(e) => setContactType(e.target.value as ContactType)}
+          className="px-2 py-1.5 text-xs bg-white border border-stone-300 rounded focus:outline-none focus:border-brand"
+        >
+          {CONTACT_TYPES.map(t => (
+            <option key={t.id} value={t.id}>{t.label}</option>
+          ))}
+        </select>
+        <input
+          type="text"
+          value={contact}
+          onChange={(e) => setContact(e.target.value)}
+          placeholder={CONTACT_TYPES.find(t => t.id === contactType)?.placeholder}
+          maxLength={80}
+          className="flex-1 min-w-0 px-2.5 py-1.5 text-xs bg-white border border-stone-300 rounded focus:outline-none focus:border-brand"
+        />
+      </div>
+      {contactType === 'other' && (
+        <input
+          type="text"
+          value={contactLabel}
+          onChange={(e) => setContactLabel(e.target.value)}
+          placeholder="平台名(如 Line)"
+          maxLength={20}
+          className="w-full px-2.5 py-1.5 text-xs bg-white border border-stone-300 rounded focus:outline-none focus:border-brand"
+        />
+      )}
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          onClick={submit}
+          disabled={submitting}
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-brand text-white rounded-chip hover:bg-brand-dark active:scale-95 disabled:opacity-50 transition-all shadow-card"
+        >
+          <Check size={12} />
+          {submitting ? '...' : '回赠'}
+        </button>
+        <button
+          onClick={onCancel}
+          className="px-3 py-1.5 text-xs text-stone-600 rounded-chip hover:bg-stone-100 transition-colors"
+        >
+          取消
+        </button>
+      </div>
     </div>
   );
 }
