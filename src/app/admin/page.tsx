@@ -360,7 +360,8 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     totalEventComments,
     totalContactSends,
     recentScrapeRuns,
-    topHotEvents,
+    topHotEventsCurrent,
+    topHotEventsHistory,
     sourceBreakdown,
   ] = await Promise.all([
     prisma.event.count({ where: { status: 'active' } }),
@@ -370,12 +371,23 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
       orderBy: { startedAt: 'desc' },
       take: 15,
     }),
-    // 热度 Top 10 (按 clickCount)
+    // 当前热门 Top 10:status=active + 未过期(startAt=null 或 startAt > now) — /localnews 上还能看到的
     prisma.event.findMany({
-      where: { status: 'active', clickCount: { gt: 0 } },
+      where: {
+        status: 'active',
+        clickCount: { gt: 0 },
+        OR: [{ startAt: null }, { startAt: { gt: new Date() } }],
+      },
       orderBy: { clickCount: 'desc' },
       take: 10,
-      select: { id: true, title: true, source: true, category: true, clickCount: true, startAt: true },
+      select: { id: true, title: true, source: true, category: true, clickCount: true, startAt: true, status: true },
+    }),
+    // 历史热门 Top 10:不限 status(含已结清/过期/取消) — 看哪类活动累计吸引最多点击
+    prisma.event.findMany({
+      where: { clickCount: { gt: 0 } },
+      orderBy: { clickCount: 'desc' },
+      take: 10,
+      select: { id: true, title: true, source: true, category: true, clickCount: true, startAt: true, status: true },
     }),
     // 每个源活跃 event 数
     prisma.event.groupBy({
@@ -527,33 +539,34 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
         )}
       </section>
 
-      {/* === 黑堡 源 + 热门 events 双栏 === */}
-      <section className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* 各源 event 数 */}
-        <div>
-          <h2 className="text-lg font-semibold mb-3">📊 各源活跃 events</h2>
-          {sourceBreakdown.length === 0 ? (
-            <EmptyBox text="没有活跃 events" />
-          ) : (
-            <div className="bg-white rounded-lg border border-stone-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <tbody>
-                  {sourceBreakdown.map(s => (
-                    <tr key={s.source} className="border-b border-stone-100 last:border-b-0">
-                      <td className="px-3 py-2 font-mono text-xs">{s.source}</td>
-                      <td className="px-3 py-2 text-right font-mono">{s._count.id}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+      {/* === 各源活跃 events:单独一区 === */}
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-3">📊 各源活跃 events</h2>
+        {sourceBreakdown.length === 0 ? (
+          <EmptyBox text="没有活跃 events" />
+        ) : (
+          <div className="bg-white rounded-lg border border-stone-200 overflow-hidden max-w-md">
+            <table className="w-full text-sm">
+              <tbody>
+                {sourceBreakdown.map(s => (
+                  <tr key={s.source} className="border-b border-stone-100 last:border-b-0">
+                    <td className="px-3 py-2 font-mono text-xs">{s.source}</td>
+                    <td className="px-3 py-2 text-right font-mono">{s._count.id}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
-        {/* 热度 Top 10 */}
+      {/* === 热门 events:当前 + 历史 双栏对照(扁平,一眼扫过) === */}
+      <section className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 当前热门 Top 10 — active + 未过期(/localnews 上还能看到的) */}
         <div>
-          <h2 className="text-lg font-semibold mb-3">🔥 热门 events Top 10</h2>
-          {topHotEvents.length === 0 ? (
+          <h2 className="text-lg font-semibold mb-1">🔥 当前热门 Top 10</h2>
+          <p className="text-xs text-stone-500 mb-2">活跃 + 未过期(/localnews 还能看到的)</p>
+          {topHotEventsCurrent.length === 0 ? (
             <EmptyBox text="还没有点击数据" />
           ) : (
             <div className="bg-white rounded-lg border border-stone-200 overflow-hidden">
@@ -565,7 +578,7 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
                   </tr>
                 </thead>
                 <tbody>
-                  {topHotEvents.map(e => (
+                  {topHotEventsCurrent.map(e => (
                     <tr key={e.id} className="border-t border-stone-100">
                       <td className="px-3 py-2 text-xs">
                         <div className="line-clamp-1">{e.title}</div>
@@ -574,6 +587,46 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
                       <td className="px-3 py-2 text-right font-mono text-xs font-semibold text-rose-600">{e.clickCount}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* 历史热门 Top 10 — 不限 status,看哪类活动累计吸引最多点击 */}
+        <div>
+          <h2 className="text-lg font-semibold mb-1">📈 历史热门 Top 10</h2>
+          <p className="text-xs text-stone-500 mb-2">累计全部状态(含已结清/过期/取消) — 看哪类活动最吸引人</p>
+          {topHotEventsHistory.length === 0 ? (
+            <EmptyBox text="还没有点击数据" />
+          ) : (
+            <div className="bg-white rounded-lg border border-stone-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-stone-50 text-xs text-stone-500 uppercase">
+                  <tr>
+                    <th className="px-3 py-2 text-left">标题</th>
+                    <th className="px-3 py-2 text-right">点击</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topHotEventsHistory.map(e => {
+                    const statusInfo = e.status === 'fulfilled' ? { label: '已结清', color: 'text-emerald-600' }
+                      : e.status === 'canceled' ? { label: '已取消', color: 'text-rose-600' }
+                      : e.status === 'expired' ? { label: '已过期', color: 'text-stone-500' }
+                      : null;
+                    return (
+                      <tr key={e.id} className="border-t border-stone-100">
+                        <td className="px-3 py-2 text-xs">
+                          <div className="line-clamp-1">{e.title}</div>
+                          <div className="text-stone-400 text-[10px] mt-0.5">
+                            {e.source} · {e.category ?? '—'}
+                            {statusInfo && <span className={`ml-1.5 font-medium ${statusInfo.color}`}>· {statusInfo.label}</span>}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono text-xs font-semibold text-rose-600">{e.clickCount}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

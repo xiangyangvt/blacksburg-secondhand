@@ -215,9 +215,10 @@ export function MyEventsContent({
 
   return (
     <div>
-      {/* tab 行 — 4 tab:我发的活动 / 留言 / 已发出 / 已收到 */}
-      <div className="flex gap-1 overflow-x-auto no-scrollbar border-b border-stone-200 mb-3">
-        <TabButton active={tab === 'posts'}    onClick={() => setTab('posts')}    icon={<FileText size={14} />}       label="我发的活动" count={posts.length} />
+      {/* tab 行 — 4 tab,跟 MyPostsPanel(找室友)同款样式:label (count) 括号 + 选中加粗
+          label 简短(不带"活动")避免换行 */}
+      <div className="flex gap-0 overflow-x-auto no-scrollbar border-b border-stone-200 mb-3">
+        <TabButton active={tab === 'posts'}    onClick={() => setTab('posts')}    icon={<FileText size={14} />}       label="我发的" count={posts.length} />
         <TabButton active={tab === 'comments'} onClick={() => setTab('comments')} icon={<MessageSquare size={14} />}  label="留言" count={comments.length} />
         <TabButton active={tab === 'sent'}     onClick={() => setTab('sent')}     icon={<Send size={14} />}           label="已发出" count={sent.length} />
         <TabButton active={tab === 'received'} onClick={() => setTab('received')} icon={<Inbox size={14} />}          label="已收到" count={received.length} badge={unreadCount} />
@@ -317,23 +318,21 @@ function TabButton({
   count?: number;
   badge?: number;
 }) {
+  // 跟 MyPostsPanel.TabBtn 同款:括号包数量、选中加粗 + 红字 + 下划线、whitespace-nowrap 防换行
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+      className={`relative inline-flex items-center gap-1 px-4 py-2 text-sm border-b-2 -mb-px whitespace-nowrap transition-colors ${
         active
-          ? 'text-brand border-brand'
-          : 'text-stone-600 border-transparent hover:text-stone-900'
+          ? 'border-brand text-brand font-semibold'
+          : 'border-transparent text-stone-500 hover:text-stone-800'
       }`}
     >
       {icon}
-      {label}
-      {typeof count === 'number' && count > 0 && (
-        <span className="text-stone-400 text-xs font-normal">· {count}</span>
-      )}
-      {badge && badge > 0 && (
-        <span className="absolute top-1 right-1 min-w-[14px] h-[14px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center" aria-hidden>
+      <span>{label}{typeof count === 'number' ? ` (${count})` : ''}</span>
+      {badge !== undefined && badge > 0 && (
+        <span className="absolute top-1 right-0 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
           {badge > 9 ? '9+' : badge}
         </span>
       )}
