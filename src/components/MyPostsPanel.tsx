@@ -88,7 +88,30 @@ type SentApplication = {
 };
 
 type Platform = 'item' | 'listing' | 'event';  // Phase 3A.2: 加 event 平台统一
-type ItemTab = 'active' | 'draft';
+type ItemTab = 'active' | 'draft' | 'sentInquiries';
+
+// Phase 3C: "我发送的询价" 列表项 type
+type SentInquiry = {
+  id: string;
+  message: string;
+  sellerReply: string | null;
+  sellerRepliedAt: string | null;
+  createdAt: string;
+  status: string;
+  contactType: string;
+  customContactLabel: string | null;
+  item: {
+    id: string;
+    title: string;
+    price: number | null;
+    type: 'sell' | 'buy';
+    category: string;
+    customTag: string | null;
+    photoUrls: string[];
+    status: string;
+    createdAt: string;
+  } | null;
+};
 type ListingTab = 'mine' | 'inbox' | 'sent';
 type EventTab = 'comments' | 'sent' | 'received';
 
@@ -129,6 +152,9 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
   const [sentApps, setSentApps] = useState<SentApplication[] | null>(null);
   const [sentPendingN, setSentPendingN] = useState(0);
 
+  // Phase 3C: 我发送的询价(buyer 视角)
+  const [sentInquiries, setSentInquiries] = useState<SentInquiry[] | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [platform, setPlatform] = useState<Platform>(initialPlatform ?? 'item');
   const [itemTab, setItemTab] = useState<ItemTab>('active');
@@ -161,7 +187,7 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
     }
     setLoading(true);
     try {
-      const [itemsRes, listingsRes, sentRes] = await Promise.all([
+      const [itemsRes, listingsRes, sentRes, inquiriesRes] = await Promise.all([
         fetch('/api/items/by-contact', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -177,11 +203,18 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ value: contactValue.trim(), editCode }),
         }),
+        // Phase 3C: 同 contactValue 发出去的 inquiry(buyer 视角,不需要 editCode)
+        fetch('/api/inquiries/by-contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: contactValue.trim() }),
+        }),
       ]);
 
       const itemsData    = await itemsRes.json();
       const listingsData = await listingsRes.json();
       const sentData     = await sentRes.json();
+      const inquiriesData = await inquiriesRes.json();
 
       if (!itemsRes.ok) {
         showError(itemsData.error || t('my.errLookup'));
@@ -191,9 +224,11 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
       const itemsArr    = (itemsData.items    ?? []) as ItemWithStatus[];
       const listingsArr = (listingsData.items ?? []) as ListingWithStatus[];
       const sentArr     = (sentData.items     ?? []) as SentApplication[];
+      const inquiriesArr = (inquiriesData.items ?? []) as SentInquiry[];
       setItems(itemsArr);
       setListings(listingsArr);
       setSentApps(sentArr);
+      setSentInquiries(inquiriesArr);
       setItemActiveN(itemsData.activeCount ?? 0);
       setItemDraftN(itemsData.draftCount  ?? 0);
       setListingActiveN(listingsData.activeCount ?? 0);
@@ -393,9 +428,31 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
                 <TabBtn active={itemTab === 'draft'} onClick={() => setItemTab('draft')}>
                   {t('my.tabDraft', { n: itemDraftN })}
                 </TabBtn>
+                {/* Phase 3C: 我发送的询价(buyer 视角) — 跟室友"我发的申请"对应 */}
+                <TabBtn active={itemTab === 'sentInquiries'} onClick={() => setItemTab('sentInquiries')}>
+                  我发的询价 ({sentInquiries?.length ?? 0})
+                </TabBtn>
               </div>
 
-              {visibleItems.length === 0 ? (
+              {itemTab === 'sentInquiries' ? (
+                (sentInquiries ?? []).length === 0 ? (
+                  <div className="text-center text-stone-500 py-12 text-sm">
+                    还没有发过询价
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(sentInquiries ?? []).map(si => (
+                      <MySentInquiryRow
+                        key={si.id}
+                        sentInquiry={si}
+                        contactValue={contactValue.trim()}
+                        refresh={lookup}
+                        locale={locale}
+                      />
+                    ))}
+                  </div>
+                )
+              ) : visibleItems.length === 0 ? (
                 <div className="text-center text-stone-500 py-12 text-sm">
                   {itemTab === 'draft' ? t('my.draftEmpty') : t('my.empty')}
                 </div>
@@ -820,6 +877,185 @@ function MyItemRow({
           hideAskForm
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Phase 3C: "我发送的询价"行 — buyer 视角看自己对别人物品发的询价
+ * 跟 MyItemRow 区别:无物品 edit/delete 按钮(不是自己的物品),但能 edit/delete 自己的询价内容
+ */
+function MySentInquiryRow({
+  sentInquiry, contactValue, refresh, locale,
+}: {
+  sentInquiry: SentInquiry;
+  contactValue: string;
+  refresh: () => void;
+  locale: 'zh' | 'en';
+}) {
+  const item = sentInquiry.item;
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(sentInquiry.message);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSave = async () => {
+    const msg = editText.trim();
+    if (!msg) { showError('询价内容不能为空'); return; }
+    if (msg.length > 500) { showError('询价最多 500 字'); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/inquiries/${sentInquiry.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactValue, message: msg }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showError(data.error || '修改失败');
+        return;
+      }
+      setEditing(false);
+      refresh();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('确定删除这条询价?')) return;
+    try {
+      const res = await fetch(
+        `/api/inquiries/${sentInquiry.id}?contactValue=${encodeURIComponent(contactValue)}`,
+        { method: 'DELETE' },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showError(data.error || '删除失败');
+        return;
+      }
+      refresh();
+    } catch {
+      showError('网络故障');
+    }
+  };
+
+  // 物品被卖家删除了
+  if (!item) {
+    return (
+      <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 text-sm">
+        <div className="text-stone-500 italic mb-2">物品已下架或删除</div>
+        <div className="text-stone-700 whitespace-pre-wrap">{sentInquiry.message}</div>
+        <button
+          onClick={handleDelete}
+          className="mt-2 inline-flex items-center gap-1 text-xs text-stone-400 hover:text-rose-600"
+        >
+          <Trash2 size={11} />
+          删除此询价
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white border border-stone-200 rounded-lg p-3">
+      {/* 物品简版卡 — 无 edit/delete(不是自己的物品) */}
+      <div className="flex gap-3 mb-3">
+        {item.photoUrls.length > 0 && (
+          <NextImage
+            src={item.photoUrls[0]}
+            alt=""
+            width={64}
+            height={64}
+            sizes="64px"
+            className="h-16 w-16 object-cover rounded flex-shrink-0"
+          />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 text-xs mb-1 flex-wrap">
+            <span className={`px-2 py-0.5 rounded-full ${
+              item.type === 'sell' ? 'bg-brand text-white' : 'bg-accent text-white'
+            }`}>
+              {typeLabel(item.type, item.category, locale)}
+            </span>
+            <span className={`px-2 py-0.5 rounded-full text-stone-700 ${categoryBgClass(item.category)}`}>
+              {categoryLabel(item.category, locale)}
+            </span>
+            {item.status !== 'active' && (
+              <span className="px-2 py-0.5 rounded-full bg-stone-200 text-stone-600 text-[10px]">
+                {item.status === 'sold' ? '已售出' : '已下架'}
+              </span>
+            )}
+          </div>
+          <div className="font-medium text-stone-900 truncate text-sm">{item.title}</div>
+          <div className="text-brand font-bold text-sm">{formatPrice(item.price, locale, item.type, item.category)}</div>
+        </div>
+      </div>
+
+      {/* 自己的询价内容 + 卖家回复(只读) */}
+      <div className="bg-stone-50 rounded p-3 space-y-2 text-sm">
+        <div className="text-xs text-stone-500">我的询价 · {timeAgo(sentInquiry.createdAt, locale)}</div>
+        {editing ? (
+          <>
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              rows={3}
+              maxLength={500}
+              autoFocus
+              className="w-full border border-stone-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-brand resize-y"
+            />
+            <div className="flex items-center gap-2 text-xs">
+              <button
+                onClick={handleSave}
+                disabled={submitting || !editText.trim()}
+                className="px-3 py-1 rounded-chip bg-brand text-white hover:bg-brand-dark active:scale-95 transition-all disabled:opacity-50 font-medium"
+              >
+                {submitting ? '保存中…' : '保存'}
+              </button>
+              <button
+                onClick={() => { setEditing(false); setEditText(sentInquiry.message); }}
+                className="px-3 py-1 rounded-chip text-stone-600 hover:text-stone-900"
+              >
+                取消
+              </button>
+              <span className={`ml-auto ${editText.length >= 500 ? 'text-rose-600' : 'text-stone-400'}`}>
+                {editText.length} / 500
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="text-stone-700 whitespace-pre-wrap leading-relaxed">{sentInquiry.message}</div>
+        )}
+
+        {sentInquiry.sellerReply && !editing && (
+          <div className="border-t border-stone-200 pt-2 mt-2">
+            <div className="text-xs text-stone-500 mb-1">
+              卖家回复
+              {sentInquiry.sellerRepliedAt && ` · ${timeAgo(sentInquiry.sellerRepliedAt, locale)}`}
+            </div>
+            <div className="text-stone-700 whitespace-pre-wrap">{sentInquiry.sellerReply}</div>
+          </div>
+        )}
+
+        {!editing && (
+          <div className="flex items-center gap-3 pt-1 text-xs">
+            <button
+              onClick={() => setEditing(true)}
+              className="inline-flex items-center gap-1 text-stone-500 hover:text-brand"
+            >
+              <Pencil size={11} />
+              编辑
+            </button>
+            <button
+              onClick={handleDelete}
+              className="inline-flex items-center gap-1 text-stone-400 hover:text-rose-600"
+            >
+              <Trash2 size={11} />
+              删除
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
