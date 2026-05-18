@@ -331,7 +331,7 @@ function TabButton({
     >
       <span>{label}</span>
       {typeof count === 'number' && (
-        <span className="text-[11px] text-stone-400 leading-tight mt-0.5">{count}</span>
+        <span className="text-[11px] text-stone-400 leading-tight mt-0.5">({count})</span>
       )}
       {badge !== undefined && badge > 0 && (
         <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">

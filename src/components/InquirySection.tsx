@@ -35,6 +35,7 @@ export function InquirySection({
   onInquiryDeleted,
   onInquiryUpdated,
   onRequestSellerDelete,
+  hideAskForm = false,
 }: {
   /** parent id（item.id 或 listing.id），变量名沿用 itemId 兼容旧用法 */
   itemId: string;
@@ -47,6 +48,8 @@ export function InquirySection({
   onInquiryDeleted: () => void;
   onInquiryUpdated: () => void;
   onRequestSellerDelete: (inquiryId: string) => void;
+  /** Phase 3C: 在"我的"面板里嵌入时,卖家视角不需要"我也要问"按钮 */
+  hideAskForm?: boolean;
 }) {
   const postUrl = parentType === 'listing'
     ? `/api/listings/${itemId}/inquiries`
@@ -335,7 +338,7 @@ export function InquirySection({
             </div>
           ))}
 
-          {!showForm && (
+          {!showForm && !hideAskForm && (
             <button
               onClick={openForm}
               className="text-sm text-brand hover:text-brand-dark"
@@ -344,7 +347,7 @@ export function InquirySection({
             </button>
           )}
 
-          {showForm && (
+          {showForm && !hideAskForm && (
             <div className="bg-stone-50 rounded p-3 space-y-2">
               <div className="flex gap-2 flex-wrap">
                 <select

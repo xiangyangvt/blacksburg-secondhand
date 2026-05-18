@@ -31,6 +31,7 @@ import {
 } from '@/lib/utils';
 import { buildItemShareText, clientOrigin } from '@/lib/shareText';
 import { ShareButton } from './ShareButton';
+import { InquirySection } from './InquirySection';
 import { CopyButton } from './CopyButton';
 import { PostModal } from './PostModal';
 import { ListingPostModal, type ListingEditInitial } from './ListingPostModal';
@@ -115,14 +116,8 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
   const [items, setItems] = useState<ItemWithStatus[] | null>(null);
   const [itemActiveN, setItemActiveN] = useState(0);
   const [itemDraftN, setItemDraftN] = useState(0);
-  // Phase 3C: 二手询价通知 — sum 所有 active items 的 active inquiry 数,跟室友 inboxPendingN 同款 badge 语义
-  const totalItemInquiryN = useMemo(() => {
-    if (!items) return 0;
-    return items.reduce((sum, it) => {
-      if (it.status !== 'active') return sum;
-      return sum + (it.inquiries?.length ?? 0);
-    }, 0);
-  }, [items]);
+  // Phase 3C: 询价通知 — 页头"我的"按钮已有 unreadCount('item'),MyPostsPanel 内不再 badge,
+  // 避免重复;卡片内的"X 条询价"chip 仍然保留作为定位提示
 
   // listings 状态
   const [listings, setListings] = useState<ListingWithStatus[] | null>(null);
@@ -363,7 +358,6 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
           icon={<ShoppingBag size={14} />}
           label="买卖二手"
           count={hasLookedUp ? itemActiveN + itemDraftN : undefined}
-          badge={totalItemInquiryN}
           onClick={() => setPlatform('item')}
         />
         <PlatformTab
@@ -418,6 +412,8 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
                       onPublish={() => handlePublishItem(item)}
                       isDraft={item.status === 'draft'}
                       t={t}
+                      refresh={lookup}
+                      editCode={editCode}
                     />
                   ))}
                 </div>
@@ -676,6 +672,7 @@ export function MyPostsStandalone() {
 
 function MyItemRow({
   item, locale, origin, isDraft, onEdit, onDelete, onPublish, t,
+  refresh, editCode,
 }: {
   item: ItemWithStatus;
   locale: 'zh' | 'en';
@@ -685,8 +682,32 @@ function MyItemRow({
   onDelete: () => void;
   onPublish: () => void;
   t: (k: any, v?: any) => string;
+  // Phase 3C: 嵌入 InquirySection 用
+  refresh: () => void;
+  editCode: string;
 }) {
   const photos = item.photoUrls;
+  // Phase 3C: 询价区默认展开("我的"是管理界面,直接看)
+  const [inquiryOpen, setInquiryOpen] = useState(true);
+
+  // Phase 3C: 卖家删 inquiry — 已 lookup 时密码已知,直接调 DELETE,不再二次 prompt
+  const handleDeleteInquiry = async (inquiryId: string) => {
+    if (!confirm('确定删除这条询价?')) return;
+    try {
+      const res = await fetch(
+        `/api/inquiries/${inquiryId}?itemEditCode=${encodeURIComponent(editCode)}`,
+        { method: 'DELETE' },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showError(data.error || '删除失败');
+        return;
+      }
+      refresh();
+    } catch {
+      showError('网络故障');
+    }
+  };
   const shareText = origin
     ? buildItemShareText({
         title: item.title,
@@ -700,7 +721,8 @@ function MyItemRow({
     : '';
 
   return (
-    <div className={`bg-white border rounded-lg p-3 flex gap-3 ${isDraft ? 'border-amber-300 bg-amber-50/30' : 'border-stone-200'}`}>
+    <div className={`bg-white border rounded-lg p-3 ${isDraft ? 'border-amber-300 bg-amber-50/30' : 'border-stone-200'}`}>
+      <div className="flex gap-3">
       {photos.length > 0 && (
         <NextImage
           src={photos[0]}
@@ -780,6 +802,24 @@ function MyItemRow({
           )}
         </div>
       </div>
+      </div>
+
+      {/* Phase 3C: inquiry 列表 inline 嵌入 — 卖家直接在"我的"管理询价
+          hideAskForm=true 隐藏"我也要问"(卖家不会自己买自己的) */}
+      {!isDraft && Array.isArray(item.inquiries) && item.inquiries.length > 0 && (
+        <InquirySection
+          itemId={item.id}
+          parentType="item"
+          inquiries={item.inquiries as any}
+          open={inquiryOpen}
+          onToggle={() => setInquiryOpen(o => !o)}
+          onInquiryAdded={refresh}
+          onInquiryDeleted={refresh}
+          onInquiryUpdated={refresh}
+          onRequestSellerDelete={handleDeleteInquiry}
+          hideAskForm
+        />
+      )}
     </div>
   );
 }
