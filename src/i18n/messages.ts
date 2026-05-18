@@ -44,6 +44,7 @@ export const messages = {
   'date.all':              { zh: '全部',                                    en: 'All time' },
 
   // 排序
+  'sort.random':           { zh: '随机',                                    en: 'Random' },
   'sort.newest':           { zh: '最新',                                    en: 'Newest' },
   'sort.oldest':           { zh: '最旧',                                    en: 'Oldest' },
   'sort.priceAsc':         { zh: '价格低 → 高',                              en: 'Price low → high' },

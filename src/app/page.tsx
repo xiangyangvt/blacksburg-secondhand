@@ -36,7 +36,8 @@ function parseFiltersFromSearchParams(sp: ReadonlyURLSearchParams | URLSearchPar
     minPrice: get('minPrice') ?? '',
     maxPrice: get('maxPrice') ?? '',
     since:    since === '1d' || since === '1w' || since === '1m' ? since : 'all',
-    sort:     sort === 'oldest' || sort === 'priceAsc' || sort === 'priceDesc' ? sort : 'newest',
+    // Phase 3C: 默认 'random' — 同日 jitter 随机展示;用户主动选 'newest' 才严格时间序
+    sort:     sort === 'newest' || sort === 'oldest' || sort === 'priceAsc' || sort === 'priceDesc' ? sort : 'random',
     seller:   get('seller'),  // Sprint 6.7g:同卖家曝光 toast 触发,?seller=contactValue
   };
 }
@@ -51,7 +52,7 @@ function buildFiltersSearch(f: Filters, debouncedQ: string): string {
   if (f.minPrice)           sp.set('minPrice', f.minPrice);
   if (f.maxPrice)           sp.set('maxPrice', f.maxPrice);
   if (f.since !== 'all')    sp.set('since', f.since);
-  if (f.sort  !== 'newest') sp.set('sort', f.sort);
+  if (f.sort  !== 'random') sp.set('sort', f.sort);
   if (f.seller)             sp.set('seller', f.seller);
   const s = sp.toString();
   return s ? `?${s}` : '';
@@ -123,10 +124,11 @@ function HomePageInner() {
     const filtered = filters.onlyRecent
       ? items.filter(it => recentIds.includes(it.id))
       : items;
-    return shuffleMode
-      ? shuffleAll(filtered, jitterSeed)
-      : sortWithDayJitter(filtered, jitterSeed);
-  }, [items, recentIds, filters.onlyRecent, shuffleMode, jitterSeed]);
+    // Phase 3C: 默认 sort='random' 时同日 jitter;用户主动选 'newest' 等其他排序则严格按 API 顺序(无 jitter)
+    if (shuffleMode) return shuffleAll(filtered, jitterSeed);
+    if (filters.sort === 'random') return sortWithDayJitter(filtered, jitterSeed);
+    return filtered; // API 已经按 filters.sort 排好,不再动顺序
+  }, [items, recentIds, filters.onlyRecent, filters.sort, shuffleMode, jitterSeed]);
 
   // 改任何 filter 都自动滚回顶部（除了 q 输入，那个用户在打字时不打断）
   const setFilters = useCallback((updater: (f: Filters) => Filters) => {
@@ -182,7 +184,8 @@ function HomePageInner() {
     if (filters.maxPrice)           sp.set('maxPrice', filters.maxPrice);
     if (filters.since !== 'all')    sp.set('since', filters.since);
     if (filters.seller)             sp.set('seller', filters.seller);
-    sp.set('sort', filters.sort);
+    // Phase 3C: random 是前端 jitter 模式,API 不认识 — 映射成 newest(API 按时间倒序返回,前端再 jitter)
+    sp.set('sort', filters.sort === 'random' ? 'newest' : filters.sort);
 
     try {
       const res = await fetch(`/api/items?${sp}`);

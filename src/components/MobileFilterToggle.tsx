@@ -30,6 +30,7 @@ export function MobileFilterToggle({
   ];
   // 排序在 chip 上显示的短标签，避免"价格低 → 高"撑爆 chip 行
   const sortOptions = [
+    { value: 'random',    label: t('sort.random'),    chipLabel: '随机'     },
     { value: 'newest',    label: t('sort.newest'),    chipLabel: '最新'     },
     { value: 'oldest',    label: t('sort.oldest'),    chipLabel: '最旧'     },
     { value: 'priceAsc',  label: t('sort.priceAsc'),  chipLabel: '价格 ↑'   },
@@ -41,13 +42,13 @@ export function MobileFilterToggle({
     || filters.category !== 'all'
     || filters.minPrice || filters.maxPrice
     || filters.since !== 'all'
-    || filters.sort !== 'newest'
+    || filters.sort !== 'random'
     || filters.onlyRecent;
 
   const clearAll = () => onChange({
     type: 'all', category: 'all',
     minPrice: '', maxPrice: '',
-    since: 'all', sort: 'newest',
+    since: 'all', sort: 'random',
     onlyRecent: false,
   });
 
@@ -431,7 +432,7 @@ function MoreSheet({
             onClick={() => onChange({
               type: 'all', category: 'all',
               minPrice: '', maxPrice: '',
-              since: 'all', sort: 'newest',
+              since: 'all', sort: 'random',
             })}
             className="text-sm text-stone-600 hover:text-stone-900 underline-offset-2 hover:underline px-2"
           >

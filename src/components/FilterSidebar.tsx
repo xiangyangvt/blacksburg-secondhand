@@ -13,7 +13,7 @@ export type Filters = {
   minPrice: string;
   maxPrice: string;
   since:    'all' | '1d' | '1w' | '1m';
-  sort:     'newest' | 'oldest' | 'priceAsc' | 'priceDesc';
+  sort:     'random' | 'newest' | 'oldest' | 'priceAsc' | 'priceDesc';
   /** 只看我最近浏览过的（localStorage 里的 recentViewIds） — client-side 过滤 */
   onlyRecent?: boolean;
   /** Sprint 6.7g:按卖家 contactValue 过滤(同卖家曝光 toast "去看看"触发);设置后 banner 显示 + ✕ 清除 */
@@ -130,6 +130,7 @@ export function FilterSidebar({
             value={filters.sort}
             onChange={v => onChange({ sort: v as Filters['sort'] })}
             options={[
+              { value: 'random',    label: t('sort.random')    },
               { value: 'newest',    label: t('sort.newest')    },
               { value: 'oldest',    label: t('sort.oldest')    },
               { value: 'priceAsc',  label: t('sort.priceAsc')  },
