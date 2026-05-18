@@ -9,13 +9,13 @@
 //   └ 我发的申请 → 我对别人 listings 发出的 application
 // - lookup 时并发拉 items + listings (with applications) + my-applications 三端
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import NextImage from 'next/image';
 import {
   X, FolderOpen, Pencil, Trash2, CheckCircle2, ChevronUp,
   Home, ShoppingBag, MapPin, Calendar,
   Inbox, Send, Check, XCircle, Clock, AlertTriangle,
-  Mountain,
+  Mountain, MessageSquare,
 } from 'lucide-react';
 import { MyEventsContent } from './MyEventsPanel';
 import { useT, useLocale } from '@/i18n/I18nProvider';
@@ -115,6 +115,14 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
   const [items, setItems] = useState<ItemWithStatus[] | null>(null);
   const [itemActiveN, setItemActiveN] = useState(0);
   const [itemDraftN, setItemDraftN] = useState(0);
+  // Phase 3C: 二手询价通知 — sum 所有 active items 的 active inquiry 数,跟室友 inboxPendingN 同款 badge 语义
+  const totalItemInquiryN = useMemo(() => {
+    if (!items) return 0;
+    return items.reduce((sum, it) => {
+      if (it.status !== 'active') return sum;
+      return sum + (it.inquiries?.length ?? 0);
+    }, 0);
+  }, [items]);
 
   // listings 状态
   const [listings, setListings] = useState<ListingWithStatus[] | null>(null);
@@ -355,6 +363,7 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
           icon={<ShoppingBag size={14} />}
           label="买卖二手"
           count={hasLookedUp ? itemActiveN + itemDraftN : undefined}
+          badge={totalItemInquiryN}
           onClick={() => setPlatform('item')}
         />
         <PlatformTab
@@ -716,6 +725,13 @@ function MyItemRow({
           {!isDraft && typeof (item as any).cartCount === 'number' && (item as any).cartCount > 0 && (
             <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200" title="买家把这件加进心愿单的独立人数（visitor 去重）">
               ♥ 在 {(item as any).cartCount} 人的心愿单
+            </span>
+          )}
+          {/* Phase 3C: 询价数 chip — 跟 listing 的"申请收件" badge 对齐,卖家一眼看到哪些物品有人留言 */}
+          {!isDraft && Array.isArray(item.inquiries) && item.inquiries.length > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200" title="待回复的询价">
+              <MessageSquare size={11} strokeWidth={2.2} />
+              {item.inquiries.length} 条询价
             </span>
           )}
           <span className="text-stone-400 ml-auto">{timeAgo(item.createdAt, locale)}</span>
