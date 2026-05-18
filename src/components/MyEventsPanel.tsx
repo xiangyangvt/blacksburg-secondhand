@@ -215,13 +215,13 @@ export function MyEventsContent({
 
   return (
     <div>
-      {/* tab 行 — 4 tab,跟 MyPostsPanel(找室友)同款样式:label (count) 括号 + 选中加粗
-          label 简短(不带"活动")避免换行 */}
-      <div className="flex gap-0 overflow-x-auto no-scrollbar border-b border-stone-200 mb-3">
-        <TabButton active={tab === 'posts'}    onClick={() => setTab('posts')}    icon={<FileText size={14} />}       label="我发的" count={posts.length} />
-        <TabButton active={tab === 'comments'} onClick={() => setTab('comments')} icon={<MessageSquare size={14} />}  label="留言" count={comments.length} />
-        <TabButton active={tab === 'sent'}     onClick={() => setTab('sent')}     icon={<Send size={14} />}           label="已发出" count={sent.length} />
-        <TabButton active={tab === 'received'} onClick={() => setTab('received')} icon={<Inbox size={14} />}          label="已收到" count={received.length} badge={unreadCount} />
+      {/* tab 行 — 4 tab 平分宽度,两行布局(label 上,数字下),不再横滑
+          Phase 3C: 解决最右"已收到"被遮住的问题 */}
+      <div className="flex gap-0 border-b border-stone-200 mb-3">
+        <TabButton active={tab === 'posts'}    onClick={() => setTab('posts')}    label="我发的" count={posts.length} />
+        <TabButton active={tab === 'comments'} onClick={() => setTab('comments')} label="留言" count={comments.length} />
+        <TabButton active={tab === 'sent'}     onClick={() => setTab('sent')}     label="已发出" count={sent.length} />
+        <TabButton active={tab === 'received'} onClick={() => setTab('received')} label="已收到" count={received.length} badge={unreadCount} />
       </div>
 
       <div className="min-h-[200px]">
@@ -309,30 +309,32 @@ export function MyEventsPanel({
 }
 
 function TabButton({
-  active, onClick, icon, label, count, badge,
+  active, onClick, label, count, badge,
 }: {
   active: boolean;
   onClick: () => void;
-  icon: React.ReactNode;
   label: string;
   count?: number;
   badge?: number;
 }) {
-  // 跟 MyPostsPanel.TabBtn 同款:括号包数量、选中加粗 + 红字 + 下划线、whitespace-nowrap 防换行
+  // Phase 3C: 两行布局(label 上 + count 下),flex-1 平分宽度,4 tab 不挤
+  // 选中态加粗 + 红字 + 下划线(跟 MyPostsPanel.TabBtn 视觉同款)
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative inline-flex items-center gap-1 px-4 py-2 text-sm border-b-2 -mb-px whitespace-nowrap transition-colors ${
+      className={`relative flex-1 flex flex-col items-center justify-center px-1 py-1.5 text-sm border-b-2 -mb-px whitespace-nowrap transition-colors ${
         active
           ? 'border-brand text-brand font-semibold'
           : 'border-transparent text-stone-500 hover:text-stone-800'
       }`}
     >
-      {icon}
-      <span>{label}{typeof count === 'number' ? ` (${count})` : ''}</span>
+      <span>{label}</span>
+      {typeof count === 'number' && (
+        <span className="text-[11px] text-stone-400 leading-tight mt-0.5">{count}</span>
+      )}
       {badge !== undefined && badge > 0 && (
-        <span className="absolute top-1 right-0 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
+        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
           {badge > 9 ? '9+' : badge}
         </span>
       )}
