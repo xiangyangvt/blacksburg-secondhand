@@ -691,7 +691,7 @@ function PostsList({
                 {/* 响应数 chip */}
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-stone-100 text-stone-700">
                   <Users size={11} strokeWidth={2.2} />
-                  {wanted ? `想找 ${wanted} · 已 ${respCount} 响应` : `已 ${respCount} 响应`}
+                  {wanted ? `想找 ${wanted} · ${respCount} 人已响应` : `${respCount} 人已响应`}
                 </span>
                 <div className="ml-auto flex items-center gap-1.5">
                   {/* 已结束活动 — 快捷"再发起"(不需展开;停止冒泡避免触发 toggle) */}

@@ -68,6 +68,26 @@ export function ContactSendModal({
   if (!mounted) return null;
 
   const typeMeta = CONTACT_TYPES.find(t => t.id === contactType)!;
+  const isRespondingToPoster = target.id === null;
+  const modalTitle = isRespondingToPoster ? '响应号召' : '发送我的联系方式';
+  const contextText = isRespondingToPoster
+    ? (
+      <>
+        响应 <span className="font-medium text-stone-900">{target.nickname}</span> 发布的
+        <br />
+        <span className="text-stone-800">「{eventTitle}」</span>
+      </>
+    )
+    : (
+      <>
+        想和 <span className="font-medium text-stone-900">{target.nickname}</span> 一起去
+        <br />
+        <span className="text-stone-800">「{eventTitle}」</span>
+      </>
+    );
+  const helperText = isRespondingToPoster
+    ? '发送后，发布者会在「我的」里看到你的联系方式；这会计入活动的已响应人数。'
+    : 'TA 会立即在「我的」里看到你发的联系方式；是否回赠完全看 TA，没回应可能只是没看到。';
 
   const submit = async () => {
     const cleanNick = nick.trim().slice(0, 20);
@@ -122,7 +142,7 @@ export function ContactSendModal({
         {/* 顶部 */}
         <div className="px-5 py-3 border-b border-stone-200 flex items-center gap-2">
           <Send size={18} className="text-brand" />
-          <h2 className="text-base font-semibold text-stone-900">发送我的联系方式</h2>
+          <h2 className="text-base font-semibold text-stone-900">{modalTitle}</h2>
           <button
             onClick={onClose}
             className="ml-auto text-stone-500 hover:text-stone-900 p-1 rounded-full hover:bg-stone-100"
@@ -135,12 +155,10 @@ export function ContactSendModal({
         <div className="p-5 space-y-3">
           {/* 上下文 */}
           <div className="text-sm text-stone-600 leading-relaxed">
-            想和 <span className="font-medium text-stone-900">{target.nickname}</span> 一起去
-            <br />
-            <span className="text-stone-800">「{eventTitle}」</span>
+            {contextText}
           </div>
           <div className="text-xs text-stone-500 bg-stone-50 rounded-lg p-2.5 border border-stone-200 leading-relaxed">
-            💡 TA 会立即在「我的」里看到你发的联系方式;是否回赠完全看 TA — 没回应可能只是没看到
+            {helperText}
           </div>
 
           {/* 昵称 */}
@@ -223,7 +241,7 @@ export function ContactSendModal({
             className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-brand text-white rounded-chip hover:bg-brand-dark active:scale-95 transition-all disabled:opacity-50 shadow-card"
           >
             <Send size={14} />
-            {submitting ? '发送中...' : '确认发送'}
+            {submitting ? '发送中...' : (isRespondingToPoster ? '发送联系方式并响应' : '确认发送')}
           </button>
         </div>
       </div>

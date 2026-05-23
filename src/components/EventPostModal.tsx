@@ -521,7 +521,7 @@ export function EventPostModal({
                   onChange={(e) => setContactPublic(e.target.checked)}
                   className="rounded"
                 />
-                公开显示联系方式(否则别人想联系你只能用「发送我的联系方式」单向交换)
+                公开显示联系方式(否则别人会通过「我要响应」把联系方式发给你)
               </label>
             )}
           </Field>
