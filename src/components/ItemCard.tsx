@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
-import { Pencil, Trash2, Flag, X, ChevronLeft, ChevronRight, Eye, Heart, Check } from 'lucide-react';
+import { Pencil, Trash2, Flag, X, ChevronLeft, ChevronRight, Eye, Heart, Check, ExternalLink } from 'lucide-react';
 import { CopyButton } from './CopyButton';
 import { ShareButton } from './ShareButton';
 import { InquirySection } from './InquirySection';
@@ -43,6 +43,78 @@ export type Item = {
   cartCount?: number;
   inquiries: any[];
 };
+
+const DESCRIPTION_COLLAPSED_CHARS = 180;
+const DESCRIPTION_COLLAPSED_LINES = 4;
+const DESCRIPTION_COLLAPSED_LINKS = 2;
+
+const URL_RE = /(?:https?:\/\/|www\.)[^\s<>"']+/gi;
+const TRAILING_URL_PUNCT_RE = /[)\]}.;,，。！!、；]$/;
+
+function splitTrailingUrlPunctuation(raw: string): { url: string; suffix: string } {
+  let url = raw;
+  let suffix = '';
+  while (url && TRAILING_URL_PUNCT_RE.test(url)) {
+    suffix = url[url.length - 1] + suffix;
+    url = url.slice(0, -1);
+  }
+  return { url, suffix };
+}
+
+function descriptionParts(description: string): { text: string; links: string[]; lineCount: number } {
+  const links: string[] = [];
+  const seen = new Set<string>();
+  let text = '';
+  let lastIndex = 0;
+
+  for (const match of description.matchAll(URL_RE)) {
+    const raw = match[0];
+    const index = match.index ?? 0;
+    const { url, suffix } = splitTrailingUrlPunctuation(raw);
+
+    text += description.slice(lastIndex, index);
+    if (url) {
+      const href = normalizeUrl(url);
+      if (!seen.has(href)) {
+        seen.add(href);
+        links.push(url);
+      }
+      text += suffix;
+    } else {
+      text += raw;
+    }
+    lastIndex = index + raw.length;
+  }
+
+  text += description.slice(lastIndex);
+  const cleaned = text
+    .split(/\r?\n/)
+    .map(line => line.replace(/[ \t]{2,}/g, ' ').trimEnd())
+    .join('\n')
+    .trim();
+
+  return {
+    text: cleaned,
+    links,
+    lineCount: description.split(/\r?\n/).length,
+  };
+}
+
+function normalizeUrl(raw: string): string {
+  return raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`;
+}
+
+function shortUrlLabel(raw: string): string {
+  try {
+    const url = new URL(normalizeUrl(raw));
+    const host = url.hostname.replace(/^www\./, '');
+    const path = url.pathname === '/' ? '' : url.pathname.replace(/\/$/, '');
+    const label = `${host}${path}`;
+    return label.length > 42 ? `${label.slice(0, 39)}...` : label;
+  } catch {
+    return raw.length > 42 ? `${raw.slice(0, 39)}...` : raw;
+  }
+}
 
 export function ItemCard({
   item,
@@ -140,10 +212,21 @@ export function ItemCard({
   };
   // 统一的展开状态 —— 三种 click 来源都 toggle 它
   const [expanded, setExpanded] = useState(autoExpand);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const photos = item.photoUrls;
   const cardRef = useRef<HTMLDivElement>(null);
   const [origin, setOrigin] = useState('');
   useEffect(() => { setOrigin(clientOrigin()); }, []);
+  useEffect(() => { setDescriptionExpanded(false); }, [item.id]);
+
+  const desc = useMemo(() => descriptionParts(item.description ?? ''), [item.description]);
+  const descriptionIsLong =
+    desc.text.length > DESCRIPTION_COLLAPSED_CHARS ||
+    desc.lineCount > DESCRIPTION_COLLAPSED_LINES ||
+    desc.links.length > DESCRIPTION_COLLAPSED_LINKS;
+  const visibleDescriptionLinks = descriptionExpanded
+    ? desc.links
+    : desc.links.slice(0, DESCRIPTION_COLLAPSED_LINKS);
 
   // autoExpand 触发:分享链接 ?focus=ID / 同卖家 toast router.push 都会改 autoExpand prop
   // Sprint 6.7h 补 setExpanded(true) + block 改 'start' 让 scroll-margin-top 生效,
@@ -346,9 +429,63 @@ export function ItemCard({
 
       {/* === 描述：默认手机隐藏；点卡片展开后显示 === */}
       {item.description && (
-        <p className={`text-sm text-stone-700 mb-3 whitespace-pre-wrap ${expanded ? 'block' : 'hidden md:block'}`}>
-          {item.description}
-        </p>
+        <div className={`text-sm text-stone-700 mb-3 ${expanded ? 'block' : 'hidden md:block'}`}>
+          {desc.text && (
+            <p
+              className={`whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${
+                descriptionIsLong
+                  ? descriptionExpanded ? 'max-h-56 overflow-y-auto pr-1' : 'line-clamp-4'
+                  : ''
+              }`}
+            >
+              {desc.text}
+            </p>
+          )}
+
+          {visibleDescriptionLinks.length > 0 && (
+            <div className="mt-2 flex flex-col gap-1.5">
+              {visibleDescriptionLinks.map(link => {
+                const href = normalizeUrl(link);
+                return (
+                  <div
+                    key={href}
+                    className="flex items-center gap-1.5 min-w-0 rounded-lg border border-stone-200 bg-stone-50 px-2 py-1.5"
+                  >
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      className="inline-flex items-center gap-1.5 min-w-0 flex-1 text-brand hover:text-brand-dark"
+                    >
+                      <ExternalLink size={13} className="flex-shrink-0" />
+                      <span className="truncate">{shortUrlLabel(link)}</span>
+                    </a>
+                    <CopyButton
+                      text={href}
+                      label="复制"
+                      copiedLabel="已复制"
+                      className="flex-shrink-0"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {descriptionIsLong && (
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                setDescriptionExpanded(v => !v);
+              }}
+              className="mt-1.5 text-xs font-medium text-brand hover:text-brand-dark"
+            >
+              {descriptionExpanded ? '收起描述' : '展开描述'}
+            </button>
+          )}
+        </div>
       )}
 
       {/* === 联系方式 — 默认隐藏；点击"查看联系方式"按钮才显示
