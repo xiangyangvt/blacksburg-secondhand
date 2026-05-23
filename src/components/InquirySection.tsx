@@ -36,6 +36,7 @@ export function InquirySection({
   onInquiryUpdated,
   onRequestSellerDelete,
   hideAskForm = false,
+  hideInquirerActions = false,
 }: {
   /** parent id（item.id 或 listing.id），变量名沿用 itemId 兼容旧用法 */
   itemId: string;
@@ -50,6 +51,9 @@ export function InquirySection({
   onRequestSellerDelete: (inquiryId: string) => void;
   /** Phase 3C: 在"我的"面板里嵌入时,卖家视角不需要"我也要问"按钮 */
   hideAskForm?: boolean;
+  /** Phase 3C bug fix: 在卖家视角(MyPostsPanel 嵌入)隐藏 buyer 操作
+   *  (editSelf/deleteSelf,避免误点弹 prompt 输错 contactValue 触发 401) */
+  hideInquirerActions?: boolean;
 }) {
   const postUrl = parentType === 'listing'
     ? `/api/listings/${itemId}/inquiries`
@@ -264,8 +268,12 @@ export function InquirySection({
                   <span className="text-stone-400">·</span>
                   <span>{timeAgo(inq.createdAt, locale)}</span>
                   <span className="ml-auto flex gap-1">
-                    <button onClick={() => editSelf(inq)} className="text-stone-500 hover:text-brand text-xs">{t('inq.editMy')}</button>
-                    <button onClick={() => deleteSelf(inq)} className="text-stone-500 hover:text-red-600 text-xs">{t('inq.deleteMy')}</button>
+                    {!hideInquirerActions && (
+                      <>
+                        <button onClick={() => editSelf(inq)} className="text-stone-500 hover:text-brand text-xs">{t('inq.editMy')}</button>
+                        <button onClick={() => deleteSelf(inq)} className="text-stone-500 hover:text-red-600 text-xs">{t('inq.deleteMy')}</button>
+                      </>
+                    )}
                     <button onClick={() => onRequestSellerDelete(inq.id)} className="text-stone-400 hover:text-red-600 text-xs">{t('inq.deleteSeller')}</button>
                   </span>
                 </div>

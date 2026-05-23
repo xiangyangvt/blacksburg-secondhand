@@ -573,6 +573,18 @@ function PostsList({
   // "再发一次"弹窗 — 用 EventPostModal 编辑
   const [repostInitial, setRepostInitial] = useState<EventPostInitial | null>(null);
 
+  // Sprint 7 后续微调:把 items 拆成 active 段 + ended 段(fulfilled/canceled/expired/archived)
+  // active 在上(按 scrapedAt desc),已结束在下加分隔条 + 快捷"再发起"
+  const { activePosts, endedPosts } = useMemo(() => {
+    const active: MyPost[] = [];
+    const ended: MyPost[] = [];
+    for (const p of items) {
+      if (p.status === 'active' || !p.status) active.push(p);
+      else ended.push(p);
+    }
+    return { activePosts: active, endedPosts: ended };
+  }, [items]);
+
   if (items.length === 0) {
     return <EmptyHint icon={<FileText size={40} />} text="还没发过活动" hint="在 /localnews 顶部点「+ 发布」分享给社区" />;
   }
@@ -640,9 +652,7 @@ function PostsList({
     else showError('复制失败,请手动选中复制');
   };
 
-  return (
-    <div className="space-y-2">
-      {items.map(p => {
+  const renderCard = (p: MyPost) => {
         const catLabel = p.category === 'other'
           ? (p.customCategory || '其他')
           : (CATEGORY_LABEL_SHORT[p.category ?? ''] ?? '活动');
@@ -654,11 +664,19 @@ function PostsList({
         const wanted = p.maxAttendees;
         return (
           <div key={p.id} className="bg-white rounded-card border border-stone-200 overflow-hidden">
-            {/* 头部 — 永远显示(点 toggle expand) */}
-            <button
-              type="button"
+            {/* 头部 — 永远显示(点 toggle expand)
+                Sprint 7 后续:外层从 <button> 改 <div role="button">,允许嵌套快捷"再发起"按钮(已结束卡片) */}
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => setExpandedId(prev => prev === p.id ? null : p.id)}
-              className="w-full text-left p-3 hover:bg-stone-50 transition-colors"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setExpandedId(prev => prev === p.id ? null : p.id);
+                }
+              }}
+              className="w-full text-left p-3 hover:bg-stone-50 transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-brand/10 text-brand">
@@ -675,9 +693,23 @@ function PostsList({
                   <Users size={11} strokeWidth={2.2} />
                   {wanted ? `想找 ${wanted} · 已 ${respCount} 响应` : `已 ${respCount} 响应`}
                 </span>
-                <span className="ml-auto text-stone-400">
-                  {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </span>
+                <div className="ml-auto flex items-center gap-1.5">
+                  {/* 已结束活动 — 快捷"再发起"(不需展开;停止冒泡避免触发 toggle) */}
+                  {!isActive && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onRepost(p); }}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-chip text-[11px] font-medium bg-brand text-white hover:bg-brand-dark active:scale-95 transition-all shadow-card"
+                      title="复用标题/描述/地点等,只需改日期 — 旧评论不会带过来"
+                    >
+                      <RefreshCw size={11} />
+                      再发起
+                    </button>
+                  )}
+                  <span className="text-stone-400">
+                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </span>
+                </div>
               </div>
               <div className="text-sm font-medium text-stone-900 truncate">{p.title}</div>
               {!isExpanded && p.description && (
@@ -692,7 +724,7 @@ function PostsList({
                   </span>
                 )}
               </div>
-            </button>
+            </div>
 
             {/* 展开 — 响应者列表 + 操作按钮 */}
             {isExpanded && (
@@ -763,7 +795,19 @@ function PostsList({
             )}
           </div>
         );
-      })}
+  };
+
+  return (
+    <div className="space-y-2">
+      {activePosts.map(renderCard)}
+      {endedPosts.length > 0 && (
+        <div className="flex items-center gap-2 pt-3 pb-1 px-1">
+          <div className="flex-1 h-px bg-stone-200" />
+          <span className="text-[11px] text-stone-400 font-medium">已结束 ({endedPosts.length})</span>
+          <div className="flex-1 h-px bg-stone-200" />
+        </div>
+      )}
+      {endedPosts.map(renderCard)}
 
       {/* 改状态 — 密码弹窗 */}
       {codePrompt && (

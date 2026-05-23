@@ -36,7 +36,7 @@ import { CopyButton } from './CopyButton';
 import { PostModal } from './PostModal';
 import { ListingPostModal, type ListingEditInitial } from './ListingPostModal';
 import { EditCodePrompt } from './EditCodePrompt';
-import { showError } from '@/lib/toast';
+import { showError, showSuccess } from '@/lib/toast';
 import type { Item } from './ItemCard';
 import type { Listing } from './ListingCard';
 
@@ -141,6 +141,16 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
   const [itemDraftN, setItemDraftN] = useState(0);
   // Phase 3C: 询价通知 — 页头"我的"按钮已有 unreadCount('item'),MyPostsPanel 内不再 badge,
   // 避免重复;卡片内的"X 条询价"chip 仍然保留作为定位提示
+
+  // Phase 3C bug fix: 卖家删询价后本地 splice items.inquiries
+  // 不调 refresh lookup,避免某些 edge case(跨设备登录、editCode race 等)清空 items
+  const handleLocalInquiryDelete = useCallback((itemId: string, inquiryId: string) => {
+    setItems(prev => prev?.map(it =>
+      it.id === itemId
+        ? { ...it, inquiries: (it.inquiries ?? []).filter((iq: any) => iq.id !== inquiryId) }
+        : it
+    ) ?? null);
+  }, []);
 
   // listings 状态
   const [listings, setListings] = useState<ListingWithStatus[] | null>(null);
@@ -471,6 +481,7 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
                       t={t}
                       refresh={lookup}
                       editCode={editCode}
+                      onLocalInquiryDelete={handleLocalInquiryDelete}
                     />
                   ))}
                 </div>
@@ -729,7 +740,7 @@ export function MyPostsStandalone() {
 
 function MyItemRow({
   item, locale, origin, isDraft, onEdit, onDelete, onPublish, t,
-  refresh, editCode,
+  refresh, editCode, onLocalInquiryDelete,
 }: {
   item: ItemWithStatus;
   locale: 'zh' | 'en';
@@ -742,12 +753,16 @@ function MyItemRow({
   // Phase 3C: 嵌入 InquirySection 用
   refresh: () => void;
   editCode: string;
+  /** Phase 3C bug fix: 删除询价后本地 splice items.inquiries,避免 refresh lookup
+   *  edge case 把 items 列表清空(跨设备登录场景下复现) */
+  onLocalInquiryDelete: (itemId: string, inquiryId: string) => void;
 }) {
   const photos = item.photoUrls;
   // Phase 3C: 询价区默认展开("我的"是管理界面,直接看)
   const [inquiryOpen, setInquiryOpen] = useState(true);
 
   // Phase 3C: 卖家删 inquiry — 已 lookup 时密码已知,直接调 DELETE,不再二次 prompt
+  // bug fix: 成功后不 refresh lookup(避免 race / 空返清空 items),改成本地 splice
   const handleDeleteInquiry = async (inquiryId: string) => {
     if (!confirm('确定删除这条询价?')) return;
     try {
@@ -760,7 +775,8 @@ function MyItemRow({
         showError(data.error || '删除失败');
         return;
       }
-      refresh();
+      onLocalInquiryDelete(item.id, inquiryId);
+      showSuccess('已删除');
     } catch {
       showError('网络故障');
     }
@@ -862,7 +878,8 @@ function MyItemRow({
       </div>
 
       {/* Phase 3C: inquiry 列表 inline 嵌入 — 卖家直接在"我的"管理询价
-          hideAskForm=true 隐藏"我也要问"(卖家不会自己买自己的) */}
+          hideAskForm: 卖家不会自己买自己的;hideInquirerActions: 卖家不该看到 buyer 操作
+          (deleteSelf/editSelf 会弹 prompt 输错 contactValue 触发 401 + 后续 refresh race) */}
       {!isDraft && Array.isArray(item.inquiries) && item.inquiries.length > 0 && (
         <InquirySection
           itemId={item.id}
@@ -875,6 +892,7 @@ function MyItemRow({
           onInquiryUpdated={refresh}
           onRequestSellerDelete={handleDeleteInquiry}
           hideAskForm
+          hideInquirerActions
         />
       )}
     </div>

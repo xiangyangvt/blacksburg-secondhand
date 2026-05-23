@@ -76,11 +76,13 @@ export async function GET(req: NextRequest) {
       take: 100,
     }),
     // Phase 3A 我发的活动 — user-posted events
+    // 含已结束(fulfilled/canceled/expired/archived)以便用户"再发起"过去的活动
+    // 排除 deleted(用户/admin 删) 和 hidden(3 IP 举报自动隐藏) — 这两个不让本人看见
     prisma.event.findMany({
       where: {
         source: 'user',
         posterVisitorId: { in: vidArray },
-        status: 'active',
+        status: { notIn: ['deleted', 'hidden'] },
       },
       orderBy: { scrapedAt: 'desc' },
       take: 100,
