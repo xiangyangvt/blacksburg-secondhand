@@ -710,25 +710,20 @@ export function EventCard({
                     查看原站
                   </a>
                 ) : (
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="text-[11px] text-stone-500 leading-tight text-right">
-                      发送联系方式后计入响应
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => canRespond && setSendToPosterOpen(true)}
-                      disabled={!canRespond}
-                      title={canRespond ? '发送联系方式给发布者并计入响应' : '活动已结束 / 已结清 / 已取消'}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-chip text-sm font-medium transition-all shadow-card ${
-                        canRespond
-                          ? 'bg-brand text-white hover:bg-brand-dark active:scale-95'
-                          : 'bg-stone-200 text-stone-400 cursor-not-allowed'
-                      }`}
-                    >
-                      <Send size={13} />
-                      我要响应
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => canRespond && setSendToPosterOpen(true)}
+                    disabled={!canRespond}
+                    title={canRespond ? '发送联系方式给发布者并计入响应' : '活动已结束 / 已结清 / 已取消'}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-chip text-sm font-medium transition-all shadow-card ${
+                      canRespond
+                        ? 'bg-brand text-white hover:bg-brand-dark active:scale-95'
+                        : 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <Send size={13} />
+                    我要响应
+                  </button>
                 )}
               </div>
             </div>
