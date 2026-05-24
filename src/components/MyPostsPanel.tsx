@@ -15,7 +15,7 @@ import {
   X, FolderOpen, Pencil, Trash2, CheckCircle2, ChevronUp,
   Home, ShoppingBag, MapPin, Calendar,
   Inbox, Send, Check, XCircle, Clock, AlertTriangle,
-  Mountain, MessageSquare,
+  Mountain, MessageSquare, Eye,
 } from 'lucide-react';
 import { MyEventsContent } from './MyEventsPanel';
 import { useT, useLocale } from '@/i18n/I18nProvider';
@@ -829,6 +829,12 @@ function MyItemRow({
               {item.inquiries.length} 条询价
             </span>
           )}
+          {!isDraft && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500" title="主动查看次数">
+              <Eye size={11} strokeWidth={2.2} />
+              {item.viewCount ?? 0}
+            </span>
+          )}
           <span className="text-stone-400 ml-auto">{timeAgo(item.createdAt, locale)}</span>
         </div>
 
@@ -1132,6 +1138,12 @@ function MyListingRow({
             <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 inline-flex items-center gap-0.5">
               <Inbox size={11} />
               {pendingN} 待回复
+            </span>
+          )}
+          {!isDraft && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500" title="主动查看次数">
+              <Eye size={11} strokeWidth={2.2} />
+              {listing.viewCount ?? 0}
             </span>
           )}
           <span className="text-stone-400 ml-auto">{timeAgo(listing.createdAt, locale)}</span>

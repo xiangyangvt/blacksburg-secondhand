@@ -30,6 +30,7 @@ model Item {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   bumpedAt            DateTime @default(now())
+  viewCount           Int      @default(0)
   ipAddress           String?
   utmSource           String?
   // contactRevealCount 字段已废弃，由 cartCount (CartEntry 表) 取代
@@ -37,11 +38,13 @@ model Item {
   inquiries   Inquiry[]
   reports     Report[]     @relation("ItemReports")
   cartEntries CartEntry[]
+  viewEntries ItemViewThrottle[]
 
   @@index([status, createdAt])
   @@index([category])
   @@index([type])
   @@index([utmSource])
+  @@index([viewCount])
 }
 
 model Inquiry {
@@ -79,6 +82,18 @@ model CartEntry {
 
   @@unique([itemId, visitorId])
   @@index([itemId])
+}
+
+model ItemViewThrottle {
+  id        String   @id @default(cuid())
+  itemId    String
+  visitorId String
+  viewedAt  DateTime @default(now())
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, visitorId])
+  @@index([viewedAt])
 }
 
 model PageView {
@@ -145,6 +160,7 @@ model Listing {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   bumpedAt            DateTime @default(now())
+  viewCount           Int      @default(0)
   ipAddress           String?
   utmSource           String?
   migratedFromItem    Boolean  @default(false)
@@ -153,10 +169,24 @@ model Listing {
   attachedTo          Application[] @relation("AttachedListing")
   reports             Report[]      @relation("ListingReports")
   inquiries           Inquiry[]     @relation("ListingInquiries")
+  viewEntries         ListingViewThrottle[]
 
   @@index([status, bumpedAt])
   @@index([type])
   @@index([contactValue])
+  @@index([viewCount])
+}
+
+model ListingViewThrottle {
+  id        String   @id @default(cuid())
+  listingId String
+  visitorId String
+  viewedAt  DateTime @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, visitorId])
+  @@index([viewedAt])
 }
 
 model Application {

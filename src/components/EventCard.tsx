@@ -8,9 +8,9 @@
 // 图片渲染:用普通 <img>(不用 NextImage)— 11 个抓取源就 11+ 个域名,挨个白名单不现实;
 // 这些都是 thumbnail 不需要 next 优化;onError 失败时 fallback 到类型色占位
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Calendar, MapPin, ExternalLink, Clock, Heart, Flame, Send,
+  Calendar, MapPin, ExternalLink, Clock, Heart, Flame, Send, Eye,
   // Phase 3B 类目 Lucide icon(替代 emoji,UI 高级感)
   Utensils, Dumbbell, BookOpen, Trophy, Sparkles, MessageCircle,
   // Phase 3B 响应数 + 状态 badge
@@ -325,11 +325,19 @@ export function EventCard({
 }) {
   const [expanded, setExpanded] = useState(autoExpand);
   const [imgFailed, setImgFailed] = useState(false);
+  const [displayClickCount, setDisplayClickCount] = useState(event.clickCount ?? 0);
   const cardRef = useRef<HTMLElement>(null);
+  const trackedRef = useRef(false);
+
+  useEffect(() => {
+    trackedRef.current = false;
+    setDisplayClickCount(event.clickCount ?? 0);
+  }, [event.id, event.clickCount]);
 
   // autoExpand:focus 进来的目标卡片自动 scroll
   useEffect(() => {
     if (!autoExpand) return;
+    setExpanded(true);
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -374,7 +382,7 @@ export function EventCard({
   ];
 
   // Phase 2A 热度梯度
-  const heat = getHeatLevel(event.clickCount, event.scrapedAt);
+  const heat = getHeatLevel(displayClickCount, event.scrapedAt);
   // Phase 3A 发给 poster modal 状态
   const [sendToPosterOpen, setSendToPosterOpen] = useState(false);
   const showImage = !!(event.imageUrl && !imgFailed);
@@ -411,14 +419,25 @@ export function EventCard({
 
   // Phase 2A:展开时上报 click(/api/events/[id]/click)— 防刷在 server 端做
   // 仅展开方向计数(收起不计),避免双击产生 2 次 increment
-  const trackedRef = useRef(false);
-  const reportClick = () => {
+  const reportClick = useCallback(() => {
     if (trackedRef.current) return; // 同一卡片单 mount 周期只上报一次
     trackedRef.current = true;
-    fetch(`/api/events/${event.id}/click`, { method: 'POST' }).catch(() => {
-      /* 静默 — server 防刷或网络故障不影响体验 */
-    });
-  };
+    fetch(`/api/events/${event.id}/click`, { method: 'POST' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && typeof data.clickCount === 'number') {
+          setDisplayClickCount(data.clickCount);
+        }
+      })
+      .catch(() => {
+        /* 静默 — server 防刷或网络故障不影响体验 */
+      });
+  }, [event.id]);
+
+  useEffect(() => {
+    if (!autoExpand) return;
+    reportClick();
+  }, [autoExpand, reportClick]);
 
   const toggleExpand = () => {
     setExpanded(prev => {
@@ -558,9 +577,14 @@ export function EventCard({
             </span>
           )}
 
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500" title="主动查看次数">
+            <Eye size={11} strokeWidth={2.2} />
+            {displayClickCount}
+          </span>
+
           {/* 热度 — 紧凑端在 chip 旁边,展开端也显;颜色梯度按 clicks/hour */}
           {heat && (
-            <span className={`inline-flex items-center gap-0.5 font-semibold ${heat.color}`} title={`热度 · ${event.clickCount ?? 0} 次点击`}>
+            <span className={`inline-flex items-center gap-0.5 font-semibold ${heat.color}`} title={`热度 · ${displayClickCount} 次点击`}>
               <Flame size={12} strokeWidth={2.4} fill={heat.fill ? 'currentColor' : 'none'} />
               {heat.double && <Flame size={12} strokeWidth={2.4} fill="currentColor" />}
             </span>

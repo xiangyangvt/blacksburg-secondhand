@@ -17,7 +17,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
   X, ChevronUp, ChevronDown, MessageSquare, Send, Inbox, Check, Copy, Undo2, FileText,
-  CheckCircle2, XCircle, Hourglass, Users, UserPlus, RefreshCw, MapPin,
+  CheckCircle2, XCircle, Hourglass, Users, UserPlus, RefreshCw, MapPin, Eye, Flame,
 } from 'lucide-react';
 import { contactTypeLabel, CONTACT_TYPES, type ContactType } from '@/lib/contactTypes';
 import { showSuccess, showError } from '@/lib/toast';
@@ -101,11 +101,27 @@ type MyPost = {
   scrapedAt: string;
   status: string;       // active | fulfilled | canceled | expired | hidden | deleted
   commentCount: number;
+  clickCount?: number;
   maxAttendees?: number | null;
   photoUrls?: string[];
   responders?: Responder[];      // Phase 3B
   responseCount?: number;
 };
+
+const HEAT_LEVELS = [
+  { min: 5,   color: 'text-rose-600',   fill: true,  double: true  },
+  { min: 1.5, color: 'text-rose-500',   fill: true,  double: false },
+  { min: 0.5, color: 'text-orange-500', fill: false, double: false },
+] as const;
+
+function getHeatLevel(clickCount: number | undefined, scrapedAt: string | null | undefined) {
+  if (!clickCount || clickCount < 1) return null;
+  const scraped = scrapedAt ? new Date(scrapedAt).getTime() : Date.now() - 24 * 3600e3;
+  const ageH = Math.max(1, (Date.now() - scraped) / 3600e3);
+  const heat = clickCount / ageH;
+  for (const lv of HEAT_LEVELS) if (heat >= lv.min) return lv;
+  return null;
+}
 
 function formatWhen(iso: string): string {
   const d = new Date(iso);
@@ -662,6 +678,8 @@ function PostsList({
         const responders = p.responders ?? [];
         const respCount = p.responseCount ?? responders.filter(r => r.status !== 'canceled').length;
         const wanted = p.maxAttendees;
+        const clickCount = p.clickCount ?? 0;
+        const heat = getHeatLevel(clickCount, p.scrapedAt);
         return (
           <div key={p.id} className="bg-white rounded-card border border-stone-200 overflow-hidden">
             {/* 头部 — 永远显示(点 toggle expand)
@@ -693,6 +711,16 @@ function PostsList({
                   <Users size={11} strokeWidth={2.2} />
                   {wanted ? `想找 ${wanted} · ${respCount} 人已响应` : `${respCount} 人已响应`}
                 </span>
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] bg-stone-100 text-stone-500" title="主动查看次数">
+                  <Eye size={11} strokeWidth={2.2} />
+                  {clickCount}
+                </span>
+                {heat && (
+                  <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${heat.color}`} title={`热度 · ${clickCount} 次点击`}>
+                    <Flame size={11} strokeWidth={2.4} fill={heat.fill ? 'currentColor' : 'none'} />
+                    {heat.double && <Flame size={11} strokeWidth={2.4} fill="currentColor" />}
+                  </span>
+                )}
                 <div className="ml-auto flex items-center gap-1.5">
                   {/* 已结束活动 — 快捷"再发起"(不需展开;停止冒泡避免触发 toggle) */}
                   {!isActive && (

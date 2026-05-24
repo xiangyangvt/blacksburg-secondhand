@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { Pencil, Trash2, Flag, X, ChevronLeft, ChevronRight, Eye, Heart, Check, ExternalLink } from 'lucide-react';
 import { CopyButton } from './CopyButton';
@@ -39,6 +39,8 @@ export type Item = {
   createdAt: string;
   /** 最近活跃时间（编辑 / 新询价 / 卖家回复都会刷新）；用于新鲜度可视化 */
   bumpedAt?: string;
+  /** 主动查看次数：用户点开 / 展开卡片时累计，server 端按 visitor 节流 */
+  viewCount?: number;
   /** 卖家可见：当前在 N 个独立访客的心愿单里（来自 CartEntry 表 visitor 去重） */
   cartCount?: number;
   inquiries: any[];
@@ -215,9 +217,15 @@ export function ItemCard({
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const photos = item.photoUrls;
   const cardRef = useRef<HTMLDivElement>(null);
+  const viewTrackedRef = useRef(false);
   const [origin, setOrigin] = useState('');
+  const [displayViewCount, setDisplayViewCount] = useState(item.viewCount ?? 0);
   useEffect(() => { setOrigin(clientOrigin()); }, []);
   useEffect(() => { setDescriptionExpanded(false); }, [item.id]);
+  useEffect(() => {
+    viewTrackedRef.current = false;
+    setDisplayViewCount(item.viewCount ?? 0);
+  }, [item.id, item.viewCount]);
 
   const desc = useMemo(() => descriptionParts(item.description ?? ''), [item.description]);
   const descriptionIsLong =
@@ -228,18 +236,35 @@ export function ItemCard({
     ? desc.links
     : desc.links.slice(0, DESCRIPTION_COLLAPSED_LINKS);
 
+  const reportView = useCallback(() => {
+    if (viewTrackedRef.current) return;
+    viewTrackedRef.current = true;
+    fetch(`/api/items/${item.id}/view`, { method: 'POST' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && typeof data.viewCount === 'number') {
+          setDisplayViewCount(data.viewCount);
+        }
+      })
+      .catch(() => {
+        // 统计失败不影响浏览体验
+      });
+  }, [item.id]);
+
   // autoExpand 触发:分享链接 ?focus=ID / 同卖家 toast router.push 都会改 autoExpand prop
   // Sprint 6.7h 补 setExpanded(true) + block 改 'start' 让 scroll-margin-top 生效,
   // 卡片顶部对齐筛选栏下沿(不被 sticky header 盖住)
   useEffect(() => {
     if (!autoExpand) return;
     setExpanded(true);
+    markRecentView(item.id);
+    reportView();
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       })
     );
-  }, [autoExpand]);
+  }, [autoExpand, item.id, reportView]);
 
   /**
    * 两种展开来源都 toggle 同一个 expanded 状态：
@@ -252,6 +277,7 @@ export function ItemCard({
       if (next) {
         // 展开 = 用户对这件商品感兴趣 → 记进"最近浏览"
         markRecentView(item.id);
+        reportView();
 
         // 双 rAF 等 col-span-2 + 内容渲染都完成
         requestAnimationFrame(() =>
@@ -404,6 +430,10 @@ export function ItemCard({
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${categoryDotClass(item.category)}`} />
               {categoryLabel(item.category, locale)}
               {item.customTag && ` · ${item.customTag}`}
+            </span>
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500" title="主动查看次数">
+              <Eye size={11} strokeWidth={2.2} />
+              {displayViewCount}
             </span>
             {/* 新鲜度：手机默认隐藏（节省视觉空间），展开后显示；桌面常驻 */}
             <span className={`ml-auto whitespace-nowrap ${fresh.className} ${expanded ? 'inline' : 'hidden md:inline'}`}>

@@ -110,6 +110,7 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
     customContactLabel: null,
     photoUrls: parsePhotoUrls(item.photoUrls),
     createdAt: item.createdAt.toISOString(),
+    viewCount: (item as any).viewCount ?? 0,
     inquiries: item.inquiries.map(inq => ({
       ...inq,
       createdAt: inq.createdAt.toISOString(),

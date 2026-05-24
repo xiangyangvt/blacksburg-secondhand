@@ -29,6 +29,7 @@ model Item {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   bumpedAt            DateTime @default(now())
+  viewCount           Int      @default(0)  // 用户主动点开/展开卡片的次数（visitor 去重节流后累加）
   ipAddress           String?  // 用于隐式限速
   utmSource           String?  // 用户首次访问时的 ?utm_source=xxx 或 ?from=xxx；用于渠道分析
   // contactRevealCount 字段已废弃 —— cartCount (CartEntry 表 visitor 去重计数) 完全取代
@@ -37,11 +38,13 @@ model Item {
   inquiries   Inquiry[]
   reports     Report[]     @relation("ItemReports")
   cartEntries CartEntry[]
+  viewEntries ItemViewThrottle[]
 
   @@index([status, createdAt])
   @@index([category])
   @@index([type])
   @@index([utmSource])
+  @@index([viewCount])
 }
 
 // 询价 / 留言 —— 通用：二手 item 上的询价，或室友 listing 上的公开 Q&A
@@ -85,6 +88,19 @@ model CartEntry {
 
   @@unique([itemId, visitorId])
   @@index([itemId])
+}
+
+// 商品主动查看计数节流：同 visitor 短时间内重复展开不重复增加 viewCount
+model ItemViewThrottle {
+  id        String   @id @default(cuid())
+  itemId    String
+  visitorId String
+  viewedAt  DateTime @default(now())
+
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, visitorId])
+  @@index([viewedAt])
 }
 
 // 页面访问统计 —— 用于 admin 后台自建轻量埋点
@@ -164,6 +180,7 @@ model Listing {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   bumpedAt            DateTime @default(now())
+  viewCount           Int      @default(0)  // 用户主动点开/展开卡片的次数（visitor 去重节流后累加）
   ipAddress           String?
   utmSource           String?
   migratedFromItem    Boolean  @default(false)  // 旧 housing item 迁移标识
@@ -172,10 +189,25 @@ model Listing {
   attachedTo          Application[] @relation("AttachedListing")
   reports             Report[]      @relation("ListingReports")
   inquiries           Inquiry[]     @relation("ListingInquiries")
+  viewEntries         ListingViewThrottle[]
 
   @@index([status, bumpedAt])
   @@index([type])
   @@index([contactValue])
+  @@index([viewCount])
+}
+
+// 室友 listing 主动查看计数节流：同 visitor 短时间内重复展开不重复增加 viewCount
+model ListingViewThrottle {
+  id        String   @id @default(cuid())
+  listingId String
+  visitorId String
+  viewedAt  DateTime @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, visitorId])
+  @@index([viewedAt])
 }
 
 // 申请-同意：B 申请联系 A 的 listing；A 决定后双方互相看到联系方式

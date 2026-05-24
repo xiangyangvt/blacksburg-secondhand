@@ -38,7 +38,11 @@ export async function POST(
     });
     if (recent && recent.createdAt > cutoff) {
       // 5 分钟内已计过 - 不重复 increment(但仍返回 ok,client 不感知)
-      const res = NextResponse.json({ ok: true, throttled: true });
+      const event = await prisma.event.findUnique({
+        where: { id: eventId },
+        select: { clickCount: true },
+      });
+      const res = NextResponse.json({ ok: true, throttled: true, clickCount: event?.clickCount ?? 0 });
       if (!existing) setVisitorCookie(res, visitorId);
       return res;
     }
@@ -51,18 +55,19 @@ export async function POST(
     });
 
     // event clickCount + 1(同时校验 event 存在 — 不存在会抛)
-    await prisma.event.update({
+    const event = await prisma.event.update({
       where: { id: eventId },
       data: { clickCount: { increment: 1 } },
+      select: { clickCount: true },
     });
+
+    const res = NextResponse.json({ ok: true, counted: true, clickCount: event.clickCount });
+    if (!existing) setVisitorCookie(res, visitorId);
+    return res;
   } catch (e) {
     // event 不存在 / DB 故障 — 静默,client 不感知
     return NextResponse.json({ ok: false }, { status: 404 });
   }
-
-  const res = NextResponse.json({ ok: true });
-  if (!existing) setVisitorCookie(res, visitorId);
-  return res;
 }
 
 function setVisitorCookie(res: NextResponse, visitorId: string) {

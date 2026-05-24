@@ -3,7 +3,7 @@
 // 单商品 detail 页的渲染主体（client 组件，因为含 lightbox、share、inquiry 等交互）
 // 由 /app/item/[id]/page.tsx (RSC) 拉数据后传进来
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import NextImage from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -36,14 +36,33 @@ export function ItemDetailView({ item }: { item: Item }) {
   const [mainIdx, setMainIdx] = useState(0);
   const [codePrompt, setCodePrompt] = useState<'delete' | { kind: 'sellerDelInq'; inquiryId: string } | null>(null);
   const [origin, setOrigin] = useState('');
+  const viewTrackedRef = useRef(false);
+  const [displayViewCount, setDisplayViewCount] = useState(item.viewCount ?? 0);
   // 联系方式 reveal 状态：detail 页跟 ItemCard 一致 —— 默认隐藏，点按钮才显示
   const [revealed, setRevealed] = useState<{ contactType: string; contactValue: string; customContactLabel: string | null } | null>(null);
   const [revealing, setRevealing] = useState(false);
 
   useEffect(() => {
+    viewTrackedRef.current = false;
+    setDisplayViewCount(item.viewCount ?? 0);
+  }, [item.id, item.viewCount]);
+
+  useEffect(() => {
     setOrigin(clientOrigin());
     // 访问 detail 页 = 强烈的浏览意图，记进最近浏览
     markRecentView(item.id);
+    if (viewTrackedRef.current) return;
+    viewTrackedRef.current = true;
+    fetch(`/api/items/${item.id}/view`, { method: 'POST' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && typeof data.viewCount === 'number') {
+          setDisplayViewCount(data.viewCount);
+        }
+      })
+      .catch(() => {
+        // 统计失败不影响详情页浏览
+      });
   }, [item.id]);
 
   // Lightbox 键盘控制
@@ -179,6 +198,10 @@ export function ItemDetailView({ item }: { item: Item }) {
               <span className={`px-2 py-0.5 rounded-full text-stone-700 ${categoryBgClass(item.category)}`}>
                 {categoryLabel(item.category, locale)}
                 {item.customTag && ` · ${item.customTag}`}
+              </span>
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500" title="主动查看次数">
+                <Eye size={11} strokeWidth={2.2} />
+                {displayViewCount}
               </span>
               <span className="text-stone-400 ml-auto">
                 {timeAgo(item.createdAt, locale)}

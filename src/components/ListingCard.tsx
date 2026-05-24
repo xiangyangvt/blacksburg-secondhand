@@ -9,12 +9,12 @@
 // - 分享按钮（生成微信文本）
 // - 租赁场景（C/D）隐藏发布人性别年龄，房东限制租客性别时顶部突出
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import NextImage from 'next/image';
 import {
   Mail, MapPin, X,
   ChevronLeft, ChevronRight,
-  Pencil, Trash2, Flag, Heart,
+  Pencil, Trash2, Flag, Heart, Eye,
 } from 'lucide-react';
 import {
   LISTING_TYPES,
@@ -58,6 +58,8 @@ export type Listing = {
   contactType: string;
   createdAt: string;
   bumpedAt?: string;
+  /** 主动查看次数：用户点开 / 展开卡片时累计，server 端按 visitor 节流 */
+  viewCount?: number;
 };
 
 const MOVEIN_FUZZY_LABEL: Record<string, string> = {
@@ -146,18 +148,42 @@ export function ListingCard({
   const [zoomIdx, setZoomIdx] = useState<number | null>(null);
   const [origin, setOrigin] = useState('');
   const cardRef = useRef<HTMLElement>(null);
+  const viewTrackedRef = useRef(false);
+  const [displayViewCount, setDisplayViewCount] = useState(listing.viewCount ?? 0);
 
   useEffect(() => { setOrigin(clientOrigin()); }, []);
+  useEffect(() => {
+    viewTrackedRef.current = false;
+    setDisplayViewCount(listing.viewCount ?? 0);
+  }, [listing.id, listing.viewCount]);
+
+  const reportView = useCallback(() => {
+    if (viewTrackedRef.current) return;
+    viewTrackedRef.current = true;
+    fetch(`/api/listings/${listing.id}/view`, { method: 'POST' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && typeof data.viewCount === 'number') {
+          setDisplayViewCount(data.viewCount);
+        }
+      })
+      .catch(() => {
+        // 统计失败不影响浏览体验
+      });
+  }, [listing.id]);
 
   // autoExpand 触发：focus 进来的目标卡片自动展开 + scroll
   useEffect(() => {
     if (!autoExpand) return;
+    setExpanded(true);
+    markRecentView(listing.id, 'listing');
+    reportView();
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       })
     );
-  }, [autoExpand]);
+  }, [autoExpand, listing.id, reportView]);
 
   const typeMeta = LISTING_TYPES.find(t => t.id === listing.type);
   const typeColor = TYPE_COLOR[listing.type] ?? TYPE_COLOR.find_roommate;
@@ -210,6 +236,7 @@ export function ListingCard({
       const next = !prev;
       if (next) {
         markRecentView(listing.id, 'listing');
+        reportView();
         requestAnimationFrame(() =>
           requestAnimationFrame(() => {
             cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -418,6 +445,11 @@ export function ListingCard({
                 {listing.lookingForGender === 'F-only' ? '仅女生租客' : '仅男生租客'}
               </span>
             )}
+
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500" title="主动查看次数">
+              <Eye size={11} strokeWidth={2.2} />
+              {displayViewCount}
+            </span>
 
             <span className={`ml-auto whitespace-nowrap ${fresh.className} ${expanded ? 'inline' : 'hidden md:inline'}`}>
               {fresh.label}
