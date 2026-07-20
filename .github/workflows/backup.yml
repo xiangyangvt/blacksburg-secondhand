@@ -43,7 +43,10 @@ jobs:
           sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-18
-          pg_dump --version
+          # 注意:不能用裸 `pg_dump` —— runner 镜像预装 PG16 + cluster 配置,
+          # /usr/bin/pg_dump 经 Debian pg_wrapper 仍会路由到 16(2026-07-20 实测)。
+          # 后续步骤统一用版本化全路径。
+          /usr/lib/postgresql/18/bin/pg_dump --version
 
       - name: Run pg_dump
         # pipefail 关键 —— 不加的话 pg_dump 失败但 gzip 成功，会得到一个 20 字节的空 .gz
@@ -61,7 +64,8 @@ jobs:
           echo "▶ dumping to $RAW (will gzip after)..."
           # 两步走：先 dump 到文件（pg_dump 失败立刻退出），再 gzip
           # 不再用 `pg_dump | gzip` 管道，避免错误被 gzip 吞掉
-          pg_dump "$DATABASE_URL" \
+          # 全路径调用 18:裸 pg_dump 会被 pg_wrapper 路由到镜像预装的 16
+          /usr/lib/postgresql/18/bin/pg_dump "$DATABASE_URL" \
             --no-owner --no-acl --clean --if-exists \
             --file="$RAW"
 
