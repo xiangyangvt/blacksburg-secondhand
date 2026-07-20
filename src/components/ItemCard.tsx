@@ -139,9 +139,6 @@ export function ItemCard({
   const t = useT();
   const locale = useLocale();
   const [zoomIdx, setZoomIdx] = useState<number | null>(null);
-  // 联系方式 reveal 状态：null = 未点击；object = 已 reveal
-  const [revealed, setRevealed] = useState<{ contactType: string; contactValue: string; customContactLabel: string | null } | null>(null);
-  const [revealing, setRevealing] = useState(false);
   // 心愿单状态：mount + subscribe 让按钮状态跨标签/同标签同步
   const [inCart, setInCart] = useState(false);
   const [cartBusy, setCartBusy] = useState(false);
@@ -431,10 +428,13 @@ export function ItemCard({
               {categoryLabel(item.category, locale)}
               {item.customTag && ` · ${item.customTag}`}
             </span>
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500" title="主动查看次数">
-              <Eye size={11} strokeWidth={2.2} />
-              {displayViewCount}
-            </span>
+            {/* UX A3:0 次查看不渲染 chip —— 冷启动期满屏「👁 0」观感=没人气 */}
+            {displayViewCount > 0 && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500" title="主动查看次数">
+                <Eye size={11} strokeWidth={2.2} />
+                {displayViewCount}
+              </span>
+            )}
             {/* 新鲜度：手机默认隐藏（节省视觉空间），展开后显示；桌面常驻 */}
             <span className={`ml-auto whitespace-nowrap ${fresh.className} ${expanded ? 'inline' : 'hidden md:inline'}`}>
               {fresh.label}
@@ -518,43 +518,17 @@ export function ItemCard({
         </div>
       )}
 
-      {/* === 联系方式 — 默认隐藏；点击"查看联系方式"按钮才显示
-            隐私目的：避免联系方式被批量爬取，同时给卖家"被几个人查看"的指标 === */}
+      {/* === 联系方式 — UX C10 直显(Sean 拍板恢复「所有信息一屏全开」):
+            展开卡即见「微信: xxx + 复制」,不再有 reveal 按钮拦一道。
+            guard:某些 feed(如 admin)可能仍返回空 contactValue,空值不渲染 === */}
       <div className={`${expanded ? 'flex' : 'hidden md:flex'} items-center gap-1.5 mb-2 flex-wrap text-xs md:text-sm`}>
-        {!revealed ? (
-          <button
-            onClick={async () => {
-              if (revealing) return;
-              setRevealing(true);
-              try {
-                const res = await fetch(`/api/items/${item.id}/reveal-contact`, { method: 'POST' });
-                const data = await res.json();
-                if (res.ok) {
-                  setRevealed({
-                    contactType: data.contactType,
-                    contactValue: data.contactValue,
-                    customContactLabel: data.customContactLabel,
-                  });
-                } else {
-                  showError(data.error || '查看失败');
-                }
-              } finally {
-                setRevealing(false);
-              }
-            }}
-            disabled={revealing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-chip bg-brand text-white text-xs font-medium hover:bg-brand-dark active:scale-95 transition-all shadow-card disabled:opacity-50"
-          >
-            <Eye size={13} />
-            {revealing ? '加载中…' : '查看联系方式'}
-          </button>
-        ) : (
+        {item.contactValue && (
           <>
             <span className="text-stone-600 truncate min-w-0">
-              {contactTypeLabel(revealed.contactType, revealed.customContactLabel, locale)}：
-              <span className="font-mono text-stone-900 select-all ml-1">{revealed.contactValue}</span>
+              {contactTypeLabel(item.contactType, item.customContactLabel, locale)}：
+              <span className="font-mono text-stone-900 select-all ml-1">{item.contactValue}</span>
             </span>
-            <CopyButton text={revealed.contactValue} />
+            <CopyButton text={item.contactValue} />
           </>
         )}
         {/* 加入心愿单 / 已加入：买家批量买的入口（展开模式文字按钮） */}

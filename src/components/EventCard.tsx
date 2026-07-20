@@ -487,7 +487,11 @@ export function EventCard({
       </button>
 
       {/* 图片区:紧凑端 4/3(mobile 比 16/9 更适合双列窄卡);展开 16/9 横展
-          Phase 3C 无图占位:主类目 icon + 对角装饰 icon(opacity 18% 营造简笔设计感) */}
+          Phase 3C 无图占位:主类目 icon + 对角装饰 icon(opacity 18% 营造简笔设计感)
+          UX A2:无图 + 紧凑态完全不渲染图片区 —— scraper 活动几乎全无图,
+          大占位区把一屏压到只剩 2 条;紧凑无图卡只留 chip+标题+时间+地点。
+          展开态保留占位区(展开有横向空间,占位反而给版式呼吸感) */}
+      {(showImage || expanded) && (
       <div
         className={`relative overflow-hidden ${
           expanded ? 'aspect-[2/1]' : 'aspect-[4/3] md:aspect-[16/9]'
@@ -545,10 +549,12 @@ export function EventCard({
           </button>
         )}
       </div>
+      )}
 
       {/* 文字区 — tint 已在 article 外层设(UGC 时整张卡 tint,grid 拉伸也覆盖);
-          这里透明继承,无白色 strip */}
-      <div className="p-3 md:p-4 space-y-1.5">
+          这里透明继承,无白色 strip
+          无图紧凑卡:article 级浮动 ♥ 悬在文字区右上,首行 pr-9 让出位置 */}
+      <div className={`p-3 md:p-4 space-y-1.5 ${!showImage && !expanded ? 'pr-9 md:pr-10' : ''}`}>
         {/* 类目 chip(Lucide icon)+ 状态 + 响应数 + 时间 + 倒计时 + 热度(Phase 2A)
             UGC 时 chip 用白底 + 类目深字(防 chip 和 tint 融成一片);scrape 用类目浅底 + 深字 */}
         <div className="flex items-center gap-1.5 text-xs flex-wrap">
@@ -567,20 +573,26 @@ export function EventCard({
             </span>
           )}
 
-          {/* Phase 3B 响应数 chip(user-posted 才显) */}
-          {showResponseChip && (
+          {/* Phase 3B 响应数 chip(user-posted 才显)
+              UX A3:0 人已响应不渲染计数 —— 有 maxAttendees 时只显「想找 N」,否则整个 chip 不显 */}
+          {showResponseChip && (responseCount > 0 || event.maxAttendees) && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
               <Users size={11} strokeWidth={2.2} />
               {event.maxAttendees
-                ? `想找 ${event.maxAttendees} · ${responseCount} 人已响应`
+                ? (responseCount > 0
+                    ? `想找 ${event.maxAttendees} · ${responseCount} 人已响应`
+                    : `想找 ${event.maxAttendees}`)
                 : `${responseCount} 人已响应`}
             </span>
           )}
 
-          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500" title="主动查看次数">
-            <Eye size={11} strokeWidth={2.2} />
-            {displayClickCount}
-          </span>
+          {/* UX A3:0 次查看不渲染 chip */}
+          {displayClickCount > 0 && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500" title="主动查看次数">
+              <Eye size={11} strokeWidth={2.2} />
+              {displayClickCount}
+            </span>
+          )}
 
           {/* 热度 — 紧凑端在 chip 旁边,展开端也显;颜色梯度按 clicks/hour */}
           {heat && (

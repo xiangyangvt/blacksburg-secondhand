@@ -424,6 +424,13 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
         />
       )}
 
+      {/* UX C8:查询前引导 —— 之前这块区域是全空白 */}
+      {platform !== 'event' && !hasLookedUp && (
+        <div className="text-center text-stone-400 py-12 text-sm px-4">
+          {t('my.lookupHint')}
+        </div>
+      )}
+
       {/* === 二手/室友 平台:lookup 之后才显内容 === */}
       {platform !== 'event' && hasLookedUp && (
         <>

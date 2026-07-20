@@ -7,6 +7,7 @@ import { getStoredUtmSource } from '@/lib/utm';
 import { useT, useLocale } from '@/i18n/I18nProvider';
 import { showError, showWarning } from '@/lib/toast';
 import { validateContact, contactPlaceholder } from '@/lib/contactValidation';
+import { getSharedContact, rememberSharedContact } from '@/lib/identity';
 
 const LS_LAST_CODE = 'hb_last_edit_code';
 
@@ -117,11 +118,12 @@ export function InquirySection({
       });
       const data = await res.json();
       if (!res.ok) { showError(data.error || t('inq.errSend')); return; }
-      try {
-        localStorage.setItem('hb_my_contact_type',  contactType);
-        localStorage.setItem('hb_my_contact_value', contactValue.trim());
-        if (contactType === 'other') localStorage.setItem('hb_my_contact_label', customLabel.trim());
-      } catch {}
+      // UX B6:统一身份 —— 双写二手/活动两侧的联系方式存储,活动侧表单可预填
+      rememberSharedContact(
+        contactType,
+        contactValue.trim(),
+        contactType === 'other' ? customLabel.trim() : undefined,
+      );
       setMessage('');
       setShowForm(false);
       onInquiryAdded();
@@ -166,14 +168,13 @@ export function InquirySection({
 
   const openForm = () => {
     setShowForm(true);
-    try {
-      const tp = localStorage.getItem('hb_my_contact_type');
-      const v  = localStorage.getItem('hb_my_contact_value');
-      const l  = localStorage.getItem('hb_my_contact_label');
-      if (tp === 'wechat' || tp === 'phone' || tp === 'email' || tp === 'other') setContactType(tp);
-      if (v) setContactValue(v);
-      if (l) setCustomLabel(l);
-    } catch {}
+    // UX B6:统一身份 —— 二手键优先,回退活动侧(响应/发送联系方式)填过的
+    const saved = getSharedContact();
+    if (saved) {
+      setContactType(saved.contactType);
+      setContactValue(saved.contactValue);
+      if (saved.customLabel) setCustomLabel(saved.customLabel);
+    }
   };
 
   // 打开"卖家回复"表单：预填上次用过的密码
@@ -227,15 +228,31 @@ export function InquirySection({
     onInquiryUpdated();
   };
 
+  // UX A3:卖家面板视角(hideAskForm)且 0 条留言时整个区块不渲染
+  // (MyPostsPanel 目前 >0 才嵌入,这里兜底防止将来出现空区块 + 孤儿分隔线)
+  if (inquiries.length === 0 && hideAskForm) return null;
+
   return (
     <div className="border-t border-stone-200 mt-3 pt-2">
-      <button
-        onClick={onToggle}
-        className="text-sm text-stone-600 hover:text-brand flex items-center gap-1"
-      >
-        <span className={`transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
-        {t('inq.toggle', { n: inquiries.length })}
-      </button>
+      {/* UX A3:0 条时不显「0 条留言」——
+          折叠态换成「+ 我也想问问 / 议价」直达入口(点击=展开并直接打开表单);
+          展开态隐藏折叠头(下方就是同名入口/表单,避免重复) */}
+      {inquiries.length > 0 ? (
+        <button
+          onClick={onToggle}
+          className="text-sm text-stone-600 hover:text-brand flex items-center gap-1"
+        >
+          <span className={`transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+          {t('inq.toggle', { n: inquiries.length })}
+        </button>
+      ) : !open ? (
+        <button
+          onClick={() => { onToggle(); openForm(); }}
+          className="text-sm text-brand hover:text-brand-dark"
+        >
+          {t('inq.add')}
+        </button>
+      ) : null}
 
       {open && (
         <div data-card-section="inquiry-list" className="mt-2 space-y-3 pl-2 md:pl-4 scroll-mt-24">

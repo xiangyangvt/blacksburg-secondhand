@@ -15,6 +15,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { EventCard, type EventCardData } from './EventCard';
 
+// UX A4:折叠状态只记 sessionStorage(本次会话有效)——
+// live 区的设计初衷是「开屏第一眼看到今晚的局」,默认必须展开;
+// 旧版用 localStorage 永久记忆且默认收起,新访客/回访永远看不到内容
 const COLLAPSED_KEY = 'hb_localnews_live_collapsed';
 const MAX_DISPLAY = 10;
 const ONE_DAY_MS = 24 * 3600e3;
@@ -67,13 +70,13 @@ export function LiveSection({
   onDeleteEvent?: (event: EventCardData) => void;
   onReportEvent?: (event: EventCardData) => void;
 }) {
-  // 默认折叠;用户点开过(localStorage = '0')才展开,折叠状态('1')和未点过(null)都保持折叠
-  const [collapsed, setCollapsed] = useState(true);
-  // hydrate 折叠状态
+  // 默认展开;用户本次会话手动收起过(sessionStorage = '1')才保持收起
+  const [collapsed, setCollapsed] = useState(false);
+  // hydrate 折叠状态(仅本会话) + 清掉旧版遗留的 localStorage 永久折叠记忆
   useEffect(() => {
     try {
-      const v = localStorage.getItem(COLLAPSED_KEY);
-      if (v === '0') setCollapsed(false);
+      if (sessionStorage.getItem(COLLAPSED_KEY) === '1') setCollapsed(true);
+      localStorage.removeItem(COLLAPSED_KEY);
     } catch {
       /* ignore */
     }
@@ -89,7 +92,7 @@ export function LiveSection({
   const toggle = () => {
     setCollapsed(prev => {
       const next = !prev;
-      try { localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0'); } catch { /* */ }
+      try { sessionStorage.setItem(COLLAPSED_KEY, next ? '1' : '0'); } catch { /* */ }
       return next;
     });
   };
@@ -121,7 +124,7 @@ export function LiveSection({
 
       {!collapsed && (
         <div className="px-3 pb-3 pt-1">
-          <div className="grid grid-cols-2 md:grid-cols-1 gap-2 md:gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-1 gap-2 md:gap-3 items-start">
             {displayed.map(e => (
               <EventCard
                 key={e.id}

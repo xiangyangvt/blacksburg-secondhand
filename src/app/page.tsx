@@ -396,7 +396,9 @@ function HomePageInner() {
             </div>
           ) : (
             // 手机 2 列网格 / 桌面单列宽卡
-            <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
+            // items-start:不让同行卡片等高拉伸 —— 无图文字帖保持内容自然高度,
+            // 否则跟邻居图片卡拉齐后卡底出现整块空白(看着像图片区没加载)
+            <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4 items-start">
               {visibleItems.map(item => (
                 <ItemCard
                   key={item.id}

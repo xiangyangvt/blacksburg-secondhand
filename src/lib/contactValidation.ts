@@ -56,9 +56,9 @@ export function validateContact(type: string, value: string): ValidationResult {
 /** 根据 contactType 返回智能 placeholder */
 export function contactPlaceholder(type: string): string {
   switch (type) {
-    case 'wechat': return '例: yangxiang5136(英文+数字)';
+    case 'wechat': return '例: zhang3vt(英文+数字)';
     case 'phone':  return '例: 5401234567(10-11 位)';
-    case 'email':  return '例: yang@vt.edu';
+    case 'email':  return '例: zhang3@vt.edu';
     case 'other':  return '例: Discord/Instagram 等';
     default:       return '';
   }
