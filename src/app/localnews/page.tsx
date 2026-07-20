@@ -428,7 +428,8 @@ export default function LocalNewsPage() {
           ) : visible.length === 0 ? (
             <EmptyState hasFilters={filters.dateRange !== 'all' || filters.locScope !== 'all' || !!q.trim()} cat={filters.cat} />
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4">
+            // items-start:同行卡片不等高拉伸,无图紧凑卡保持自然高度
+            <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4 items-start">
               {visible.map(e => (
                 <EventCard
                   key={e.id}

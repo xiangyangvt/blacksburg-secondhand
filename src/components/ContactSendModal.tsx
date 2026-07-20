@@ -16,7 +16,8 @@ import { createPortal } from 'react-dom';
 import { X, Send } from 'lucide-react';
 import { showError } from '@/lib/toast';
 import { CONTACT_TYPES, validateContactInput, type ContactType } from '@/lib/contactTypes';
-import { getNickname, setNickname, getLastContact, setLastContact } from '@/lib/eventNickname';
+import { getNickname, setNickname, getLastContact } from '@/lib/eventNickname';
+import { rememberSharedContact } from '@/lib/identity';
 
 type Target = {
   id: string | null;   // 评论 id;null = 发给 event poster(用户发布的活动)
@@ -116,12 +117,14 @@ export function ContactSendModal({
         return;
       }
       // 持久化(下次默认填)
+      // UX B6:rememberSharedContact 双写活动侧 + 二手侧的联系方式存储,
+      // 二手询价表单也能预填(替代原来只写 hb_last_contact 的 setLastContact)
       setNickname(cleanNick);
-      setLastContact({
+      rememberSharedContact(
         contactType,
-        contact: contact.trim(),
-        contactLabel: contactType === 'other' ? contactLabel.trim() : undefined,
-      });
+        contact.trim(),
+        contactType === 'other' ? contactLabel.trim() : undefined,
+      );
       onSent();
     } catch {
       showError('网络故障,稍后再试');

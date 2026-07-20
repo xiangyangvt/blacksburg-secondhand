@@ -446,10 +446,13 @@ export function ListingCard({
               </span>
             )}
 
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500" title="主动查看次数">
-              <Eye size={11} strokeWidth={2.2} />
-              {displayViewCount}
-            </span>
+            {/* UX A3:0 次查看不渲染 chip */}
+            {displayViewCount > 0 && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500" title="主动查看次数">
+                <Eye size={11} strokeWidth={2.2} />
+                {displayViewCount}
+              </span>
+            )}
 
             <span className={`ml-auto whitespace-nowrap ${fresh.className} ${expanded ? 'inline' : 'hidden md:inline'}`}>
               {fresh.label}

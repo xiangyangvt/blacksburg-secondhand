@@ -13,6 +13,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Trash2, Send, Pencil } from 'lucide-react';
 import { showSuccess, showError } from '@/lib/toast';
 import { getNickname, setNickname, subscribeNickname } from '@/lib/eventNickname';
+import { getDisplayNameFallback } from '@/lib/identity';
 import { ContactSendModal } from './ContactSendModal';
 
 type Comment = {
@@ -59,8 +60,10 @@ export function EventCommentSection({
   const [savingEdit, setSavingEdit] = useState(false);
 
   // 昵称 hydrate(localStorage)
+  // UX B6:没填过昵称时回退到用户在站内(二手询价/活动响应)填过的联系方式值
+  // (如微信号),让身份「填过一处,处处可用」。预填值发布前可改。
   useEffect(() => {
-    const n = getNickname();
+    const n = getDisplayNameFallback();
     if (n) setNickInput(n);
     return subscribeNickname(() => {
       const updated = getNickname();

@@ -106,8 +106,9 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
     category: item.category,
     customTag: item.customTag,
     contactType: item.contactType,
-    contactValue: '',  // 隐私：默认隐藏，点"查看联系方式"按钮才会调 API 拿
-    customContactLabel: null,
+    // UX C10:卖家联系方式直显(Sean 拍板恢复「所有信息一屏全开」);留言人联系方式仍脱敏
+    contactValue: item.contactValue,
+    customContactLabel: item.customContactLabel,
     photoUrls: parsePhotoUrls(item.photoUrls),
     createdAt: item.createdAt.toISOString(),
     viewCount: (item as any).viewCount ?? 0,

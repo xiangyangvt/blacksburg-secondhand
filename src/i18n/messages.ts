@@ -217,6 +217,7 @@ export const messages = {
   'my.empty':              { zh: '这里还没有任何商品',                         en: 'Nothing here yet' },
   'my.draftEmpty':         { zh: '没有草稿。批量导入后的商品默认是草稿。',         en: 'No drafts. Items from batch import start as drafts.' },
   'my.errLookup':          { zh: '查找失败',                                  en: 'Lookup failed' },
+  'my.lookupHint':         { zh: '输入发布时的联系方式和密码,点「查找」查看你的发布', en: 'Enter the contact and password you used when posting, then tap "Look up"' },
   'my.headerLink':         { zh: '我的',                                      en: 'My Posts' },
 
   // 批量导入

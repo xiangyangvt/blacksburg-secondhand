@@ -229,20 +229,32 @@ export function MyEventsContent({
   const unreadCount = useMemo(() => received.filter(r => r.isUnread).length, [received]);
   const close = onItemClick ?? (() => {});
 
+  // UX C8:「查询前空态」—— 用户还没点「查找」(无 contact)且本设备 cookie 也没
+  // 匹配到任何内容时,不渲染 4 个 (0) tab + 空态插画(观感=「你什么都没有」),
+  // 改为引导文案。cookie 匹配到内容(soft login 生效)或显式查找后照常显示计数。
+  const hasData = posts.length + comments.length + sent.length + received.length > 0;
+  const showCounts = !loading && (!!contact || hasData);
+  const showGuidance = !loading && !contact && !hasData;
+
   return (
     <div>
       {/* tab 行 — 4 tab 平分宽度,两行布局(label 上,数字下),不再横滑
           Phase 3C: 解决最右"已收到"被遮住的问题 */}
       <div className="flex gap-0 border-b border-stone-200 mb-3">
-        <TabButton active={tab === 'posts'}    onClick={() => setTab('posts')}    label="我发的" count={posts.length} />
-        <TabButton active={tab === 'comments'} onClick={() => setTab('comments')} label="留言" count={comments.length} />
-        <TabButton active={tab === 'sent'}     onClick={() => setTab('sent')}     label="已发出" count={sent.length} />
-        <TabButton active={tab === 'received'} onClick={() => setTab('received')} label="已收到" count={received.length} badge={unreadCount} />
+        <TabButton active={tab === 'posts'}    onClick={() => setTab('posts')}    label="我发的" count={showCounts ? posts.length : undefined} />
+        <TabButton active={tab === 'comments'} onClick={() => setTab('comments')} label="留言" count={showCounts ? comments.length : undefined} />
+        <TabButton active={tab === 'sent'}     onClick={() => setTab('sent')}     label="已发出" count={showCounts ? sent.length : undefined} />
+        <TabButton active={tab === 'received'} onClick={() => setTab('received')} label="已收到" count={showCounts ? received.length : undefined} badge={unreadCount} />
       </div>
 
       <div className="min-h-[200px]">
         {loading ? (
           <div className="text-center text-stone-400 py-12 text-sm">加载中...</div>
+        ) : showGuidance ? (
+          <div className="text-center text-stone-400 py-12 text-sm px-4 leading-relaxed">
+            在上方输入发布时的联系方式和密码,点「查找」<br />
+            找回你发过的活动、留言和联系方式记录
+          </div>
         ) : tab === 'posts' ? (
           <PostsList items={posts} onClose={close} onRefresh={refresh} />
         ) : tab === 'comments' ? (
