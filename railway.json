@@ -6,7 +6,9 @@
     "watchPatterns": ["**", "!.github/**"]
   },
   "deploy": {
+    "preDeployCommand": "npm run db:push:prod",
     "startCommand": "npm run start:prod",
+    "sleepApplication": true,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }
