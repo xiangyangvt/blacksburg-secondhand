@@ -8,9 +8,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "build:prod": "prisma generate --schema=prisma/schema.production.prisma && next build",
+    "build:prod": "prisma generate --schema=prisma/schema.production.prisma && NEXT_TELEMETRY_DISABLED=1 next build",
     "start": "next start",
-    "start:prod": "prisma db push --schema=prisma/schema.production.prisma --accept-data-loss --skip-generate && next start",
+    "start:prod": "NEXT_TELEMETRY_DISABLED=1 next start",
+    "db:push:prod": "prisma db push --schema=prisma/schema.production.prisma --accept-data-loss --skip-generate",
     "lint": "next lint",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
