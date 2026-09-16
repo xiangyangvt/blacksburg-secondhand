@@ -1,13 +1,15 @@
 # 黑堡社区站 — 项目状态
 
 > 单一可信源：当前在哪、未来慢慢优化什么、文档去哪找。
-> 上次更新：2026-05-21
+> 上次更新：2026-09-16
 
 ---
 
 ## 当前状态
 
-**Sprint 7 Phase 3B 已完工（2026-05-17）。** 无活跃 sprint。
+**Sprint 8 UX 微优化已完工（2026-07-20）。** 无活跃 sprint。
+
+2026-07 维护记录：backup workflow 加 keepalive commit 防 60 天自动禁用（#1）、pg client 升 18 修复每周 dump 失败（#2/#3）、Railway 开 serverless 休眠控成本（#4）。
 
 生产数据快照（pivot 6 天后，2026-05-20 抓的）：
 
@@ -91,6 +93,7 @@ Next.js 14 · Prisma + SQLite(dev)/Postgres(prod) · Cloudinary · Resend · Dee
 | S5 | 专业化（部分完成） | `docs/archive/PROFESSIONAL_PLAN.md` |
 | S6 | UX 精修 | `docs/archive/UX_BATCH.md` |
 | S7 Phase 1+2+3B | 本地 Hub | `docs/archive/BLACKSBURG_HUB_PLAN.md` + `docs/archive/SPRINT_7_DONE.md` |
+| S8 | RESALE UX 微优化（8 项）+ backup keepalive | `docs/archive/SPRINT_8_UX_POLISH.md` |
 
 ---
 
@@ -98,7 +101,7 @@ Next.js 14 · Prisma + SQLite(dev)/Postgres(prod) · Cloudinary · Resend · Dee
 
 - **活文档**（根目录）：`README` · `DEPLOY` · `RESTORE` · **`STATE`**（本文件）
 - **历史 sprint plan**：`docs/archive/`
-- **当前 sprint plan**：暂无（下一个 sprint 启动时在根目录新建 `SPRINT_8_*.md`）
+- **当前 sprint plan**：暂无（下一个 sprint 启动时在根目录新建 `SPRINT_9_*.md`）
 
 ---
 
