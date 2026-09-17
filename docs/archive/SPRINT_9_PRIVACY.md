@@ -1,3 +1,12 @@
+# Sprint 9 — 隐私分级与可观测性（已完工）
+
+> 完工于 2026-09-17，tag `v2026.09.17-sprint9`。六项分别经 PR #7（9C）、#8（9A）、#9（9F）、#10（9E）、#11（9D）、#12（9B）合入。
+> 执行偏差与互审记录见各 PR 描述；2 级风险项（9C / 9A / 9E）经 Codex 跨厂互审 6 / 2 / 3 轮收口，共 11 条实质发现。
+> 上线待办：Railway 配 `ADMIN_SESSION_SECRET`、`DIGEST_SECRET`、`DIGEST_EMAIL_TO`；GitHub Secrets 配 `DIGEST_SECRET`；后台重新登录；用 `/api/admin/whoami` 核对 Railway 的 X-Forwarded-For 行为。
+> 以下为原始执行 spec，原样保留。
+
+---
+
 # Sprint 9 — 隐私分级与可观测性 · 执行 Spec（2026-09-16）
 
 > 交给 AI agent 在分支上执行，PR 收口。每个子项独立分支、独立 PR，按编号顺序合入。
