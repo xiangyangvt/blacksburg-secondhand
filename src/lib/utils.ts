@@ -171,10 +171,22 @@ export function serializePhotoUrls(urls: string[]): string {
 }
 
 // 从请求里取客户端 IP（用于限速）
+// 客户端 IP:取 X-Forwarded-For 的**最后一段** —— 唯一可信代理(Railway 边缘)追加在最右,最左那段客户端可伪造
+// (Sprint 9E 互审:此前取首段,攻击者轮换首段即可绕过所有按 IP 的限流)。
+// 不提供"跳数"配置:互审指出若前面套 Cloudflare 而 Railway 入口仍可直连,按跳数取会选中伪造段。
+// 前面再套代理属不支持的部署:后果是所有用户共用代理 IP 的额度(过严),而不是被绕过。
+export function getClientIpFromHeaders(h: Headers): string {
+  const fwd = h.get('x-forwarded-for');
+  if (fwd) {
+    const parts = fwd.split(',').map(s => s.trim()).filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (last) return last;
+  }
+  return h.get('x-real-ip') ?? 'unknown';
+}
+
 export function getClientIp(req: Request): string {
-  const fwd = req.headers.get('x-forwarded-for');
-  if (fwd) return fwd.split(',')[0].trim();
-  return req.headers.get('x-real-ip') ?? 'unknown';
+  return getClientIpFromHeaders(req.headers);
 }
 
 // ===== 设计系统：类目色 + 新鲜度 =====
