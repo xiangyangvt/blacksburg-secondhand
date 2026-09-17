@@ -443,8 +443,10 @@ model RateLimitHit {
   id        String   @id @default(cuid())
   key       String
   tag       String?
+  bucket    Int?
   createdAt DateTime @default(now())
 
+  @@unique([key, tag, bucket])
   @@index([key, createdAt])
   @@index([createdAt])
 }

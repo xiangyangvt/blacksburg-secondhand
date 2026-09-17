@@ -1,29 +1,31 @@
 import { describe, it, expect } from 'vitest';
 import { checkQuota, isBotUA, type QuotaDb } from './rateLimit';
 
-// 内存版 RateLimitHit,实现 checkQuota 用到的方法。
-// 每个 await 都让出一次事件循环,让 Promise.all 的并发调用真正交错,以复现竞态。
+// 内存版 RateLimitHit。实现与 SQL 一致的语义:
+// - @@unique([key, tag, bucket]):tag 为 NULL 的行互不冲突(SQL NULL ≠ NULL)
+// - 只按 createdAt 排序,不加 id 兜底(生产查询没有)
+// - 每个 await 让出一次事件循环,让 Promise.all 的并发调用真正交错
 function memDb() {
-  type Row = { id: string; key: string; tag: string | null; createdAt: Date };
+  type Row = { id: string; key: string; tag: string | null; bucket: number | null; createdAt: Date };
   const rows: Row[] = [];
   let seq = 0;
   const tick = () => new Promise<void>(r => setTimeout(r, 0));
-  const inWin = (where: { key: string; tag?: string; createdAt: { gt: Date }; NOT?: { tag: string } }) =>
-    rows.filter(r => r.key === where.key && r.createdAt > where.createdAt.gt
-      && (where.tag === undefined || r.tag === where.tag)
-      && (where.NOT === undefined || r.tag !== where.NOT.tag));
+  const inWin = (where: { key: string; createdAt: { gt: Date } }) =>
+    rows.filter(r => r.key === where.key && r.createdAt > where.createdAt.gt);
   const db: QuotaDb = {
     rateLimitHit: {
       async count({ where }) { await tick(); return inWin(where).length; },
-      async findFirst({ where, orderBy }) {
+      async findFirst({ where }) {
         await tick();
-        const hits = inWin(where).slice();
-        if (orderBy?.createdAt === 'asc') hits.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
-        return hits[0] ? { id: hits[0].id, createdAt: hits[0].createdAt } : null;
+        const hits = inWin(where).slice().sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+        return hits[0] ? { createdAt: hits[0].createdAt } : null;
       },
       async create({ data }) {
         await tick();
-        const row = { id: `r${++seq}`, key: data.key, tag: data.tag, createdAt: new Date(clock.t) };
+        if (data.tag !== null && rows.some(r => r.key === data.key && r.tag === data.tag && r.bucket === data.bucket)) {
+          throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+        }
+        const row = { id: `r${++seq}`, key: data.key, tag: data.tag, bucket: data.bucket, createdAt: new Date(clock.t) };
         rows.push(row);
         return { id: row.id };
       },
@@ -124,6 +126,39 @@ describe('checkQuota · 边界与并发(Codex 互审补)', () => {
     expect((await checkQuota(opts, db, now, () => 1)).ok).toBe(true);
     expect((await checkQuota(opts, db, now, () => 1)).ok).toBe(false);
     expect(rows.every(r => r.tag === null)).toBe(true);
+  });
+});
+
+describe('checkQuota · 第 2 轮互审场景', () => {
+  it('配额已满时,并发去重命中不得放行(持有行方回滚,命中方同样被拒)', async () => {
+    const { db, rows, now } = memDb();
+    const opts = { key: 'k', windowMs: 3600e3, max: 1 };
+    expect((await checkQuota({ ...opts, tag: 'item-0' }, db, now, () => 1)).ok).toBe(true); // 配额满
+    const results = await Promise.all(Array.from({ length: 4 }, () => checkQuota({ ...opts, tag: 'item-9' }, db, now, () => 1)));
+    expect(results.every(r => !r.ok)).toBe(true);
+    expect(rows.length).toBe(1); // 临时行已回滚,没有"免费通过"的记录缺口
+  });
+
+  it('无 tag 的行必须被带 tag 的请求计入(NULL 行不能漏算)', async () => {
+    const { db, now } = memDb();
+    const opts = { key: 'k', windowMs: 60e3, max: 1 };
+    expect((await checkQuota(opts, db, now, () => 1)).ok).toBe(true);
+    const r = await checkQuota({ ...opts, tag: 'item-1' }, db, now, () => 1);
+    expect(r.ok).toBe(false);
+    expect(r.remaining).toBe(0);
+  });
+
+  it('同 tag 去重跨桶边界会再计一次(已知且接受的桶语义)', async () => {
+    const { db, rows, clock, now } = memDb();
+    const opts = { key: 'k', windowMs: 60e3, max: 5, tag: 'item-1' };
+    clock.t = 60e3 * 1000; // 桶起点
+    await checkQuota(opts, db, now, () => 1);
+    clock.t += 59_000;
+    await checkQuota(opts, db, now, () => 1);
+    expect(rows.length).toBe(1);
+    clock.t += 2_000; // 跨桶
+    await checkQuota(opts, db, now, () => 1);
+    expect(rows.length).toBe(2);
   });
 });
 
