@@ -1,11 +1,24 @@
-// 管理员身份验证 — cookie 模式
-// 单管理员，密码就是 ADMIN_PASSWORD env var
-// 登录后下发一个 httpOnly cookie，30 天过期
+// 管理员身份验证 — 签名会话令牌(Sprint 9E)
+//
+// 单管理员,密码 = ADMIN_PASSWORD env var。登录成功后下发 httpOnly cookie `hb_admin`,
+// 值是 HMAC-SHA256 签名的会话令牌 `base64url(payload).base64url(sig)`,payload 只有签发时间与随机 nonce。
+// **cookie 里不再出现密码**(9E 之前 cookie 值就是明文 ADMIN_PASSWORD)。
+//
+// 签名密钥:ADMIN_SESSION_SECRET;未配置时用 sha256(ADMIN_PASSWORD + 固定盐)派生 —— 换密码即全部会话失效。
+// 密码比对与签名校验都走 timingSafeEqual(先 sha256 等长再比)。
+// 登录尝试限流:同 IP 5 次 / 15 分钟,走 rateLimit.checkQuota,计数插入先于比较(并发不可绕)。
+//
+// 一次性影响:9E 上线后旧格式 cookie 校验失败,需重新登录一次。
 
 import { cookies } from 'next/headers';
+import { createHmac, createHash, randomBytes, timingSafeEqual } from 'crypto';
+import { checkQuota, type QuotaDb } from '@/lib/rateLimit';
 
-const COOKIE_NAME = 'hb_admin';
+export const ADMIN_COOKIE = 'hb_admin';
 const DEFAULT_PASS = 'changeme-in-production';
+const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 天
+export const LOGIN_WINDOW_MS = 15 * 60e3;
+export const LOGIN_MAX_ATTEMPTS = 5;
 
 export function getAdminPassword(): string | null {
   const p = process.env.ADMIN_PASSWORD;
@@ -13,25 +26,84 @@ export function getAdminPassword(): string | null {
   return p;
 }
 
+function sessionSecret(): Buffer | null {
+  const explicit = process.env.ADMIN_SESSION_SECRET;
+  if (explicit && explicit.length >= 16) return createHash('sha256').update(explicit).digest();
+  const pw = getAdminPassword();
+  if (!pw) return null;
+  return createHash('sha256').update(`hb-admin-session:${pw}`).digest();
+}
+
+const b64u = (b: Buffer) => b.toString('base64url');
+const sign = (secret: Buffer, payloadB64: string) => b64u(createHmac('sha256', secret).update(payloadB64).digest());
+
+/** 常量时间比较任意长度字符串:先各自 sha256 再 timingSafeEqual */
+export function safeEqual(a: string, b: string): boolean {
+  const ha = createHash('sha256').update(a).digest();
+  const hb = createHash('sha256').update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
+
+export function issueAdminToken(now: () => number = Date.now): string | null {
+  const secret = sessionSecret();
+  if (!secret) return null;
+  const payload = b64u(Buffer.from(JSON.stringify({ iat: Math.floor(now() / 1000), n: b64u(randomBytes(12)) })));
+  return `${payload}.${sign(secret, payload)}`;
+}
+
+export function verifyAdminToken(token: string | undefined, now: () => number = Date.now): boolean {
+  if (!token) return false;
+  const secret = sessionSecret();
+  if (!secret) return false;
+  const dot = token.indexOf('.');
+  if (dot <= 0 || token.indexOf('.', dot + 1) !== -1) return false;
+  const payload = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  if (!safeEqual(sig, sign(secret, payload))) return false;
+  try {
+    const { iat } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { iat?: unknown };
+    if (typeof iat !== 'number') return false;
+    const age = Math.floor(now() / 1000) - iat;
+    return age >= 0 && age <= SESSION_MAX_AGE_SEC;
+  } catch {
+    return false;
+  }
+}
+
 export function isAdmin(): boolean {
-  const expected = getAdminPassword();
-  if (!expected) return false;
-  const c = cookies().get(COOKIE_NAME)?.value;
-  return c === expected;
+  return verifyAdminToken(cookies().get(ADMIN_COOKIE)?.value);
 }
 
 export function setAdminCookie() {
-  const expected = getAdminPassword();
-  if (!expected) return;
-  cookies().set(COOKIE_NAME, expected, {
+  const token = issueAdminToken();
+  if (!token) return;
+  cookies().set(ADMIN_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: 60 * 60 * 24 * 30, // 30 天
+    maxAge: SESSION_MAX_AGE_SEC,
   });
 }
 
 export function clearAdminCookie() {
-  cookies().delete(COOKIE_NAME);
+  cookies().delete(ADMIN_COOKIE);
+}
+
+export type LoginResult = 'ok' | 'wrong' | 'limited' | 'disabled';
+
+/**
+ * 登录尝试:先记一次配额(插入先于比较,并发一批也不能超过 5 次比较),再常量时间比对。
+ * 返回值给调用方决定 redirect 目标;不在这里写 cookie。
+ */
+export async function attemptAdminLogin(
+  password: string,
+  ip: string,
+  db?: QuotaDb,
+): Promise<LoginResult> {
+  const expected = getAdminPassword();
+  if (!expected) return 'disabled';
+  const q = await checkQuota({ key: `adminlogin:ip:${ip}`, windowMs: LOGIN_WINDOW_MS, max: LOGIN_MAX_ATTEMPTS }, db);
+  if (!q.ok) return 'limited';
+  return safeEqual(password, expected) ? 'ok' : 'wrong';
 }

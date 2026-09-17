@@ -40,7 +40,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 | 邮件 | `lib/email.ts`（Resend 包装） | `RESEND_API_KEY` | 仅 `api/auth/magic-link/send`。**没有服务端主动通知** |
 | 图床 | `lib/uploader.ts` · `api/upload` · `lib/cloudinary.ts` · `PendingCloudinaryDeletion` 延迟删除队列（由 items / listings 列表 GET 机会式触发） | Cloudinary env | 三个发布表单 |
 | LLM | `lib/llm.ts`：`llmCall` / `chat`（DeepSeek）· `embed`（OpenAI 兼容端点，**无调用方，为搜索预埋**） | env | scraper |
-| admin | `app/admin/page.tsx`（1329 行，server actions 内联）· `admin/recovery` · `api/recovery/**` | `adminAuth.isAdmin()` | — |
+| admin | `app/admin/page.tsx`（1329 行，server actions 内联）· `admin/recovery` · `api/recovery/**` | `adminAuth.isAdmin()` · `attemptAdminLogin()`（走 rateLimit） | — |
 | 反滥用 | `src/lib/rateLimit.ts`（**唯一入口**）：`getVisitorId` / `readVisitorId` / `setVisitorCookie`（`hb_vid`）、`isBotUA`（basic / full 两档）、`checkQuota`（`RateLimitHit` 表计数的滑动窗口；行只增不减、被拒尝试也计入；tag 去重靠 `(key, tag, bucket)` 唯一约束 + `admitted` 标记，Codex 互审六轮定稿）。12 个 route 的 visitor cookie 与 6 处 bot 判断已迁入；各业务域自己的窗口计数（发布 / 评论 / 申请等）仍读各自的表，见 §6 | prisma | 所有需要访客标识或配额的 route；9A / 9E / 10B / 10C 的配额 |
 | 数据与运维 | `prisma/schema.prisma`（dev）· `schema.production.prisma`（prod，手工同步）· `scripts/{backup,restore-local}.sh` · `.github/workflows/{ci,backup,scrape-events}.yml` · `railway.json` | — | — |
 
@@ -69,7 +69,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 | contactValue 单凭证 | `*/by-contact` GET · `api/my/events?contact=` | 基本不构成保护 | 知道微信号即可反查，见 §5 |
 | `hb_vid` cookie（HttpOnly，1 年） | `lib/rateLimit.ts` 统一生成与读取 | 活动评论作者、联系方式交换、reveal-to-responder 的发布者鉴权、view / cart 去重、UV | 统一 helper，属性：httpOnly · lax · secure(prod) · 1 年 |
 | magic-link session | `api/auth/magic-link/*` · `lib/auth.ts` · `hb_session` | **不保护任何资源**，只做预填与身份连续性 | 15 分钟 token，同邮箱 60s 限流 |
-| admin cookie | `lib/adminAuth.ts` · `hb_admin` | `/admin` `/api/recovery` `api/admin/*` | **cookie 值 = 明文 `ADMIN_PASSWORD`**，非常量时间比较 |
+| admin 会话 | `lib/adminAuth.ts` · `hb_admin` | `/admin` `/api/recovery` `api/admin/*` | 9E 起：HMAC 签名令牌（iat + nonce），密钥 `ADMIN_SESSION_SECRET` 或由密码派生；常量时间比较；登录同 IP 5 次 / 15 分钟 |
 | `SCRAPER_SECRET` bearer | `api/scraper/run` | 触发抓取 | 未配置直接拒跑 |
 
 ## 4. 数据流（一次发布到一次被看见）

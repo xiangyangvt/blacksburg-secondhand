@@ -1,9 +1,10 @@
 // 管理员后台 — 看举报、管隐藏商品、清理灌水
 // 路由：/admin
-// 认证：cookie（密码 = ADMIN_PASSWORD env var）
+// 认证：签名会话 cookie（密码 = ADMIN_PASSWORD env var;9E 起 cookie 不含密码,登录同 IP 5 次 / 15 分钟）
 // robots.txt 已禁止抓取此路径
 
-import { isAdmin, setAdminCookie, clearAdminCookie, getAdminPassword } from '@/lib/adminAuth';
+import { isAdmin, setAdminCookie, clearAdminCookie, attemptAdminLogin, getAdminPassword } from '@/lib/adminAuth';
+import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -16,12 +17,14 @@ export const dynamic = 'force-dynamic'; // 永远拿最新
 async function loginAction(formData: FormData) {
   'use server';
   const password = String(formData.get('password') ?? '');
-  const expected = getAdminPassword();
-  if (expected && password === expected) {
+  const h = headers();
+  const ip = h.get('x-forwarded-for')?.split(',')[0].trim() || h.get('x-real-ip') || 'unknown';
+  const result = await attemptAdminLogin(password, ip);
+  if (result === 'ok') {
     setAdminCookie();
     redirect('/admin');
   }
-  redirect('/admin?error=wrong');
+  redirect(`/admin?error=${result}`);
 }
 
 async function logoutAction() {
@@ -849,6 +852,11 @@ function LoginScreen({ error }: { error?: string }) {
         {error === 'wrong' && (
           <p className="text-red-600 text-sm mb-3 bg-red-50 border border-red-200 rounded p-2">
             密码错误
+          </p>
+        )}
+        {error === 'limited' && (
+          <p className="text-amber-700 text-sm mb-3 bg-amber-50 border border-amber-200 rounded p-2">
+            尝试次数过多,请 15 分钟后再试
           </p>
         )}
         <form action={loginAction} className="space-y-3">
