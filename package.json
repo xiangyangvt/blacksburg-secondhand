@@ -19,7 +19,8 @@
     "db:reset": "prisma migrate reset --force",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:schema": "node scripts/check-schema-sync.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
