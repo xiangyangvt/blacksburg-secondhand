@@ -154,9 +154,10 @@ function toCardData(ev: LoadedEvent, responseCount: number): EventCardData {
     scrapedAt: ev.scrapedAt ? ev.scrapedAt.toISOString() : null,
     customCategory: ev.customCategory,
     posterNickname: ev.posterNickname,
-    posterContactType: ev.posterContactType,
-    posterContact: ev.posterContact,
-    posterContactLabel: ev.posterContactLabel,
+    // Sprint 9A:非公开联系方式不进 SSR HTML(响应者走双向流程)
+    posterContactType: ev.posterContactPublic ? ev.posterContactType : null,
+    posterContact: ev.posterContactPublic ? ev.posterContact : null,
+    posterContactLabel: ev.posterContactPublic ? ev.posterContactLabel : null,
     posterContactPublic: ev.posterContactPublic,
     photoUrls,
     maxAttendees: ev.maxAttendees,

@@ -190,10 +190,8 @@ export function MyEventsContent({
   useEffect(() => {
     let cancel = false;
     setLoading(true);
-    const url = contact
-      ? `/api/my/events?contact=${encodeURIComponent(contact)}`
-      : '/api/my/events';
-    fetch(url, { cache: 'no-store' })
+    // Sprint 9A:服务端不再支持 ?contact= 反查(披露面漏洞),身份只认 hb_vid cookie
+    fetch('/api/my/events', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : { comments: [], sent: [], received: [], posts: [] })
       .then(d => {
         if (cancel) return;

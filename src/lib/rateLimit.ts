@@ -17,8 +17,13 @@ import { prisma } from '@/lib/prisma';
 export const VID_COOKIE = 'hb_vid';
 export const VID_MAX_AGE = 60 * 60 * 24 * 365; // 1 年;键名不可改,老用户已有数据
 
+// hb_vid 只接受 randomUUID 格式;伪造的 cookie 值(含分隔符 / 超长)一律当作没有,重新签发。
+// 这样配额键 / tag 里拼进 visitorId 时不会有构造碰撞(Codex 9A 互审)。
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function readVisitorId(req: NextRequest): string | undefined {
-  return req.cookies.get(VID_COOKIE)?.value || undefined;
+  const v = req.cookies.get(VID_COOKIE)?.value;
+  return v && UUID_RE.test(v) ? v : undefined;
 }
 
 export function getVisitorId(req: NextRequest): { visitorId: string; isNew: boolean } {
@@ -71,9 +76,9 @@ export interface QuotaDb {
   rateLimitHit: {
     count(args: { where: { key: string; createdAt: { gt: Date } } }): Promise<number>;
     findFirst(args: {
-      where: { key: string; createdAt: { gt: Date }; tag?: string; bucket?: number };
-      select: { id: true; admitted: true };
-    }): Promise<{ id: string; admitted: boolean } | null>;
+      where: { key: string; createdAt: { gt: Date }; tag?: string };
+      select: { id: true; admitted: true; createdAt: true };
+    }): Promise<{ id: string; admitted: boolean; createdAt: Date } | null>;
     findMany(args: {
       where: { key: string; createdAt: { gt: Date } };
       orderBy: { createdAt: 'asc' };
@@ -102,11 +107,13 @@ function isUniqueViolation(e: unknown): boolean {
 //     (同 tag 去重命中共用一条计费记录,所以"放行次数"可以大于记录数,这是去重的定义。)
 //   - 放行 ⇒ 自己的行或去重命中的 admitted 行存在 ⇒ 不可能"放行但无记录"。
 //     前提:请求在 CLEANUP_AGE_MS(48h)内结束,清理只删更老的行;HTTP 请求做不到挂 48h。
-// 去重:数据库唯一约束 (key, tag, bucket),bucket = floor(now / windowMs)。行带 admitted 标记:
-//   去重命中时只有当初被放行的行才放行(否则被拒的 tag 行会被重访漏过);并发同 tag 第二个请求
-//   在第一个标记 admitted 前到达会被拒,属过严,客户端按卡片缓存,不影响体验。桶边界同 tag 可能计两次,已接受。
+// 去重:按**滑动窗口**查同 key 同 tag 的已有行(不是按桶,否则整点后刷新会被旧行占额却不命中去重,Codex 9A 互审)。
+//   数据库唯一约束 (key, tag, bucket) 只用来挡并发双写;bucket = floor(now / windowMs),跨桶的并发双写
+//   可能留两行(过严一格),可接受。行带 admitted 标记:去重命中时只有当初被放行的行才放行
+//   (否则被拒的 tag 行会被重访漏过);并发同 tag 第二个请求在第一个标记 admitted 前到达会被拒,属过严,
+//   客户端按卡片缓存,不影响体验。
 // retryAfter:被拒尝试也占行,所以"最早一行过期"不等于有名额;返回第 (used - max + 1) 条最早行的过期时间;
-//   带 tag 的拒绝再与本桶结束时刻取较大值(同 tag 的 admitted=false 行要到下个桶才失效)。
+//   带 tag 的拒绝再与同 tag 已有行(admitted=false)的过期时刻取较大值。
 export async function checkQuota(
   opts: QuotaOpts,
   db: QuotaDb = prisma as unknown as QuotaDb,
@@ -119,26 +126,26 @@ export async function checkQuota(
   const where = { key: opts.key, createdAt: { gt: since } };
   const bucket = tag ? Math.floor(t / opts.windowMs) : null;
 
-  const reject = async (used: number): Promise<QuotaResult> => {
+  const reject = async (used: number, blockedUntilMs?: number): Promise<QuotaResult> => {
     // 需要 used - max + 1 行过期才有名额 → 第 (used - max) 个(0 基)最早行的过期时刻
     const k = Math.max(0, used - opts.max);
     const [kth] = await db.rateLimitHit.findMany({ where, orderBy: { createdAt: 'asc' }, skip: k, take: 1, select: { createdAt: true } });
     let retryAfterSec = kth
       ? Math.max(1, Math.ceil((kth.createdAt.getTime() + opts.windowMs - t) / 1000))
       : Math.ceil(opts.windowMs / 1000);
-    // 带 tag 的拒绝:本桶内可能已留下 admitted=false 的同 tag 行,同 tag 要到下个桶才可能放行
-    if (bucket !== null) retryAfterSec = Math.max(retryAfterSec, Math.ceil(((bucket + 1) * opts.windowMs - t) / 1000));
+    if (blockedUntilMs !== undefined) retryAfterSec = Math.max(retryAfterSec, Math.ceil((blockedUntilMs - t) / 1000));
     return { ok: false, remaining: 0, retryAfterSec };
   };
 
   const admit = (used: number): QuotaResult => ({ ok: true, remaining: Math.max(0, opts.max - used), retryAfterSec: 0 });
 
-  // 去重快路径:同 tag 本桶已有行 → 按它当初的结果
-  if (tag && bucket !== null) {
-    const prior = await db.rateLimitHit.findFirst({ where: { ...where, tag, bucket }, select: { id: true, admitted: true } });
+  // 去重快路径:窗口内同 tag 已有行 → 按它当初的结果
+  const priorSelect = { id: true, admitted: true, createdAt: true } as const;
+  if (tag) {
+    const prior = await db.rateLimitHit.findFirst({ where: { ...where, tag }, select: priorSelect });
     if (prior) {
       const used = await db.rateLimitHit.count({ where });
-      return prior.admitted ? admit(used) : reject(used);
+      return prior.admitted ? admit(used) : reject(used, prior.createdAt.getTime() + opts.windowMs);
     }
   }
 
@@ -152,13 +159,13 @@ export async function checkQuota(
   } catch (e) {
     if (!isUniqueViolation(e)) throw e;
     // 并发同 tag,对方先插入且尚未(或已)标记 admitted → 走它的结果
-    const prior = await db.rateLimitHit.findFirst({ where: { ...where, tag: tag!, bucket: bucket! }, select: { id: true, admitted: true } });
+    const prior = await db.rateLimitHit.findFirst({ where: { ...where, tag: tag! }, select: priorSelect });
     const used = await db.rateLimitHit.count({ where });
-    return prior?.admitted ? admit(used) : reject(used);
+    return prior?.admitted ? admit(used) : reject(used, prior ? prior.createdAt.getTime() + opts.windowMs : undefined);
   }
 
   const used = await db.rateLimitHit.count({ where }); // 含自己;行永不回滚
-  if (used > opts.max) return reject(used);
+  if (used > opts.max) return reject(used, tag ? t + opts.windowMs : undefined); // 自己这行 admitted=false 会挡同 tag 一整个窗口
 
   await db.rateLimitHit.update({ where: { id: mine.id }, data: { admitted: true } });
 
@@ -167,4 +174,15 @@ export async function checkQuota(
     db.rateLimitHit.deleteMany({ where: { createdAt: { lt: new Date(t - CLEANUP_AGE_MS) } } }).catch(() => {});
   }
   return admit(used);
+}
+
+/** 只看不记:窗口内已达上限返回 false。用于"失败才计数"的场景(先 peek,失败后再 checkQuota 记一笔) */
+export async function peekQuota(
+  opts: Pick<QuotaOpts, 'key' | 'windowMs' | 'max'>,
+  db: QuotaDb = prisma as unknown as QuotaDb,
+  now: () => number = Date.now,
+): Promise<boolean> {
+  const since = new Date(now() - opts.windowMs);
+  const used = await db.rateLimitHit.count({ where: { key: opts.key, createdAt: { gt: since } } });
+  return used < opts.max;
 }

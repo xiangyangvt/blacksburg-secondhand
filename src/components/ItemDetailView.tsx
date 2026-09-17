@@ -38,6 +38,24 @@ export function ItemDetailView({ item }: { item: Item }) {
   const [origin, setOrigin] = useState('');
   const viewTrackedRef = useRef(false);
   const [displayViewCount, setDisplayViewCount] = useState(item.viewCount ?? 0);
+  // Sprint 9A:SSR 不带联系方式,挂载后逐条取(经配额)
+  const [contact, setContact] = useState<{ contactType: string; contactValue: string; customContactLabel: string | null } | null>(null);
+  const [contactState, setContactState] = useState<'loading' | 'ok' | 'limited' | 'error'>('loading');
+  useEffect(() => {
+    let cancel = false;
+    setContact(null); setContactState('loading');
+    fetch(`/api/items/${item.id}/reveal-contact`, { method: 'POST' })
+      .then(async res => {
+        if (cancel) return;
+        if (res.status === 429) { setContactState('limited'); return; }
+        if (!res.ok) { setContactState('error'); return; }
+        const d = await res.json();
+        setContact({ contactType: d.contactType, contactValue: d.contactValue, customContactLabel: d.customContactLabel ?? null });
+        setContactState('ok');
+      })
+      .catch(() => { if (!cancel) setContactState('error'); });
+    return () => { cancel = true; };
+  }, [item.id]);
 
   useEffect(() => {
     viewTrackedRef.current = false;
@@ -220,16 +238,20 @@ export function ItemDetailView({ item }: { item: Item }) {
               </p>
             )}
 
-            {/* 联系方式 —— UX C10 直显(无 reveal 步骤),空值不渲染内容行 */}
+            {/* 联系方式 —— 展开即见的体验保留,数据挂载后经配额逐条取(Sprint 9A) */}
             <div className="bg-stone-50 border border-stone-200 rounded p-3 mb-4">
               <div className="text-xs text-stone-500 mb-1">{t('card.copyContact')}</div>
-              {item.contactValue && (
+              {contact ? (
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm md:text-base">
-                    {contactTypeLabel(item.contactType, item.customContactLabel, locale)}：
-                    <span className="font-mono text-stone-900 select-all ml-1">{item.contactValue}</span>
+                    {contactTypeLabel(contact.contactType, contact.customContactLabel, locale)}：
+                    <span className="font-mono text-stone-900 select-all ml-1">{contact.contactValue}</span>
                   </span>
-                  <CopyButton text={item.contactValue} />
+                  <CopyButton text={contact.contactValue} />
+                </div>
+              ) : (
+                <div className="text-sm text-stone-400">
+                  {contactState === 'loading' ? t('card.contactLoading') : contactState === 'limited' ? t('card.contactQuota') : t('card.contactError')}
                 </div>
               )}
             </div>
