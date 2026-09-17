@@ -12,9 +12,9 @@ concurrency:
 
 jobs:
   build:
-    name: typecheck · lint · build
+    name: typecheck · lint · test · build · e2e
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       # 让 prisma generate 不联网抓 schema 文档
       CHECKPOINT_DISABLE: '1'
@@ -52,8 +52,40 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Sprint 9F:单测进门禁(此前从未在 CI 跑过 vitest)
+      - name: Unit tests (vitest)
+        run: npm test
+
+      # Sprint 9F:两份 Prisma schema 字段级一致(雷区 §8.8:漏同步 = 生产掉列)
+      - name: Schema sync check (dev vs production)
+        run: npm run check:schema
+
       - name: Build
         run: npm run build
+
+      # Sprint 9F:e2e 冒烟进门禁。复用本 job 的 build 产物,用 next start 而不是 dev;
+      # 数据库是空的 SQLite(db push 建表),smoke 用例不依赖 seed 数据。
+      - name: Prisma db push (CI SQLite)
+        run: npx prisma db push --skip-generate
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E smoke (playwright)
+        run: npm run test:e2e
+        env:
+          CI: 'true'
+          PLAYWRIGHT_WEB_SERVER: start
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
 
   # 额外验证：production schema（PG）也能 generate 出来
   # 这一步只检查 schema 自身合法 + Prisma client 类型生成，不连真 DB
