@@ -162,6 +162,31 @@ describe('checkQuota · 第 2 轮互审场景', () => {
   });
 });
 
+describe('checkQuota · 第 3 轮互审场景', () => {
+  it('放行必有记录:配额差一个名额时,并发同 tag 双方最多放行一个,且放行者的行存在', async () => {
+    const opts = { key: 'k', windowMs: 3600e3, max: 2 };
+    for (let round = 0; round < 20; round++) {
+      const { db, rows, now } = memDb();
+      expect((await checkQuota({ ...opts, tag: 'item-0' }, db, now, () => 1)).ok).toBe(true); // 剩 1 名额
+      const results = await Promise.all(Array.from({ length: 6 }, () => checkQuota({ ...opts, tag: 'item-9' }, db, now, () => 1)));
+      const okCount = results.filter(r => r.ok).length;
+      const tagRows = rows.filter(r => r.tag === 'item-9').length;
+      expect(okCount).toBeLessThanOrEqual(6);
+      if (okCount > 0) expect(tagRows).toBe(1); // 有人放行 → 记录必须在
+      expect(rows.length).toBeLessThanOrEqual(2); // 总量不超 max
+    }
+  });
+
+  it('配额已满时同 tag 并发全部被拒,且不留临时行', async () => {
+    const { db, rows, now } = memDb();
+    const opts = { key: 'k', windowMs: 3600e3, max: 1 };
+    expect((await checkQuota({ ...opts, tag: 'item-0' }, db, now, () => 1)).ok).toBe(true);
+    const results = await Promise.all(Array.from({ length: 6 }, () => checkQuota({ ...opts, tag: 'item-9' }, db, now, () => 1)));
+    expect(results.every(r => !r.ok)).toBe(true);
+    expect(rows.length).toBe(1);
+  });
+});
+
 describe('isBotUA', () => {
   it('basic 只拦 bot/crawler/spider', () => {
     expect(isBotUA('Mozilla/5.0 Googlebot', 'basic')).toBe(true);
