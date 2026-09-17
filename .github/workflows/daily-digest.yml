@@ -1,0 +1,37 @@
+name: Daily Maintenance Digest
+
+# Sprint 9D:每天调一次摘要接口;只有越过阈值才会发邮件(接口内决定),正常日静默。
+on:
+  schedule:
+    - cron: '0 13 * * *'   # 13 UTC = 9 AM EDT / 8 AM EST
+  workflow_dispatch:
+    inputs:
+      thresholds:
+        description: '阈值查询串(0 = 关闭该项),例如 reports=1&hidden=0&scraperFails=3&backupDays=8&rejects=50'
+        required: false
+        default: ''
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call digest endpoint
+        env:
+          SECRET: ${{ secrets.DIGEST_SECRET }}
+          ENDPOINT: ${{ vars.DIGEST_ENDPOINT || 'https://blacksburg-secondhand-production.up.railway.app/api/admin/digest' }}
+          # 手动触发时的 inputs 优先,其次 repo Variables 里的 DIGEST_THRESHOLDS,再其次接口默认值
+          THRESHOLDS: ${{ github.event.inputs.thresholds || vars.DIGEST_THRESHOLDS || '' }}
+        run: |
+          if [ -z "$SECRET" ]; then echo "❌ DIGEST_SECRET 未配置"; exit 1; fi
+          url="$ENDPOINT?notify=1"
+          if [ -n "$THRESHOLDS" ]; then url="$url&$THRESHOLDS"; fi
+          echo "▶ GET ${url%%\?*}?notify=1&…"
+          response=$(curl -sS "$url" -H "Authorization: Bearer $SECRET" --max-time 120 -w "\n%{http_code}")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          echo "▶ HTTP $http_code"
+          echo "$body" | head -60
+          if [ "$http_code" != "200" ]; then echo "❌ digest 返回非 200"; exit 1; fi
+          alerts=$(echo "$body" | sed -n 's/.*"alerts":\[\(.*\)\],"sent".*/\1/p' | grep -c '"task"' || true)
+          echo "✅ 完成;告警数 ≈ $alerts(0 = 今天没发邮件)"

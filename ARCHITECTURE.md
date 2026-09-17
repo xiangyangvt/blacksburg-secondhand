@@ -37,7 +37,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 | 室友平台 | 页 `roommates/page.tsx` `listing/[id]`（仅 OG 后 redirect）；API `api/listings/**` `api/applications/**` `api/og/listing/[id]`；组件 `ListingCard` `ListingPostModal` `ListingApplyModal` `ListingFilterBar`…；lib `listingValidation` `listingMatch` `savedListings` | 同上 | `MyPostsPanel` |
 | 活动平台 + scraper | 页 `localnews/page.tsx` `localnews/event/[id]`；API `api/events/**` `api/my/events` `api/og/event/[id]`（edge）`api/scraper/run` `api/admin/cleanup-reddit`；组件 `EventCard` `EventPostModal` `EventCommentSection` `ContactSendModal` `LiveSection` `MyEventsPanel`…；lib `scraper/*`（源注册表 `scraper/index.ts`）`eventArchive` `eventDistance` `eventLocation` `eventNickname` `eventShareText` `savedEvents` | prisma · `llm.ts` | `scrape-events.yml` |
 | 身份与鉴权 | `lib/auth.ts`（magic-link session）· `lib/adminAuth.ts` · `lib/identity.ts`（客户端三键身份 facade）· `api/auth/**` · 组件 `SessionTopBar` `EditCodePrompt` | prisma · email | 所有需要编辑 / 删除 / 「我的」的路径 |
-| 邮件 | `lib/email.ts`（Resend 包装） | `RESEND_API_KEY` | 仅 `api/auth/magic-link/send`。**没有服务端主动通知** |
+| 邮件 / 出站通知 | `lib/email.ts`（Resend 包装）· `lib/digest.ts` + `api/admin/digest`（9D：摘要 + 阈值 + 告警邮件，`daily-digest.yml` 每日调） | `RESEND_API_KEY` `DIGEST_SECRET` `DIGEST_EMAIL_TO` | magic-link；维护告警（举报 / 隐藏 / scraper / 备份 / 披露被拒） |
 | 图床 | `lib/uploader.ts` · `api/upload` · `lib/cloudinary.ts` · `PendingCloudinaryDeletion` 延迟删除队列（由 items / listings 列表 GET 机会式触发） | Cloudinary env | 三个发布表单 |
 | LLM | `lib/llm.ts`：`llmCall` / `chat`（DeepSeek）· `embed`（OpenAI 兼容端点，**无调用方，为搜索预埋**） | env | scraper |
 | admin | `app/admin/page.tsx`（1329 行，server actions 内联）· `admin/recovery` · `api/recovery/**` | `adminAuth.isAdmin()` · `attemptAdminLogin()`（走 rateLimit） | — |
@@ -109,7 +109,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 | Embedding | `LLM_EMBED_*` | 无调用方 |
 | 源站 | — | 改版是最可能的静默失效点，只在 `ScrapeRun.errorMsg` 里可见 |
 | Railway | `DATABASE_URL` `NEXT_PUBLIC_SITE_URL` | 后者未设则硬编码回落到 railway 域名；`sleepApplication` 带来冷启动 |
-| Actions cron | secrets `DATABASE_URL` `SCRAPER_SECRET`，var `SCRAPER_ENDPOINT` | backup 写死 pg 18 全路径；artifact 90 天；60 天无 commit 即被禁用（靠 keepalive commit） |
+| Actions cron | secrets `DATABASE_URL` `SCRAPER_SECRET` `DIGEST_SECRET`，vars `SCRAPER_ENDPOINT` `DIGEST_ENDPOINT` `DIGEST_THRESHOLDS` | backup 写死 pg 18 全路径；artifact 90 天；60 天无 commit 即被禁用（靠 keepalive commit）；digest 每日 13 UTC，越阈值才发邮件 |
 
 ## 8. 不变量（改之前必须知道）
 

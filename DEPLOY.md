@@ -108,3 +108,10 @@ curl -X POST https://$YOUR_DOMAIN/api/admin/cleanup-reddit \
 Railway 变量里新增 `ADMIN_SESSION_SECRET`（随机 ≥16 字符，`openssl rand -base64 32`）。不配也能跑，但会话密钥退回由 `ADMIN_PASSWORD` 经 scrypt 派生并在日志打警告，拿到一个会话 cookie 的人可以离线猜密码。`ADMIN_PASSWORD` 轮换、删除或改回默认值都会让所有管理员会话立即失效。9E 上线后需要重新登录一次。
 
 按 IP 的限流取 `X-Forwarded-For` 的最后一段，即 Railway 边缘追加的那段。**不要在 Railway 前再套代理**（Cloudflare 等）：那样最后一段会变成代理 IP，所有用户共用一份额度（过严但不会被绕过）。合并后用 `GET /api/admin/whoami`（需管理员 cookie）核对 Railway 的 XFF 行为：带 `X-Forwarded-For: 1.2.3.4` 请求，返回的 `ip` 必须是你的真实出口 IP 而不是 1.2.3.4。
+
+## 每日维护摘要（Sprint 9D）
+
+- Railway 变量：`DIGEST_SECRET`（随机 ≥16 字符）、`DIGEST_EMAIL_TO`（收件邮箱）。`RESEND_API_KEY` 已有。
+- GitHub：Settings → Secrets 加同一个 `DIGEST_SECRET`；可选 Variables `DIGEST_THRESHOLDS`（如 `reports=1&scraperFails=3&backupDays=8&rejects=50`，0 = 关闭该项）。
+- 验证：Actions → Daily Maintenance Digest → Run workflow，inputs 填 `backupDays=1` 强制触发一封；正常阈值下应"告警数 0、不发邮件"。
+- 登录后台后也可直接打开 `/api/admin/digest` 看摘要 JSON（不带 `notify=1` 不发邮件）。
