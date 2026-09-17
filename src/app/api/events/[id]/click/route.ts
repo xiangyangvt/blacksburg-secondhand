@@ -7,11 +7,9 @@
 // Phase 2A: clickCount 用于计算 hot score,前端按梯度显示 🔥 icon
 
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { getVisitorId, isBotUA, setVisitorCookie } from '@/lib/rateLimit';
 
-const VID_COOKIE = 'hb_vid';
-const VID_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 const THROTTLE_MIN = 5;                  // 5 分钟内同 visitor 同 event 不重复计数
 
 export async function POST(
@@ -22,13 +20,11 @@ export async function POST(
   if (!eventId) return NextResponse.json({ ok: false }, { status: 400 });
 
   // bot 过滤 — 跟 pageview 同款
-  const ua = (req.headers.get('user-agent') ?? '').toLowerCase();
-  if (ua.includes('bot') || ua.includes('crawler') || ua.includes('spider') || ua.includes('preview') || ua.includes('headless')) {
+  if (isBotUA(req, 'full')) {
     return NextResponse.json({ ok: true, skipped: 'bot' });
   }
 
-  const existing = req.cookies.get(VID_COOKIE)?.value;
-  const visitorId = existing || randomUUID();
+  const { visitorId, isNew } = getVisitorId(req);
   const cutoff = new Date(Date.now() - THROTTLE_MIN * 60 * 1000);
 
   try {
@@ -43,7 +39,7 @@ export async function POST(
         select: { clickCount: true },
       });
       const res = NextResponse.json({ ok: true, throttled: true, clickCount: event?.clickCount ?? 0 });
-      if (!existing) setVisitorCookie(res, visitorId);
+      if (isNew) setVisitorCookie(res, visitorId);
       return res;
     }
 
@@ -62,7 +58,7 @@ export async function POST(
     });
 
     const res = NextResponse.json({ ok: true, counted: true, clickCount: event.clickCount });
-    if (!existing) setVisitorCookie(res, visitorId);
+    if (isNew) setVisitorCookie(res, visitorId);
     return res;
   } catch (e) {
     // event 不存在 / DB 故障 — 静默,client 不感知
@@ -70,12 +66,3 @@ export async function POST(
   }
 }
 
-function setVisitorCookie(res: NextResponse, visitorId: string) {
-  res.cookies.set(VID_COOKIE, visitorId, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: VID_MAX_AGE,
-    path: '/',
-  });
-}

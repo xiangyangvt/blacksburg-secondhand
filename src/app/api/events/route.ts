@@ -12,12 +12,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { getVisitorId, isBotUA, setVisitorCookie } from '@/lib/rateLimit';
 import { expireStaleEvents } from '@/lib/eventArchive';
 
 export const dynamic = 'force-dynamic';
 
-const VID_COOKIE = 'hb_vid';
-const VID_MAX_AGE = 60 * 60 * 24 * 365;
 const POST_PER_DAY_LIMIT = 3;
 // Phase 3A.1: 用户发布可选类别(新命名)
 // Phase 3B: 移除 'discussion' — Event 通用化后只保留组活动 / 求助场景
@@ -209,14 +208,12 @@ export async function POST(req: NextRequest) {
   }
 
   // bot UA 过滤
-  const ua = (req.headers.get('user-agent') ?? '').toLowerCase();
-  if (ua.includes('bot') || ua.includes('crawler') || ua.includes('spider')) {
+  if (isBotUA(req, 'basic')) {
     return NextResponse.json({ ok: true, skipped: 'bot' });
   }
 
   // visitorId
-  const existing = req.cookies.get(VID_COOKIE)?.value;
-  const visitorId = existing || randomUUID();
+  const { visitorId, isNew } = getVisitorId(req);
 
   // 防刷:同 visitor 每天 ≤ 3 条
   const dayAgo = new Date(Date.now() - 86400e3);
@@ -276,14 +273,6 @@ export async function POST(req: NextRequest) {
   const { posterCodeHash: _h, posterVisitorId: _v, ...safe } = event as any;
 
   const res = NextResponse.json({ ok: true, event: safe });
-  if (!existing) {
-    res.cookies.set(VID_COOKIE, visitorId, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: VID_MAX_AGE,
-      path: '/',
-    });
-  }
+  if (isNew) setVisitorCookie(res, visitorId);
   return res;
 }

@@ -396,3 +396,13 @@ model UserSession {
   @@index([sessionToken])
   @@index([email])
 }
+
+model RateLimitHit {
+  id        String   @id @default(cuid())
+  key       String
+  tag       String?
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+  @@index([createdAt])
+}

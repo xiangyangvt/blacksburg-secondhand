@@ -18,11 +18,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { readVisitorId } from '@/lib/rateLimit';
 
-const VID_COOKIE = 'hb_vid';
 
 export async function GET(req: NextRequest) {
-  const cookieVid = req.cookies.get(VID_COOKIE)?.value;
+  const cookieVid = readVisitorId(req);
   const url = new URL(req.url);
   const contact = url.searchParams.get('contact')?.trim() || '';
 
