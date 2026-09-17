@@ -14,6 +14,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
     { url: `${SITE_URL}/`,          lastModified: new Date(), changeFrequency: 'hourly',  priority: 1.0 },
     { url: `${SITE_URL}/roommates`, lastModified: new Date(), changeFrequency: 'hourly',  priority: 0.9 },
+    { url: `${SITE_URL}/privacy`,   lastModified: new Date('2026-09-17'), changeFrequency: 'yearly', priority: 0.2 },
+    { url: `${SITE_URL}/terms`,     lastModified: new Date('2026-09-17'), changeFrequency: 'yearly', priority: 0.2 },
   ];
 
   // 动态：所有 active item（/item/[id] 详情页 + 主页 ?focus=ID）

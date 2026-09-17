@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, PackageOpen, Construction } from 'lucide-react';
 import { ListingCard, type Listing } from '@/components/ListingCard';
+import { SiteFooter } from '@/components/SiteFooter';
 import { RecentListingStrip } from '@/components/RecentListingStrip';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
@@ -342,6 +343,7 @@ function RoommatesContent() {
 
       {/* 浮动回顶部按钮（滚动 >400px 才出现） */}
       <ScrollToTop />
+      <SiteFooter />
     </main>
   );
 }
