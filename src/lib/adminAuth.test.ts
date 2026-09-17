@@ -120,9 +120,7 @@ describe('getClientIpFromHeaders(Codex 9E 互审:XFF 取可信代理追加的最
     expect(getClientIpFromHeaders(new Headers({ 'x-real-ip': '198.51.100.1' }))).toBe('198.51.100.1');
     expect(getClientIpFromHeaders(new Headers())).toBe('unknown');
   });
-  it('TRUSTED_PROXY_HOPS=2 取倒数第二段', () => {
-    process.env.TRUSTED_PROXY_HOPS = '2';
-    expect(getClientIpFromHeaders(new Headers({ 'x-forwarded-for': 'a, b, c' }))).toBe('b');
-    delete process.env.TRUSTED_PROXY_HOPS;
+  it('多段一律取最后一段(不提供跳数配置)', () => {
+    expect(getClientIpFromHeaders(new Headers({ 'x-forwarded-for': 'a, b, c' }))).toBe('c');
   });
 });

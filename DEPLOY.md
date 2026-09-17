@@ -107,4 +107,4 @@ curl -X POST https://$YOUR_DOMAIN/api/admin/cleanup-reddit \
 
 Railway 变量里新增 `ADMIN_SESSION_SECRET`（随机 ≥16 字符，`openssl rand -base64 32`）。不配也能跑，但会话密钥退回由 `ADMIN_PASSWORD` 经 scrypt 派生并在日志打警告，拿到一个会话 cookie 的人可以离线猜密码。`ADMIN_PASSWORD` 轮换、删除或改回默认值都会让所有管理员会话立即失效。9E 上线后需要重新登录一次。
 
-若在 Railway 前再套一层代理（Cloudflare 等），把 `TRUSTED_PROXY_HOPS` 设为 2，否则按 IP 的限流会取到代理 IP。
+按 IP 的限流取 `X-Forwarded-For` 的最后一段，即 Railway 边缘追加的那段。**不要在 Railway 前再套代理**（Cloudflare 等）：那样最后一段会变成代理 IP，所有用户共用一份额度（过严但不会被绕过）。合并后用 `GET /api/admin/whoami`（需管理员 cookie）核对 Railway 的 XFF 行为：带 `X-Forwarded-For: 1.2.3.4` 请求，返回的 `ip` 必须是你的真实出口 IP 而不是 1.2.3.4。
