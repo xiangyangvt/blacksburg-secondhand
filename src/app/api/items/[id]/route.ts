@@ -8,6 +8,7 @@ import {
   parsePhotoUrls,
 } from '@/lib/utils';
 import { schedulePendingCloudinaryDeletion } from '@/lib/uploader';
+import { scheduleEmbed, scheduleRemove, needsReembed } from '@/lib/search/indexer';
 
 const VALID_CATEGORIES = CATEGORIES.map(c => c.id);
 const VALID_CONTACT_TYPES = CONTACT_TYPES.map(c => c.id);
@@ -78,6 +79,9 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
 
   await prisma.item.update({ where: { id }, data });
 
+  // Sprint 10A:标题 / 描述 / 类目 / 标签 / 类型变了才重算向量;改价格 / 联系方式不重算
+  if (needsReembed('item', updates)) scheduleEmbed('item', id);
+
   // 编辑时如果替换了图，把被丢弃的 Cloudinary 图清掉（节省额度）
   if (updates.photoUrls !== undefined) {
     const oldUrls = parsePhotoUrls(item.photoUrls);
@@ -107,6 +111,7 @@ export async function DELETE(req: NextRequest, ctx: { params: { id: string } }) 
 
   // 软删
   await prisma.item.update({ where: { id }, data: { status: 'deleted' } });
+  scheduleRemove('item', id);
 
   // 延迟 24h 清掉 Cloudinary 图床上的图（防止卖家手滑误删后图也丢了）；本地 /uploads/ 的图保留
   // 真正 destroy 由 processOverduePendingDeletions 在后续 GET 时机会式触发

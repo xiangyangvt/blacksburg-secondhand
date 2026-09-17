@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { validateListingFields, normalizeListingFields } from '@/lib/listingValidation';
 import { schedulePendingCloudinaryDeletion } from '@/lib/uploader';
+import { scheduleEmbed, scheduleRemove, needsReembed } from '@/lib/search/indexer';
 
 export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
   const { id } = ctx.params;
@@ -47,6 +48,9 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
 
   await prisma.listing.update({ where: { id }, data });
 
+  // Sprint 10A:实质性字段(标题 / 描述 / 类型 / 区域 / 预算 / 户型)变了才重算向量
+  if (needsReembed('listing', updates)) scheduleEmbed('listing', id);
+
   // 换图 → 旧图入 24h 待删队列
   if (updates.photoUrls !== undefined) {
     const oldUrls = parseJsonArray(listing.photoUrls);
@@ -71,6 +75,7 @@ export async function DELETE(req: NextRequest, ctx: { params: { id: string } }) 
   if (!ok) return err('密码错误', 401);
 
   await prisma.listing.update({ where: { id }, data: { status: 'deleted' } });
+  scheduleRemove('listing', id);
 
   // 软删时把图入 24h 待删队列；本地 /uploads/ 不动
   const urls = parseJsonArray(listing.photoUrls);

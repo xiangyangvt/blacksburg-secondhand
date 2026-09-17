@@ -4,6 +4,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { translateToChineseSummary } from '@/lib/llm';
+import { scheduleEmbed } from '@/lib/search/indexer';
 import type { SourceDefinition, RawEvent, ScrapeResult } from './types';
 
 export async function runScraper(def: SourceDefinition): Promise<ScrapeResult> {
@@ -91,9 +92,16 @@ export async function runScraper(def: SourceDefinition): Promise<ScrapeResult> {
           data: { ...data, scrapedAt: new Date() }, // bump scrapedAt 标识最近一次更新
         });
         itemsUpdated++;
+        // Sprint 10A:每天都 update 一遍,只有文本字段真变了(或从没算过)才重算向量
+        const textChanged =
+          existing.title !== data.title || existing.description !== data.description ||
+          existing.location !== data.location || existing.category !== data.category ||
+          (existing.startAt?.getTime() ?? null) !== (data.startAt?.getTime() ?? null);
+        if (textChanged || !existing.embeddedAt) scheduleEmbed('event', existing.id);
       } else {
-        await prisma.event.create({ data });
+        const created = await prisma.event.create({ data, select: { id: true } });
         itemsNew++;
+        scheduleEmbed('event', created.id);
       }
     } catch {
       // 单条出错(数据格式不对等),静默跳过

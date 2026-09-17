@@ -35,6 +35,9 @@
 | `LLM_API_KEY` | ✓ | DeepSeek API key |
 | `LLM_CHAT_MODEL` | ✓ | 默认 `deepseek-chat` |
 | `LLM_UTILITY_MODEL` | ✓ | 默认 `deepseek-chat`（HTML 抽取 + 翻译） |
+| `LLM_EMBED_API_KEY` | 可选 | OpenAI key（Sprint 10 语义搜索的 embedding）；不配则发帖不算向量、搜索只有关键词层 |
+| `LLM_EMBED_MODEL` | 可选 | 默认 `text-embedding-3-small`（1536 维，与 pgvector 列绑定，别随手换） |
+| `SEARCH_AI_ENABLED` | 可选 | 默认 `false`。语义搜索 / AI 助手总开关（10B 起生效） |
 | `NEXT_PUBLIC_SITE_URL` | ✓ | 站点公开 URL（magic-link 邮件 + OG 卡片用），如 `https://blacksburg-secondhand-production.up.railway.app` |
 | `RESEND_API_KEY` | 可选 | 配了才启用 magic-link 邮箱登录；不配 prod 返 503 |
 | `EMAIL_FROM_ADDRESS` | 可选 | 默认 `onboarding@resend.dev`，自有域名后改 `noreply@$DOMAIN` |
@@ -63,6 +66,27 @@ curl -X POST https://$YOUR_DOMAIN/api/admin/cleanup-reddit \
 ```
 
 清完后这个 endpoint 仍保留（下个 sprint 可清理代码）。
+
+---
+
+## 语义搜索：pgvector 与 embedding 回填（Sprint 10A）
+
+- Railway 的 Postgres 模板镜像 `postgres-ssl:18` 自带 pgvector（镜像 Dockerfile 装了 `postgresql-18-pgvector`），
+  `schema.production.prisma` 的 `extensions = [vector]` 让 preDeploy 的 `db push` 自动 `CREATE EXTENSION IF NOT EXISTS vector`。
+- HNSW 索引 Prisma 不能声明，由 `src/lib/search/vectorStore.ts` 在每个进程首次用到某张表时 `CREATE INDEX IF NOT EXISTS`；
+  就算 `db push` 把它当 drift 删了，下次访问会重建（几百行数据毫秒级）。
+- 部署后核对 + 回填（需先登录 `/admin` 拿到 `hb_admin` cookie）：
+
+```bash
+# 1. 探针:后端 / key / 各类型待回填数 / vector 扩展与 HNSW 索引是否存在
+curl https://$YOUR_DOMAIN/api/admin/backfill-embeddings -H "Cookie: hb_admin=$HB_ADMIN"
+# 2. 回填:每次最多 10 批 × 50 条 / 类型;返回 done=false 就再来一次
+curl -X POST https://$YOUR_DOMAIN/api/admin/backfill-embeddings -H "Cookie: hb_admin=$HB_ADMIN" \
+  -H 'content-type: application/json' -d '{"maxBatches":10}'
+```
+
+- 本地 SQLite 没有 vector 类型，向量存 `embeddingJson` 文本列，JS 端算余弦；本地回填用 `npm run backfill:embeddings`。
+- 费用：text-embedding-3-small 每百万 token 0.02 美元，全站几百条帖子回填一次不到 1 美分。
 
 ---
 

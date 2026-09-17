@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { scheduleEmbed } from '@/lib/search/indexer';
 import { getClientIp, serializePhotoUrls } from '@/lib/utils';
 import { validateItemFields } from '@/lib/itemValidation';
 
@@ -70,6 +71,9 @@ export async function POST(req: NextRequest) {
       })
     )
   );
+
+  // Sprint 10A:草稿也建向量,发布时不必再算
+  for (const c of created) scheduleEmbed('item', c.id);
 
   return NextResponse.json({
     success: true,

@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { getClientIp, LISTING_TYPES, LISTING_GENDERS } from '@/lib/utils';
 import { validateListingFields, normalizeListingFields } from '@/lib/listingValidation';
 import { processOverduePendingDeletions } from '@/lib/uploader';
+import { scheduleEmbed } from '@/lib/search/indexer';
 
 const VALID_TYPES = LISTING_TYPES.map(t => t.id) as string[];
 const VALID_GENDERS = LISTING_GENDERS as readonly string[];
@@ -162,6 +163,8 @@ export async function POST(req: NextRequest) {
       utmSource: cleanedUtm,
     },
   });
+
+  scheduleEmbed('listing', listing.id); // Sprint 10A
 
   return NextResponse.json({ id: listing.id, status: listing.status, success: true });
 }

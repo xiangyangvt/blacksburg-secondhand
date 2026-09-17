@@ -9,6 +9,7 @@ import {
 } from '@/lib/utils';
 import { validateItemFields } from '@/lib/itemValidation';
 import { processOverduePendingDeletions } from '@/lib/uploader';
+import { scheduleEmbed } from '@/lib/search/indexer';
 
 const VALID_CATEGORIES = CATEGORIES.map(c => c.id);
 
@@ -157,6 +158,9 @@ export async function POST(req: NextRequest) {
       utmSource: cleanedUtm,
     },
   });
+
+  // Sprint 10A:写库成功后异步 embedding(失败不影响发布,留待回填)
+  scheduleEmbed('item', item.id);
 
   return NextResponse.json({
     id: item.id,

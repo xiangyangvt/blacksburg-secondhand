@@ -14,6 +14,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getVisitorId, isBotUA, setVisitorCookie } from '@/lib/rateLimit';
 import { expireStaleEvents } from '@/lib/eventArchive';
+import { scheduleEmbed } from '@/lib/search/indexer';
 
 export const dynamic = 'force-dynamic';
 
@@ -273,6 +274,8 @@ export async function POST(req: NextRequest) {
       maxAttendees,
     },
   });
+
+  scheduleEmbed('event', event.id); // Sprint 10A
 
   // 不暴露 posterCodeHash / posterVisitorId 给客户端
   const { posterCodeHash: _h, posterVisitorId: _v, ...safe } = event as any;

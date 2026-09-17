@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { scheduleRemove } from '@/lib/search/indexer';
 import { getClientIp } from '@/lib/utils';
 
 const HIDE_THRESHOLD = 3; // 累计 3 个不同 IP 举报自动隐藏
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
   if (targetType === 'item') {
     if (await countByIp({ itemId: targetId }) >= HIDE_THRESHOLD) {
       await prisma.item.update({ where: { id: targetId }, data: { status: 'hidden' } });
+      scheduleRemove('item', targetId); // Sprint 10A:下架即清向量
     }
   } else if (targetType === 'inquiry') {
     if (await countByIp({ inquiryId: targetId }) >= HIDE_THRESHOLD) {
@@ -54,6 +56,7 @@ export async function POST(req: NextRequest) {
   } else if (targetType === 'listing') {
     if (await countByIp({ listingId: targetId }) >= HIDE_THRESHOLD) {
       await prisma.listing.update({ where: { id: targetId }, data: { status: 'hidden' } });
+      scheduleRemove('listing', targetId);
     }
   } else if (targetType === 'event') {
     // Phase 3C: 按 reason 前缀 [event:xxx] 匹配,count distinct IP
@@ -63,6 +66,7 @@ export async function POST(req: NextRequest) {
     });
     if (eventCount >= HIDE_THRESHOLD) {
       await prisma.event.update({ where: { id: targetId }, data: { status: 'hidden' } });
+      scheduleRemove('event', targetId);
     }
   }
   // application 暂不做自动隐藏 —— A 自己也能 reject + 我的发布里能删

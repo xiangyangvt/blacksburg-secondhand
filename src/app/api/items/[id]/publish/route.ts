@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getClientIp } from '@/lib/utils';
+import { scheduleEmbed } from '@/lib/search/indexer';
 
 export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
   const { id } = ctx.params;
@@ -40,6 +41,8 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
     where: { id },
     data: { status: 'active', bumpedAt: new Date() },
   });
+  // Sprint 10A:草稿期若没算过向量(比如当时 key 未配),这里补
+  if (!item.embeddedAt) scheduleEmbed('item', id);
 
   return NextResponse.json({ success: true });
 }

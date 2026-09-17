@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getClientIp } from '@/lib/utils';
+import { scheduleEmbed } from '@/lib/search/indexer';
 
 export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
   const { id } = ctx.params;
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
     where: { id },
     data: { status: 'active', bumpedAt: new Date() },
   });
+  if (!listing.embeddedAt) scheduleEmbed('listing', id); // Sprint 10A
 
   return NextResponse.json({ success: true });
 }
