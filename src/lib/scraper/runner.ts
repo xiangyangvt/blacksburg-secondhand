@@ -4,7 +4,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { translateToChineseSummary } from '@/lib/llm';
-import { scheduleEmbed } from '@/lib/search/indexer';
+import { scheduleEmbed, substantiveChanged } from '@/lib/search/indexer';
 import type { SourceDefinition, RawEvent, ScrapeResult } from './types';
 
 export async function runScraper(def: SourceDefinition): Promise<ScrapeResult> {
@@ -87,16 +87,13 @@ export async function runScraper(def: SourceDefinition): Promise<ScrapeResult> {
       };
 
       if (existing) {
+        // Sprint 10A:每天都 update 一遍,只有文本字段真变了(或从没算过)才重算向量;变了就把 embeddedAt 置空让回填兜底
+        const textChanged = substantiveChanged('event', existing, data);
         await prisma.event.update({
           where: { id: existing.id },
-          data: { ...data, scrapedAt: new Date() }, // bump scrapedAt 标识最近一次更新
+          data: { ...data, scrapedAt: new Date(), ...(textChanged ? { embeddedAt: null } : {}) }, // bump scrapedAt 标识最近一次更新
         });
         itemsUpdated++;
-        // Sprint 10A:每天都 update 一遍,只有文本字段真变了(或从没算过)才重算向量
-        const textChanged =
-          existing.title !== data.title || existing.description !== data.description ||
-          existing.location !== data.location || existing.category !== data.category ||
-          (existing.startAt?.getTime() ?? null) !== (data.startAt?.getTime() ?? null);
         if (textChanged || !existing.embeddedAt) scheduleEmbed('event', existing.id);
       } else {
         const created = await prisma.event.create({ data, select: { id: true } });

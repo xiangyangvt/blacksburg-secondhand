@@ -73,14 +73,14 @@ curl -X POST https://$YOUR_DOMAIN/api/admin/cleanup-reddit \
 
 - Railway 的 Postgres 模板镜像 `postgres-ssl:18` 自带 pgvector（镜像 Dockerfile 装了 `postgresql-18-pgvector`），
   `schema.production.prisma` 的 `extensions = [vector]` 让 preDeploy 的 `db push` 自动 `CREATE EXTENSION IF NOT EXISTS vector`。
-- HNSW 索引 Prisma 不能声明，由 `src/lib/search/vectorStore.ts` 在每个进程首次用到某张表时 `CREATE INDEX IF NOT EXISTS`；
-  就算 `db push` 把它当 drift 删了，下次访问会重建（几百行数据毫秒级）。
+- HNSW 索引 Prisma 不能声明，由 `src/lib/search/vectorStore.ts` 用 `CREATE INDEX CONCURRENTLY IF NOT EXISTS` 幂等建，
+  只在下面的探针 GET 与回填路径触发（发布请求不跑 DDL）；就算 `db push` 把它当 drift 删了，下次探针 / 回填会重建。
 - 部署后核对 + 回填（需先登录 `/admin` 拿到 `hb_admin` cookie）：
 
 ```bash
 # 1. 探针:后端 / key / 各类型待回填数 / vector 扩展与 HNSW 索引是否存在
 curl https://$YOUR_DOMAIN/api/admin/backfill-embeddings -H "Cookie: hb_admin=$HB_ADMIN"
-# 2. 回填:每次最多 10 批 × 50 条 / 类型;返回 done=false 就再来一次
+# 2. 回填:每次最多 10 批 × 50 条 / 类型、整体 60 秒截止;返回 done=false 就再来一次
 curl -X POST https://$YOUR_DOMAIN/api/admin/backfill-embeddings -H "Cookie: hb_admin=$HB_ADMIN" \
   -H 'content-type: application/json' -d '{"maxBatches":10}'
 ```

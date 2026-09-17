@@ -132,8 +132,9 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 - 超 400 行文件 17 个，最大：`MyPostsPanel.tsx` 1511 · `admin/page.tsx` 1329 · `MyEventsPanel.tsx` 1136 · `ListingPostModal.tsx` 856 · `EventCard.tsx` 792。AI 在这些文件里出错率最高，改动前先读整段上下文。
 - 死代码：`components/PlatformSwitcher.tsx`（文件头 TODO 标删）、`scripts/migrate-housing-to-listings.ts`（废弃占位）。
 - 权宜实现：event 举报用 `reason` 前缀 `[event:<id>]` 匹配（无外键）；`listingMatch.ts` v1 仅 2 维。
-- HNSW 索引不在 Prisma schema 里（索引类型不支持），靠 `vectorStore.ts` 运行时 `CREATE INDEX IF NOT EXISTS`；preDeploy 的 `db push` 是否会把它当 drift 删掉未实测，删了也只是下次访问重建。
+- HNSW 索引不在 Prisma schema 里（索引类型不支持），由 `vectorStore.ensureIndex` 用 `CREATE INDEX CONCURRENTLY IF NOT EXISTS` 幂等建，**只在回填脚本与 admin 探针路径调用，发布请求路径不跑 DDL**；preDeploy 的 `db push` 是否会把它当 drift 删掉未实测，删了下次回填重建。当前 `nearest` 用 `OFFSET 0` 栅栏强制"先过滤后精确排序"，不走 HNSW 近似（候选集小时 HNSW 会漏结果），索引留给以后的全局查询。
 - `vectorStore.nearest` 的过滤是"调用方先用 Prisma where 查出候选 id 再传入"，不是 spec 里的 `filterSql`；两个后端共用一份过滤逻辑，代价是候选 id 列表随数据量线性增长（几百行无感，上万行再改）。
+- 向量生命周期规则：只为 `active` / `draft` 行维护（`upsert` 自带 status 守卫）；删除与举报隐藏清向量，admin 恢复补向量；`fulfilled` / `canceled` / `expired` 不清，靠查询侧 status 过滤。实质性编辑在同一条 update 里把 `embeddedAt` 置空，embed 失败由回填捞回；embed 是异步的，写回前会重读文本与状态，变了就丢弃这次结果（乱序 / 删后写回防线）。
 - dev / SQLite 的 `embeddingJson` 靠 `lib/prisma.ts` 的全局 `omit`（`omitApi` preview）挡在默认 select 之外，否则任何 `...row` spread 的响应都会带出 30KB 向量；omit 按 `DATABASE_URL` 分支（Postgres 没这列，omit 不存在的字段会报错）。显式 `select` 可越过 omit，这是 `JsonVectorStore` 读向量的方式。
 
 ## 10. 测试与门禁现状

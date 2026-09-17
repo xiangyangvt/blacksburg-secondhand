@@ -37,9 +37,15 @@ describe('后端选择', () => {
 });
 
 function memJsonDb() {
-  const rows = new Map<string, { embeddingJson: string | null; embeddedAt: Date | null }>();
+  const rows = new Map<string, { embeddingJson: string | null; embeddedAt: Date | null; status: string }>();
+  const blank = { embeddingJson: null, embeddedAt: null, status: 'active' };
   const delegate = {
-    async update({ where, data }: any) { rows.set(where.id, { ...(rows.get(where.id) ?? { embeddingJson: null, embeddedAt: null }), ...data }); },
+    async update({ where, data }: any) { rows.set(where.id, { ...(rows.get(where.id) ?? blank), ...data }); },
+    async updateMany({ where, data }: any) {
+      const r = rows.get(where.id) ?? blank;
+      if (!where.status.in.includes(r.status)) return { count: 0 };
+      rows.set(where.id, { ...r, ...data }); return { count: 1 };
+    },
     async findMany({ where }: any) {
       return [...rows.entries()]
         .filter(([id, r]) => where.id.in.includes(id) && r.embeddingJson !== null)
@@ -75,13 +81,27 @@ describe('JsonVectorStore', () => {
     expect(await s.nearest('item', unit(0), { ids: [] }, 10)).toEqual([]);
 
     await s.remove('item', 'a');
-    expect(rows.get('a')).toEqual({ embeddingJson: null, embeddedAt: null });
+    expect(rows.get('a')).toMatchObject({ embeddingJson: null, embeddedAt: null });
+  });
+
+  it('upsert 的 status 守卫:已删除 / 隐藏的行不写(乱序防线)', async () => {
+    const { db, rows } = memJsonDb();
+    rows.set('gone', { embeddingJson: null, embeddedAt: null, status: 'deleted' });
+    rows.set('hid', { embeddingJson: null, embeddedAt: null, status: 'hidden' });
+    rows.set('draft', { embeddingJson: null, embeddedAt: null, status: 'draft' });
+    const s = new JsonVectorStore(db);
+    await s.upsert('item', 'gone', unit(0));
+    await s.upsert('item', 'hid', unit(0));
+    await s.upsert('item', 'draft', unit(0));
+    expect(rows.get('gone')!.embeddingJson).toBeNull();
+    expect(rows.get('hid')!.embeddingJson).toBeNull();
+    expect(rows.get('draft')!.embeddingJson).not.toBeNull();
   });
 
   it('坏 JSON / 错维度的行被跳过', async () => {
     const { db, rows } = memJsonDb();
-    rows.set('bad', { embeddingJson: '{oops', embeddedAt: new Date() });
-    rows.set('short', { embeddingJson: '[1,2,3]', embeddedAt: new Date() });
+    rows.set('bad', { embeddingJson: '{oops', embeddedAt: new Date(), status: 'active' });
+    rows.set('short', { embeddingJson: '[1,2,3]', embeddedAt: new Date(), status: 'active' });
     const s = new JsonVectorStore(db);
     expect(await s.nearest('item', unit(0), { ids: ['bad', 'short'] }, 10)).toEqual([]);
   });
@@ -105,14 +125,16 @@ describe('PgVectorStore(SQL 层)', () => {
     return { db, calls };
   }
 
-  it('首次使用先幂等建 HNSW 索引,之后不再建', async () => {
+  it('请求路径(upsert / nearest)不跑 DDL;ensureIndex 用 CONCURRENTLY 幂等建,并发共用一次', async () => {
     const { db, calls } = fakeRaw();
     const s = new PgVectorStore(db);
     await s.upsert('item', 'a', unit(0));
-    await s.upsert('item', 'b', unit(1));
-    const idx = calls.filter(c => c.sql.includes('CREATE INDEX IF NOT EXISTS'));
-    expect(idx).toHaveLength(1);
-    expect(idx[0]!.sql).toContain('"Item_embedding_hnsw" ON "Item" USING hnsw (embedding vector_cosine_ops)');
+    await s.nearest('item', unit(0), { ids: ['a'] }, 1);
+    expect(calls.some(c => c.sql.includes('CREATE INDEX'))).toBe(false);
+    await Promise.all([s.ensureIndex('item'), s.ensureIndex('item'), s.ensureIndex('listing')]);
+    const idx = calls.filter(c => c.sql.includes('CREATE INDEX'));
+    expect(idx).toHaveLength(2);
+    expect(idx[0]!.sql).toContain('CREATE INDEX CONCURRENTLY IF NOT EXISTS "Item_embedding_hnsw" ON "Item" USING hnsw (embedding vector_cosine_ops)');
   });
 
   it('upsert / remove / nearest 的 SQL 形状与参数', async () => {
@@ -122,7 +144,9 @@ describe('PgVectorStore(SQL 层)', () => {
     const up = calls.find(c => c.sql.startsWith('UPDATE "Listing" SET embedding = $1::vector'))!;
     expect(up.params[0]).toBe(toVectorLiteral(unit(2)));
     expect(up.params[1]).toBe('L1');
+    expect(up.params[2]).toEqual(['active', 'draft']); // status 守卫
     expect(up.sql).toContain('"embeddedAt" = now()');
+    expect(up.sql).toContain('AND status = ANY($3::text[])');
 
     await s.remove('event', 'E1');
     const rm = calls.find(c => c.sql.includes('SET embedding = NULL, "embeddedAt" = NULL'))!;
@@ -130,23 +154,25 @@ describe('PgVectorStore(SQL 层)', () => {
     expect(rm.params).toEqual(['E1']);
 
     const hits = await s.nearest('item', unit(0), { ids: ['a', 'b'] }, 5);
-    const q = calls.find(c => c.sql.includes('1 - (embedding <=> $1::vector) AS similarity'))!;
+    const q = calls.find(c => c.sql.includes('1 - dist AS similarity'))!;
     expect(q.sql).toContain('FROM "Item"');
     expect(q.sql).toContain('id = ANY($2::text[])');
-    expect(q.sql).toContain('ORDER BY embedding <=> $1::vector');
+    expect(q.sql).toContain('embedding <=> $1::vector AS dist');
+    expect(q.sql).toMatch(/OFFSET 0\) s\s+ORDER BY dist ASC/); // 优化栅栏:先过滤后精确排序,不走 HNSW 近似
     expect(q.params).toEqual([toVectorLiteral(unit(0)), ['a', 'b'], 5]);
     expect(hits).toEqual([{ id: 'a', similarity: 0.91 }, { id: 'b', similarity: 0.2 }]);
   });
 
-  it('索引创建失败只 warn,不阻断写入', async () => {
-    const calls: string[] = [];
+  it('索引创建失败只 warn 不抛,且下次可重试', async () => {
+    let n = 0;
     const db: RawDb = {
-      async $executeRawUnsafe(sql) { calls.push(sql); if (sql.includes('CREATE INDEX')) throw new Error('no hnsw'); return 1; },
+      async $executeRawUnsafe(sql) { if (sql.includes('CREATE INDEX') && n++ === 0) throw new Error('no hnsw'); return 1; },
       async $queryRawUnsafe() { return [] as any; },
     };
     const s = new PgVectorStore(db);
-    await expect(s.upsert('item', 'a', unit(0))).resolves.toBeUndefined();
-    expect(calls.some(c => c.startsWith('UPDATE "Item"'))).toBe(true);
+    await expect(s.ensureIndex('item')).resolves.toBeUndefined();
+    await expect(s.ensureIndex('item')).resolves.toBeUndefined();
+    expect(n).toBe(2);
   });
 
   it('向量字面量格式与 NaN 拒绝', async () => {

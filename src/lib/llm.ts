@@ -23,6 +23,10 @@ const chatClient = new OpenAI({
 const embedClient = new OpenAI({
   baseURL: process.env.LLM_EMBED_BASE_URL ?? 'https://api.openai.com/v1',
   apiKey: process.env.LLM_EMBED_API_KEY ?? '',
+  // SDK 默认 10 分钟超时 + 2 次重试,一批 embedding 最坏能等半小时;发帖路径是 fire-and-forget 无所谓,
+  // 但 admin 回填接口会撞 Railway 的无数据传输超时(Codex 互审 #6)。单批 ≤ 50 条,30s 足够。
+  timeout: 30_000,
+  maxRetries: 1,
 });
 
 const CHAT_MODEL    = process.env.LLM_CHAT_MODEL    ?? 'deepseek-v4-pro';

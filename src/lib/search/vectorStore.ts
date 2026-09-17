@@ -27,12 +27,18 @@ export interface NearestFilter {
 
 export interface VectorStore {
   readonly backend: 'pgvector' | 'json';
+  /** 只对仍可检索(status ∈ SEARCHABLE_STATUSES)的行写入;行已删除 / 隐藏则静默不写(乱序防线,互审 #1) */
   upsert(kind: EmbedKind, id: string, vector: number[]): Promise<void>;
   remove(kind: EmbedKind, id: string): Promise<void>;
   nearest(kind: EmbedKind, vector: number[], filter: NearestFilter, k: number): Promise<NearestHit[]>;
+  /** 可选:建索引等一次性维护,只在回填 / admin 路径调,不在请求路径调 DDL(互审 #3) */
+  ensureIndex?(kind: EmbedKind): Promise<void>;
 }
 
 export const TABLE: Record<EmbedKind, string> = { item: 'Item', listing: 'Listing', event: 'Event' };
+
+/** 向量只为这些状态的行维护;其余状态靠查询侧的 status 过滤,不必逐个清 */
+export const SEARCHABLE_STATUSES = ['active', 'draft'] as const;
 
 export function isPostgresUrl(url: string | undefined = process.env.DATABASE_URL): boolean {
   return /^postgres(ql)?:/i.test(url ?? '');
@@ -70,34 +76,36 @@ export interface RawDb {
 
 export class PgVectorStore implements VectorStore {
   readonly backend = 'pgvector' as const;
-  private indexed = new Set<EmbedKind>();
+  private indexing = new Map<EmbedKind, Promise<void>>();
 
   constructor(private db: RawDb = prisma as unknown as RawDb) {}
 
   /**
-   * HNSW 索引 Prisma schema 不能声明(索引类型不在其枚举里),这里首次使用时幂等创建。
-   * 若 preDeploy 的 db push 把它当 drift 删掉,下次进程首次用到时会再建;几百行数据建索引是毫秒级。
-   * 失败只 warn:没有索引 pgvector 退化为顺序扫描,结果一样,只是慢。
+   * HNSW 索引 Prisma schema 不能声明(索引类型不在其枚举里),这里幂等创建。
+   * 只由回填脚本 / admin 接口调用,**不在发布请求路径里跑 DDL**;用 CONCURRENTLY 不阻塞同表写入(互审 #3)。
+   * 并发调用共用一个进行中的 Promise。失败只 warn:没有索引 pgvector 退化为顺序扫描,结果一样,只是慢。
+   * 若 preDeploy 的 db push 把它当 drift 删掉,下次回填会再建;几百行数据建索引是毫秒级。
    */
-  async ensureIndex(kind: EmbedKind): Promise<void> {
-    if (this.indexed.has(kind)) return;
-    const t = TABLE[kind];
-    try {
-      await this.db.$executeRawUnsafe(
-        `CREATE INDEX IF NOT EXISTS "${t}_embedding_hnsw" ON "${t}" USING hnsw (embedding vector_cosine_ops)`,
-      );
-    } catch (e) {
-      console.warn(`[vectorStore] ${t} HNSW 索引创建失败(继续,无索引也能查):`, (e as Error)?.message ?? e);
+  ensureIndex(kind: EmbedKind): Promise<void> {
+    let p = this.indexing.get(kind);
+    if (!p) {
+      const t = TABLE[kind];
+      p = this.db.$executeRawUnsafe(
+        `CREATE INDEX CONCURRENTLY IF NOT EXISTS "${t}_embedding_hnsw" ON "${t}" USING hnsw (embedding vector_cosine_ops)`,
+      ).then(() => undefined, (e: unknown) => {
+        console.warn(`[vectorStore] ${t} HNSW 索引创建失败(继续,无索引也能查):`, (e as Error)?.message ?? e);
+        this.indexing.delete(kind); // 下次再试
+      });
+      this.indexing.set(kind, p);
     }
-    this.indexed.add(kind);
+    return p;
   }
 
   async upsert(kind: EmbedKind, id: string, vector: number[]): Promise<void> {
     assertDim(vector);
-    await this.ensureIndex(kind);
     await this.db.$executeRawUnsafe(
-      `UPDATE "${TABLE[kind]}" SET embedding = $1::vector, "embeddedAt" = now() WHERE id = $2`,
-      toVectorLiteral(vector), id,
+      `UPDATE "${TABLE[kind]}" SET embedding = $1::vector, "embeddedAt" = now() WHERE id = $2 AND status = ANY($3::text[])`,
+      toVectorLiteral(vector), id, [...SEARCHABLE_STATUSES],
     );
   }
 
@@ -108,15 +116,21 @@ export class PgVectorStore implements VectorStore {
     );
   }
 
+  /**
+   * 先过滤后精确排序。内层子查询带 OFFSET 0 作优化栅栏,阻止规划器把它拉平后改走 HNSW 近似扫描——
+   * HNSW 是"先取近邻再过滤",候选集合小的时候会漏结果甚至返回 0 条(互审 #7,pgvector 文档 Filtering 一节)。
+   * 候选几百行时顺序算距离是微秒级;HNSW 索引留给以后无候选过滤的全局查询用。
+   */
   async nearest(kind: EmbedKind, vector: number[], filter: NearestFilter, k: number): Promise<NearestHit[]> {
     if (filter.ids.length === 0 || k <= 0) return [];
     assertDim(vector);
-    await this.ensureIndex(kind);
     const rows = await this.db.$queryRawUnsafe<{ id: string; similarity: number | string }[]>(
-      `SELECT id, 1 - (embedding <=> $1::vector) AS similarity
-         FROM "${TABLE[kind]}"
-        WHERE embedding IS NOT NULL AND id = ANY($2::text[])
-        ORDER BY embedding <=> $1::vector
+      `SELECT id, 1 - dist AS similarity
+         FROM (SELECT id, embedding <=> $1::vector AS dist
+                 FROM "${TABLE[kind]}"
+                WHERE embedding IS NOT NULL AND id = ANY($2::text[])
+               OFFSET 0) s
+        ORDER BY dist ASC
         LIMIT $3`,
       toVectorLiteral(vector), [...filter.ids], k,
     );
@@ -131,6 +145,7 @@ interface JsonRow { id: string; embeddingJson: string | null }
 /** 只用到三个 delegate 的两个方法;prod 客户端没有 embeddingJson 字段,所以经 unknown 强转,不直接依赖生成类型 */
 export interface JsonVectorDelegate {
   update(args: { where: { id: string }; data: { embeddingJson: string | null; embeddedAt: Date | null } }): Promise<unknown>;
+  updateMany(args: { where: { id: string; status: { in: string[] } }; data: { embeddingJson: string | null; embeddedAt: Date | null } }): Promise<unknown>;
   findMany(args: { where: { id: { in: string[] }; embeddingJson: { not: null } }; select: { id: true; embeddingJson: true } }): Promise<JsonRow[]>;
 }
 export type JsonVectorDb = Record<EmbedKind, JsonVectorDelegate>;
@@ -145,7 +160,10 @@ export class JsonVectorStore implements VectorStore {
 
   async upsert(kind: EmbedKind, id: string, vector: number[]): Promise<void> {
     assertDim(vector);
-    await this.db[kind].update({ where: { id }, data: { embeddingJson: JSON.stringify(vector), embeddedAt: new Date() } });
+    await this.db[kind].updateMany({
+      where: { id, status: { in: [...SEARCHABLE_STATUSES] } },
+      data: { embeddingJson: JSON.stringify(vector), embeddedAt: new Date() },
+    });
   }
 
   async remove(kind: EmbedKind, id: string): Promise<void> {

@@ -9,20 +9,24 @@ function world(counts: { item?: number; listing?: number; event?: number }) {
   for (const [kind, n] of Object.entries(counts)) for (let i = 0; i < n; i++) rows.set(`${kind}-${i}`, { kind, embedded: false });
   let apiCalls = 0;
   const upserts: string[] = [];
+  const indexed: string[] = [];
   const store: VectorStore = {
     backend: 'json',
     async upsert(_k, id) { rows.get(id)!.embedded = true; upserts.push(id); },
     async remove() {},
     async nearest() { return []; },
+    async ensureIndex(k) { indexed.push(k); },
   };
+  let clock = 0;
   const deps: BackfillDeps = {
     fetchPending: async (kind, take) =>
       [...rows.entries()].filter(([, r]) => r.kind === kind && !r.embedded).slice(0, take).map(([id]): PendingRow => ({ id, text: `t:${id}` })),
     embedMany: async (texts) => { apiCalls++; return texts.map(() => new Array(EMBED_DIM).fill(0.2)); },
     store: () => store,
     sleep: async () => {},
+    now: () => clock,
   };
-  return { deps, rows, upserts, api: () => apiCalls };
+  return { deps, rows, upserts, indexed, api: () => apiCalls, tick: (ms: number) => { clock += ms; } };
 }
 
 describe('backfillEmbeddings', () => {
@@ -35,6 +39,8 @@ describe('backfillEmbeddings', () => {
     expect(r1.perKind.map(k => k.apiCalls)).toEqual([3, 1, 0]);
     expect(r1.apiCalls).toBe(4);
     expect([...w.rows.values()].every(r => r.embedded)).toBe(true);
+    // 建索引只在这条路径,每种类型一次
+    expect(w.indexed).toEqual(['item', 'listing', 'event']);
 
     const before = w.api();
     const r2 = await backfillEmbeddings({ deps: w.deps });
@@ -50,6 +56,19 @@ describe('backfillEmbeddings', () => {
     expect(r1.done).toBe(false);
     const r2 = await backfillEmbeddings({ deps: w.deps, kinds: ['item'], maxBatches: 2 });
     expect(r2.embedded).toBe(30);
+    expect(r2.done).toBe(true);
+  });
+
+  it('deadlineMs:到期在批边界停下,done=false,续跑补齐', async () => {
+    const w = world({ item: 120, listing: 3 });
+    // 每次 embed 推进 400ms,截止 1000ms → item 跑 3 批中的前 3 批?第 3 批开始前已 800ms 未到期,第 3 批后 1200ms 到期,listing 整个跳过
+    const deps = { ...w.deps, embedMany: async (t: string[]) => { w.tick(400); return w.deps.embedMany(t); } };
+    const r1 = await backfillEmbeddings({ deps, deadlineMs: 1000 });
+    expect(r1.perKind[0]!.embedded).toBe(120);
+    expect(r1.perKind[1]!.embedded).toBe(0);
+    expect(r1.done).toBe(false);
+    const r2 = await backfillEmbeddings({ deps: w.deps });
+    expect(r2.perKind[1]!.embedded).toBe(3);
     expect(r2.done).toBe(true);
   });
 
@@ -80,13 +99,21 @@ describe('backfillEmbeddings', () => {
     expect(logs.some(l => l.includes('boom'))).toBe(true);
   });
 
-  it('单条写入失败不阻塞其余,且下一批排除它', async () => {
+  it('单条写入失败不阻塞其余,但 drained / done 必须为 false(失败行仍待回填),再跑能补齐', async () => {
     const w = world({ item: 3 });
+    let failOnce = true;
     const store: VectorStore = {
       ...w.deps.store(),
-      async upsert(_k, id) { if (id === 'item-1') throw new Error('write fail'); w.rows.get(id)!.embedded = true; },
+      async upsert(_k, id) {
+        if (id === 'item-1' && failOnce) { failOnce = false; throw new Error('write fail'); }
+        w.rows.get(id)!.embedded = true;
+      },
     };
     const r = await backfillEmbeddings({ deps: { ...w.deps, store: () => store }, kinds: ['item'] });
-    expect(r.perKind[0]).toMatchObject({ embedded: 2, failed: 1, drained: true });
+    expect(r.perKind[0]).toMatchObject({ embedded: 2, failed: 1, drained: false });
+    expect(r.done).toBe(false);
+    const r2 = await backfillEmbeddings({ deps: { ...w.deps, store: () => store }, kinds: ['item'] });
+    expect(r2.perKind[0]).toMatchObject({ embedded: 1, failed: 0, drained: true });
+    expect(r2.done).toBe(true);
   });
 });

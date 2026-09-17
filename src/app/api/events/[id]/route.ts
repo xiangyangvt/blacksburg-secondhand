@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
-import { scheduleEmbed, scheduleRemove, needsReembed } from '@/lib/search/indexer';
+import { scheduleEmbed, scheduleRemove, substantiveChanged } from '@/lib/search/indexer';
 
 // Phase 3A.1 重命名 + Phase 3B 移除 discussion(跟 POST /api/events 保持一致)
 const ALLOWED_CATEGORIES = new Set(['life', 'exercise', 'academic', 'competition', 'other']);
@@ -93,12 +93,15 @@ export async function PATCH(
     update.status = s;
   }
 
+  // Sprint 10A:标题 / 描述 / 地点 / 类别 / 时间真的变了才重算向量;同一条 update 置空 embeddedAt
+  const reembed = substantiveChanged('event', auth.ev, update);
+  if (reembed) update.embeddedAt = null;
+
   const updated = await prisma.event.update({
     where: { id: params.id },
     data: update,
   });
-  // Sprint 10A:标题 / 描述 / 地点 / 类别 / 时间变了才重算向量
-  if (needsReembed('event', update)) scheduleEmbed('event', params.id);
+  if (reembed) scheduleEmbed('event', params.id);
 
   const { posterCodeHash: _h, posterVisitorId: _v, ...safe } = updated as any;
   return NextResponse.json({ ok: true, event: safe });

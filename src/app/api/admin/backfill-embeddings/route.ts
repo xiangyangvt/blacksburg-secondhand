@@ -3,7 +3,7 @@
 // GET  预览:后端类型、key 是否配、各类型待回填数;pgvector 时顺便探测扩展与 HNSW 索引是否存在
 //      (这就是 spec 验收里 `\dx` 的替代证据,curl 一下贴到 PR)
 // POST 跑回填:body { kinds?: ['item'|'listing'|'event'], maxBatches?: number(默认 10,每批 ≤ 50 条) }
-//      单次请求最多 10 批 × 3 类型,避免撞 Railway 请求超时;done=false 就再 POST 一次
+//      单次请求最多 10 批 × 3 类型、整体 60 秒截止,避免撞 Railway 请求超时;done=false 就再 POST 一次
 //
 // 鉴权:admin cookie(9E 签名令牌)。
 
@@ -35,6 +35,8 @@ async function probePgvector() {
 export async function GET() {
   if (!isAdmin()) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const store = getVectorStore();
+  // 探针顺便把三张表的 HNSW 索引建好(CONCURRENTLY,幂等)——这是 DDL 唯一允许的入口之一
+  if (store.ensureIndex) await Promise.all(EMBED_KINDS.map(k => store.ensureIndex!(k)));
   return NextResponse.json({
     backend: store.backend,
     embedConfigured: isEmbedConfigured(),
@@ -56,7 +58,7 @@ export async function POST(req: NextRequest) {
 
   const logs: string[] = [];
   const t0 = Date.now();
-  const result = await backfillEmbeddings({ kinds, maxBatches, log: m => logs.push(m) });
+  const result = await backfillEmbeddings({ kinds, maxBatches, deadlineMs: 60_000, log: m => logs.push(m) });
   return NextResponse.json({
     ...result,
     seconds: Math.round((Date.now() - t0) / 100) / 10,

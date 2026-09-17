@@ -39,6 +39,8 @@ export interface BackfillOpts {
   delayMs?: number;
   /** 每种类型最多跑几批(admin 接口用来控制单次请求时长);不填 = 跑到没有为止 */
   maxBatches?: number;
+  /** 整体截止(ms,自调用起算);到期在批边界停下,done=false(互审 #6)。不填 = 不限 */
+  deadlineMs?: number;
   log?: (msg: string) => void;
   deps?: Partial<BackfillDeps>;
 }
@@ -51,6 +53,7 @@ export interface BackfillDeps {
   embedMany: (texts: string[]) => Promise<number[][]>;
   store: () => VectorStore;
   sleep: (ms: number) => Promise<void>;
+  now: () => number;
 }
 
 const PENDING_WHERE = { status: 'active', embeddedAt: null } as const;
@@ -88,6 +91,7 @@ const defaultDeps: BackfillDeps = {
   embedMany,
   store: getVectorStore,
   sleep: (ms) => new Promise(r => setTimeout(r, ms)),
+  now: Date.now,
 };
 
 export async function backfillEmbeddings(opts: BackfillOpts = {}): Promise<BackfillResult> {
@@ -96,19 +100,27 @@ export async function backfillEmbeddings(opts: BackfillOpts = {}): Promise<Backf
   const batchSize = Math.min(Math.max(opts.batchSize ?? 50, 1), 50);
   const delayMs = opts.delayMs ?? 200;
   const log = opts.log ?? (() => {});
+  const t0 = deps.now();
+  const overdue = () => opts.deadlineMs !== undefined && deps.now() - t0 >= opts.deadlineMs;
   const perKind: BackfillKindResult[] = [];
 
   for (const kind of kinds) {
     const r: BackfillKindResult = { kind, scanned: 0, embedded: 0, failed: 0, apiCalls: 0, drained: false };
     perKind.push(r);
+    if (overdue()) continue;
+    // 建索引只在这条路径(不在请求路径);失败只 warn
+    const store = deps.store();
+    if (store.ensureIndex) await store.ensureIndex(kind);
     let batches = 0;
     // 失败的 id 记下来,下一批查询时排除,避免同一批反复失败卡住
     const failedIds = new Set<string>();
 
     for (;;) {
       if (opts.maxBatches !== undefined && batches >= opts.maxBatches) break;
+      if (overdue()) { log(`[backfill] ${kind} 到达截止时间,停在批边界`); break; }
       const rows = (await deps.fetchPending(kind, batchSize + failedIds.size)).filter(x => !failedIds.has(x.id)).slice(0, batchSize);
-      if (rows.length === 0) { r.drained = true; break; }
+      // drained 必须反映真实待回填数:本次跳过的失败行不算完成(互审 #5)
+      if (rows.length === 0) { r.drained = failedIds.size === 0; break; }
       batches++;
       r.scanned += rows.length;
 
@@ -128,7 +140,6 @@ export async function backfillEmbeddings(opts: BackfillOpts = {}): Promise<Backf
         break;
       }
 
-      const store = deps.store();
       for (let i = 0; i < rows.length; i++) {
         try {
           await store.upsert(kind, rows[i]!.id, vectors[i]!);
@@ -148,6 +159,6 @@ export async function backfillEmbeddings(opts: BackfillOpts = {}): Promise<Backf
     perKind,
     apiCalls: perKind.reduce((s, x) => s + x.apiCalls, 0),
     embedded: perKind.reduce((s, x) => s + x.embedded, 0),
-    done: perKind.every(x => x.drained),
+    done: perKind.every(x => x.drained && x.failed === 0),
   };
 }
