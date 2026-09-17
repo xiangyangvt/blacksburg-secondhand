@@ -29,7 +29,6 @@ function memDb() {
         rows.push(row);
         return { id: row.id };
       },
-      async delete({ where }) { await tick(); const i = rows.findIndex(r => r.id === where.id); if (i >= 0) rows.splice(i, 1); },
       async deleteMany({ where }) { for (let i = rows.length - 1; i >= 0; i--) if (rows[i].createdAt < where.createdAt.lt) rows.splice(i, 1); },
     },
   };
@@ -101,12 +100,14 @@ describe('checkQuota · 边界与并发(Codex 互审补)', () => {
     expect((await checkQuota(opts, db, now, () => 1)).ok).toBe(true);
   });
 
-  it('并发 20 次 max=1:放行 ≤ 1,表里最多 1 行(失败方向是过严不是过宽)', async () => {
+  it('并发 20 次 max=1:放行 ≤ 1(失败方向是过严不是过宽);被拒的尝试也占行', async () => {
     const { db, rows, now } = memDb();
     const opts = { key: 'k', windowMs: 60e3, max: 1 };
     const results = await Promise.all(Array.from({ length: 20 }, () => checkQuota(opts, db, now, () => 1)));
     expect(results.filter(r => r.ok).length).toBeLessThanOrEqual(1);
-    expect(rows.length).toBeLessThanOrEqual(1);
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    // 之后的请求都被拒:被拒尝试计入配额
+    expect((await checkQuota(opts, db, now, () => 1)).ok).toBe(false);
   });
 
   it('并发同 tag 双写只留一行,不消耗额外配额', async () => {
@@ -130,13 +131,13 @@ describe('checkQuota · 边界与并发(Codex 互审补)', () => {
 });
 
 describe('checkQuota · 第 2 轮互审场景', () => {
-  it('配额已满时,并发去重命中不得放行(持有行方回滚,命中方同样被拒)', async () => {
+  it('配额已满时,并发同 tag 全部被拒,预检挡住不写行', async () => {
     const { db, rows, now } = memDb();
     const opts = { key: 'k', windowMs: 3600e3, max: 1 };
     expect((await checkQuota({ ...opts, tag: 'item-0' }, db, now, () => 1)).ok).toBe(true); // 配额满
     const results = await Promise.all(Array.from({ length: 4 }, () => checkQuota({ ...opts, tag: 'item-9' }, db, now, () => 1)));
     expect(results.every(r => !r.ok)).toBe(true);
-    expect(rows.length).toBe(1); // 临时行已回滚,没有"免费通过"的记录缺口
+    expect(rows.length).toBe(1);
   });
 
   it('无 tag 的行必须被带 tag 的请求计入(NULL 行不能漏算)', async () => {
@@ -177,13 +178,17 @@ describe('checkQuota · 第 3 轮互审场景', () => {
     }
   });
 
-  it('配额已满时同 tag 并发全部被拒,且不留临时行', async () => {
+  it('Codex 第 4 轮调度:持有方长时间停顿也不可能让第三方空手放行(行永不回滚)', async () => {
+    // max=1,A(tag x) 与 B(tag y) 并发 → 两者都被拒但行都留下;之后 C(tag x) 与 D(tag z) 必然被拒
     const { db, rows, now } = memDb();
     const opts = { key: 'k', windowMs: 3600e3, max: 1 };
-    expect((await checkQuota({ ...opts, tag: 'item-0' }, db, now, () => 1)).ok).toBe(true);
-    const results = await Promise.all(Array.from({ length: 6 }, () => checkQuota({ ...opts, tag: 'item-9' }, db, now, () => 1)));
-    expect(results.every(r => !r.ok)).toBe(true);
-    expect(rows.length).toBe(1);
+    const ab = await Promise.all([checkQuota({ ...opts, tag: 'x' }, db, now, () => 1), checkQuota({ ...opts, tag: 'y' }, db, now, () => 1)]);
+    expect(ab.filter(r => r.ok).length).toBeLessThanOrEqual(1);
+    const c = await checkQuota({ ...opts, tag: 'x' }, db, now, () => 1);
+    const d = await checkQuota({ ...opts, tag: 'z' }, db, now, () => 1);
+    const totalOk = ab.filter(r => r.ok).length + (c.ok ? 1 : 0) + (d.ok ? 1 : 0);
+    expect(totalOk).toBeLessThanOrEqual(1);
+    if (c.ok) expect(rows.some(r => r.tag === 'x')).toBe(true);
   });
 });
 

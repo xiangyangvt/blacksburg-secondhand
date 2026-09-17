@@ -77,7 +77,6 @@ export interface QuotaDb {
     }): Promise<{ createdAt: Date } | null>;
     /** 违反 @@unique([key, tag, bucket]) 时必须抛出 { code: 'P2002' }(Prisma 语义) */
     create(args: { data: { key: string; tag: string | null; bucket: number | null }; select: { id: true } }): Promise<{ id: string }>;
-    delete(args: { where: { id: string } }): Promise<unknown>;
     deleteMany(args: { where: { createdAt: { lt: Date } } }): Promise<unknown>;
   };
 }
@@ -89,17 +88,15 @@ function isUniqueViolation(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002';
 }
 
-// 并发语义(Codex 互审 2026-09-17 三轮):
-// 1. 去重靠数据库唯一约束 (key, tag, bucket),bucket = floor(now / windowMs)。并发同 tag 双写,第二个
-//    insert 直接被数据库拒绝(P2002),不存在"读到别人临时行"的窗口。代价:去重窗口是固定桶而非滑动窗口,
-//    桶边界处同 tag 可能计两次,对"同 visitor 同 item 不重复计数"这个用途可接受。
-// 2. 配额本身"先写后数":先插自己的行再数窗口内总数(含 NULL tag 的行),超额删自己的行并拒绝。
-//    没有跨行锁,并发爆发的失败方向是"过严"(同一瞬间 N 个请求可能全拒),不会"过宽"。
-// 3. P2002(去重命中)不允许"空手放行":数完没超额就再试插入,拿到自己的行才走正常路径。持有行的一方
-//    若因超额回滚,这一方要么同样被拒,要么在重试时拿到行并重新计数。最多重试 MAX_ATTEMPTS 次;
-//    连续 MAX_ATTEMPTS 次都撞 P2002 且未超额,才按去重命中放行(需要对方在此期间反复插入又删除,概率可忽略)。
-const MAX_ATTEMPTS = 3;
-
+// 并发语义(Codex 互审 2026-09-17 四轮,最终设计):
+// 核心不变量:**行只增不减,被拒的尝试也计入配额,绝不回滚。**
+//   - 前三轮的所有反例都源于"临时行"(插入后可能被删):另一方读到它就可能空手放行。行永久后这个概念消失。
+//   - 行单调增长 ⇒ 第 k 个被放行的请求在计数时至少看到 k 行 ⇒ 放行数 ≤ max,数学上不可能超额。
+//   - 放行 ⇒ 自己的行(或去重命中的同 tag 行)永久存在 ⇒ 不可能"放行但无记录"。
+// 代价:被拒的请求也占一行、也占配额。对反滥用这是想要的方向(刷的人越刷锁得越久),
+//   正常用户不会撞到上限。插入前做一次预检,已超额就不插行,攻击下表增长上限 ≈ max + 并发数。
+// 去重:数据库唯一约束 (key, tag, bucket),bucket = floor(now / windowMs)。同 tag 并发第二个 insert 被
+//   数据库拒绝(P2002),视为去重命中,同样按当前计数判定。桶边界处同 tag 可能计两次,已接受。
 export async function checkQuota(
   opts: QuotaOpts,
   db: QuotaDb = prisma as unknown as QuotaDb,
@@ -112,8 +109,7 @@ export async function checkQuota(
   const where = { key: opts.key, createdAt: { gt: since } };
   const bucket = tag ? Math.floor(t / opts.windowMs) : null;
 
-  const reject = async (mine: { id: string } | null): Promise<QuotaResult> => {
-    if (mine) await db.rateLimitHit.delete({ where: { id: mine.id } });
+  const reject = async (): Promise<QuotaResult> => {
     const oldest = await db.rateLimitHit.findFirst({ where, orderBy: { createdAt: 'asc' }, select: { createdAt: true } });
     const retryAfterSec = oldest
       ? Math.max(1, Math.ceil((oldest.createdAt.getTime() + opts.windowMs - t) / 1000))
@@ -121,25 +117,24 @@ export async function checkQuota(
     return { ok: false, remaining: 0, retryAfterSec };
   };
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    let mine: { id: string } | null = null;
-    try {
-      mine = await db.rateLimitHit.create({ data: { key: opts.key, tag, bucket }, select: { id: true } });
-    } catch (e) {
-      if (!isUniqueViolation(e)) throw e;
-    }
+  // 预检:已经超额就不再写行(只为控制表增长;正确性不依赖它)
+  if ((await db.rateLimitHit.count({ where })) >= opts.max) return reject();
 
-    const used = await db.rateLimitHit.count({ where }); // 含自己,或含已有的同 tag 行
-    if (used > opts.max) return reject(mine);
-
-    if (!mine && attempt < MAX_ATTEMPTS) continue; // 去重命中但对方可能回滚:再试拿行
-
-    if (mine && rand() < CLEANUP_PROBABILITY) {
-      // 机会式清理,失败不影响主流程
-      db.rateLimitHit.deleteMany({ where: { createdAt: { lt: new Date(t - CLEANUP_AGE_MS) } } }).catch(() => {});
-    }
-    return { ok: true, remaining: opts.max - used, retryAfterSec: 0 };
+  let inserted = false;
+  try {
+    await db.rateLimitHit.create({ data: { key: opts.key, tag, bucket }, select: { id: true } });
+    inserted = true;
+  } catch (e) {
+    if (!isUniqueViolation(e)) throw e;
+    // 去重命中:同 key 同 tag 本桶已有永久行
   }
-  // 不可达:循环内每条路径都 return 或 continue,最后一次 attempt 必 return
-  throw new Error('checkQuota: unreachable');
+
+  const used = await db.rateLimitHit.count({ where }); // 含自己或含已有的同 tag 行;行永不回滚
+  if (used > opts.max) return reject();
+
+  if (inserted && rand() < CLEANUP_PROBABILITY) {
+    // 机会式清理 48h 前的行,失败不影响主流程
+    db.rateLimitHit.deleteMany({ where: { createdAt: { lt: new Date(t - CLEANUP_AGE_MS) } } }).catch(() => {});
+  }
+  return { ok: true, remaining: opts.max - used, retryAfterSec: 0 };
 }
