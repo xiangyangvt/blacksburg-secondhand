@@ -1,26 +1,34 @@
 import { describe, it, expect } from 'vitest';
 import { checkQuota, isBotUA, type QuotaDb } from './rateLimit';
 
-// 内存版 RateLimitHit,实现 checkQuota 用到的四个方法
+// 内存版 RateLimitHit,实现 checkQuota 用到的方法。
+// 每个 await 都让出一次事件循环,让 Promise.all 的并发调用真正交错,以复现竞态。
 function memDb() {
-  const rows: { key: string; tag: string | null; createdAt: Date }[] = [];
+  type Row = { id: string; key: string; tag: string | null; createdAt: Date };
+  const rows: Row[] = [];
+  let seq = 0;
+  const tick = () => new Promise<void>(r => setTimeout(r, 0));
+  const inWin = (where: { key: string; tag?: string; createdAt: { gt: Date }; NOT?: { tag: string } }) =>
+    rows.filter(r => r.key === where.key && r.createdAt > where.createdAt.gt
+      && (where.tag === undefined || r.tag === where.tag)
+      && (where.NOT === undefined || r.tag !== where.NOT.tag));
   const db: QuotaDb = {
     rateLimitHit: {
-      async count({ where }) {
-        return rows.filter(r => r.key === where.key && r.createdAt > where.createdAt.gt).length;
-      },
+      async count({ where }) { await tick(); return inWin(where).length; },
       async findFirst({ where, orderBy }) {
-        let hits = rows.filter(r => r.key === where.key && r.createdAt > where.createdAt.gt);
-        if (where.tag !== undefined) hits = hits.filter(r => r.tag === where.tag);
-        if (orderBy?.createdAt === 'asc') hits.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-        return hits[0] ? { createdAt: hits[0].createdAt } : null;
+        await tick();
+        const hits = inWin(where).slice();
+        if (orderBy?.createdAt === 'asc') hits.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+        return hits[0] ? { id: hits[0].id, createdAt: hits[0].createdAt } : null;
       },
       async create({ data }) {
-        rows.push({ key: data.key, tag: data.tag ?? null, createdAt: new Date(clock.t) });
+        await tick();
+        const row = { id: `r${++seq}`, key: data.key, tag: data.tag, createdAt: new Date(clock.t) };
+        rows.push(row);
+        return { id: row.id };
       },
-      async deleteMany({ where }) {
-        for (let i = rows.length - 1; i >= 0; i--) if (rows[i].createdAt < where.createdAt.lt) rows.splice(i, 1);
-      },
+      async delete({ where }) { await tick(); const i = rows.findIndex(r => r.id === where.id); if (i >= 0) rows.splice(i, 1); },
+      async deleteMany({ where }) { for (let i = rows.length - 1; i >= 0; i--) if (rows[i].createdAt < where.createdAt.lt) rows.splice(i, 1); },
     },
   };
   const clock = { t: 1_000_000_000_000 };
@@ -77,6 +85,45 @@ describe('checkQuota', () => {
     await checkQuota({ key: 'k', windowMs: 60e3, max: 10 }, db, now, () => 0); // rand=0 触发清理
     await new Promise(r => setTimeout(r, 0));
     expect(rows.length).toBe(1);
+  });
+});
+
+describe('checkQuota · 边界与并发(Codex 互审补)', () => {
+  it('窗口精确边界:59999ms 仍拒,60000ms 放行', async () => {
+    const { db, clock, now } = memDb();
+    const opts = { key: 'k', windowMs: 60e3, max: 1 };
+    expect((await checkQuota(opts, db, now, () => 1)).ok).toBe(true);
+    clock.t += 59_999;
+    expect((await checkQuota(opts, db, now, () => 1)).ok).toBe(false);
+    clock.t += 1;
+    expect((await checkQuota(opts, db, now, () => 1)).ok).toBe(true);
+  });
+
+  it('并发 20 次 max=1:放行 ≤ 1,表里最多 1 行(失败方向是过严不是过宽)', async () => {
+    const { db, rows, now } = memDb();
+    const opts = { key: 'k', windowMs: 60e3, max: 1 };
+    const results = await Promise.all(Array.from({ length: 20 }, () => checkQuota(opts, db, now, () => 1)));
+    expect(results.filter(r => r.ok).length).toBeLessThanOrEqual(1);
+    expect(rows.length).toBeLessThanOrEqual(1);
+  });
+
+  it('并发同 tag 双写只留一行,不消耗额外配额', async () => {
+    const { db, rows, now } = memDb();
+    const opts = { key: 'k', windowMs: 3600e3, max: 2 };
+    const results = await Promise.all(Array.from({ length: 5 }, () => checkQuota({ ...opts, tag: 'item-1' }, db, now, () => 1)));
+    expect(results.every(r => r.ok)).toBe(true);
+    expect(rows.length).toBe(1);
+    expect((await checkQuota({ ...opts, tag: 'item-2' }, db, now, () => 1)).ok).toBe(true);
+    expect((await checkQuota({ ...opts, tag: 'item-3' }, db, now, () => 1)).ok).toBe(false);
+  });
+
+  it('空字符串 tag 等同无 tag:正常计数,不去重', async () => {
+    const { db, rows, now } = memDb();
+    const opts = { key: 'k', windowMs: 60e3, max: 2, tag: '' };
+    expect((await checkQuota(opts, db, now, () => 1)).ok).toBe(true);
+    expect((await checkQuota(opts, db, now, () => 1)).ok).toBe(true);
+    expect((await checkQuota(opts, db, now, () => 1)).ok).toBe(false);
+    expect(rows.every(r => r.tag === null)).toBe(true);
   });
 });
 
