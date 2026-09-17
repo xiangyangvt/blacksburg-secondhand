@@ -105,7 +105,8 @@ function isUniqueViolation(e: unknown): boolean {
 // 去重:数据库唯一约束 (key, tag, bucket),bucket = floor(now / windowMs)。行带 admitted 标记:
 //   去重命中时只有当初被放行的行才放行(否则被拒的 tag 行会被重访漏过);并发同 tag 第二个请求
 //   在第一个标记 admitted 前到达会被拒,属过严,客户端按卡片缓存,不影响体验。桶边界同 tag 可能计两次,已接受。
-// retryAfter:被拒尝试也占行,所以"最早一行过期"不等于有名额;返回第 (used - max + 1) 条最早行的过期时间。
+// retryAfter:被拒尝试也占行,所以"最早一行过期"不等于有名额;返回第 (used - max + 1) 条最早行的过期时间;
+//   带 tag 的拒绝再与本桶结束时刻取较大值(同 tag 的 admitted=false 行要到下个桶才失效)。
 export async function checkQuota(
   opts: QuotaOpts,
   db: QuotaDb = prisma as unknown as QuotaDb,
@@ -122,9 +123,11 @@ export async function checkQuota(
     // 需要 used - max + 1 行过期才有名额 → 第 (used - max) 个(0 基)最早行的过期时刻
     const k = Math.max(0, used - opts.max);
     const [kth] = await db.rateLimitHit.findMany({ where, orderBy: { createdAt: 'asc' }, skip: k, take: 1, select: { createdAt: true } });
-    const retryAfterSec = kth
+    let retryAfterSec = kth
       ? Math.max(1, Math.ceil((kth.createdAt.getTime() + opts.windowMs - t) / 1000))
       : Math.ceil(opts.windowMs / 1000);
+    // 带 tag 的拒绝:本桶内可能已留下 admitted=false 的同 tag 行,同 tag 要到下个桶才可能放行
+    if (bucket !== null) retryAfterSec = Math.max(retryAfterSec, Math.ceil(((bucket + 1) * opts.windowMs - t) / 1000));
     return { ok: false, remaining: 0, retryAfterSec };
   };
 

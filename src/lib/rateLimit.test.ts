@@ -237,6 +237,28 @@ describe('checkQuota · 第 5 轮互审场景', () => {
   });
 });
 
+describe('checkQuota · 第 6 轮互审场景', () => {
+  it('带 tag 被拒后的 retryAfter 不早于本桶结束(同 tag 本桶内不可能再放行)', async () => {
+    const { db, rows, clock, now } = memDb();
+    const opts = { key: 'k', windowMs: 60e3, max: 3 };
+    clock.t = 60e3 * 1000; // 桶起点
+    // 两行旧记录:-50s / -40s(仍在窗口内)
+    await checkQuota(opts, db, now, () => 1); rows[0].createdAt = new Date(clock.t - 50_000);
+    await checkQuota(opts, db, now, () => 1); rows[1].createdAt = new Date(clock.t - 40_000);
+    clock.t += 5_000;
+    const [a] = await Promise.all([checkQuota({ ...opts, tag: 'a' }, db, now, () => 1), checkQuota({ ...opts, tag: 'b' }, db, now, () => 1)]);
+    if (!a.ok) {
+      expect(a.retryAfterSec).toBeGreaterThanOrEqual(55); // 桶还剩 55s
+      clock.t += 15_000; // 旧行过期
+      const again = await checkQuota({ ...opts, tag: 'a' }, db, now, () => 1);
+      expect(again.ok).toBe(false);
+      expect(again.retryAfterSec).toBeGreaterThanOrEqual(40);
+      clock.t += 40_000; // 进入下个桶
+      expect((await checkQuota({ ...opts, tag: 'a' }, db, now, () => 1)).ok).toBe(true);
+    }
+  });
+});
+
 describe('isBotUA', () => {
   it('basic 只拦 bot/crawler/spider', () => {
     expect(isBotUA('Mozilla/5.0 Googlebot', 'basic')).toBe(true);
