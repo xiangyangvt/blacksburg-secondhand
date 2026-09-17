@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const type     = sp.get('type');     // sell | buy | null(全部)
   const category = sp.get('category'); // home/electronics/...
   const q        = sp.get('q')?.trim();
-  const seller   = sp.get('seller')?.trim();  // Sprint 6.7g:按卖家 contactValue 过滤
+  const sameSellerAs = sp.get('sameSellerAs')?.trim(); // Sprint 6.7g / 9A:按「与某 item 同卖家」过滤,联系方式不进 URL
   const minPrice = sp.get('minPrice') ? Number(sp.get('minPrice')) : undefined;
   const maxPrice = sp.get('maxPrice') ? Number(sp.get('maxPrice')) : undefined;
   const since    = sp.get('since');    // 1d | 1w | 1m | all
@@ -32,7 +32,12 @@ export async function GET(req: NextRequest) {
   const where: any = { status: 'active', NOT: { category: 'housing' } };
   if (type === 'sell' || type === 'buy') where.type = type;
   if (category && VALID_CATEGORIES.includes(category as any) && category !== 'housing') where.category = category;
-  if (seller) where.contactValue = seller;
+  if (sameSellerAs) {
+    // 9A:用 item id 反查卖家,联系方式既不出现在 URL 也不出现在响应里
+    const anchor = await prisma.item.findUnique({ where: { id: sameSellerAs }, select: { contactValue: true, status: true } });
+    if (!anchor || anchor.status !== 'active') return NextResponse.json({ items: [] });
+    where.contactValue = anchor.contactValue;
+  }
   if (q) {
     // 搜索匹配标题、描述、自定义标签
     // 不再匹配 contactValue —— 联系方式现在隐藏，搜索它会反推泄露
@@ -78,13 +83,18 @@ export async function GET(req: NextRequest) {
     ...it,
     photoUrls: parsePhotoUrls(it.photoUrls),
     editCodeHash: undefined,         // 别返回 hash
-    // UX C10(Sean 拍板恢复直显):卖家联系方式随公开 GET 返回,展开卡直接可见。
-    // tradeoff:联系方式可被爬虫直接抓取(reveal 门此前客观上有防爬作用);
-    // 后续如需补救走服务端限流。留言人联系方式仍脱敏(点 reveal 才出现)。
-    contactValue: it.contactValue,
-    customContactLabel: it.customContactLabel,
+    ipAddress: undefined,
+    utmSource: undefined,
+    // Sprint 9A:公开列表不携带联系方式(不变量 ARCHITECTURE.md §8.10)。
+    // 展开卡片时客户端调 POST /api/items/[id]/reveal-contact 逐条取,经配额。
+    // 「展开即见」的体验保留(UX C10),只是批量抓取的成本变了。contactType 不敏感,保留供占位渲染。
+    contactValue: '',
+    customContactLabel: null,
+    // 留言对象白名单:ipAddress / utmSource 不出网,留言人联系方式走 inquiries/[id]/reveal-contact
     inquiries: it.inquiries.map(inq => ({
-      ...inq,
+      id: inq.id, itemId: inq.itemId, listingId: inq.listingId, contactType: inq.contactType,
+      message: inq.message, sellerReply: inq.sellerReply, sellerRepliedAt: inq.sellerRepliedAt,
+      status: inq.status, createdAt: inq.createdAt, updatedAt: inq.updatedAt,
       contactValue: '',
       customContactLabel: null,
     })),

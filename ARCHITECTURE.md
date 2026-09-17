@@ -2,7 +2,7 @@
 
 > 读者两类：不读代码的项目所有者（建立"改哪炸哪"的直觉），和进来干活的 AI agent（拆任务、判风险、找雷区）。
 > 只放结构、边界、不变量和指针，不放实现细节。细节在指向的文件里。
-> 勘察基线：2026-09-16 · main `dd2ce74`；9C 更新 2026-09-17。改动触及本文任一节时，PR 必须同步更新本文。
+> 勘察基线：2026-09-16 · main `dd2ce74`；9C / 9A 更新 2026-09-17。改动触及本文任一节时，PR 必须同步更新本文。
 
 ## 0. 一屏概览
 
@@ -76,24 +76,28 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 
 发布表单 → `POST /api/{items,listings,events}`（IP 限流、校验、bcrypt 编辑码、存 `ipAddress`）→ 状态 `draft` / `active` → 列表 GET（`status='active'`，二手排除 `category='housing'`，按 `bumpedAt` 排）→ 卡片展开（`view` 去重计数）→ 联系方式披露（各子站不同，§5）→ 留言 / 申请 / 响应（各自限流）→ `bumpedAt` 刷新。scraper 走 `api/scraper/run` → `scraper/runner.ts` → 各源 → LLM 抽取翻译 → `Event`（`@@unique(source, sourceUrl)` 去重）。
 
-## 5. 联系方式披露面（当前状态，Sprint 9 的改造对象）
+## 5. 联系方式披露面（Sprint 9A 后）
+
+所有下发联系方式的接口都经 `src/lib/contactQuota.ts` 的 `gateReveal`：bot UA 403；同 visitor 30/h、120/d，同 IP 60/h；同 visitor 同目标重复不计；超限 429 + `Retry-After`。
 
 | 端点 | 公开? | 门 | 限流 |
 |---|---|---|---|
-| `GET /api/items` · `/item/[id]` SSR | 是 | **无**，卖家 `contactValue` 随列表返回 | 无 |
-| `POST /api/items/[id]/reveal-contact` · `POST /api/inquiries/[id]/reveal-contact` | 是 | 无 | 无 |
-| `GET /api/items/by-contact` | 是 | 知道 contactValue 即可；**spread 泄漏 `ipAddress` `utmSource`** | 无 |
-| `GET /api/listings` | 是 | `contactValue` 置空、`ipAddress` 擦除（**这是正确做法**） | 无 |
-| `GET /api/listings/by-contact` | 是 | **未擦 `contactValue` / `ipAddress`** | 无 |
-| `POST /api/applications/by-contact` | 否 | 双凭证；对方 contact 仅 `approved` 后透出（室友非对称交换的唯一服务端门） | 无 |
-| `GET /api/events` · event SSR 页 | 是 | **`posterContact` 无条件返回**，`posterContactPublic` 仅前端开关 | 无 |
+| `GET /api/items` · `/item/[id]` SSR | 是 | **不含联系方式**（`contactValue: ''`），`ipAddress` / `utmSource` / `editCodeHash` 不出网 | 无 |
+| `POST /api/items/[id]/reveal-contact` · `POST /api/inquiries/[id]/reveal-contact` | 是 | 唯一下发口；客户端展开卡 / 挂载详情页时调 | gateReveal，tag = `item:<id>` / `inq:<id>` |
+| `GET /api/items/by-contact` | 是 | 白名单 select，不含联系方式 / IP / hash；limit ≤ 30 | gateReveal，tag = `by:<value>` |
+| `GET /api/listings` · `GET /api/listings/by-contact` | 是 | 白名单，`contactValue` 置空，IP / hash 不出网 | 无 |
+| `POST /api/applications/by-contact` | 否 | 双凭证；对方 contact 仅 `approved` 后透出（室友非对称交换的服务端门） | 无 |
+| `GET /api/events` · event SSR 页 | 是 | **`posterContactPublic` 在服务端生效**：非公开时 `posterContact` / type / label 置 null | 无 |
 | `POST /api/events/[id]/contact-send` · `reveal-to-responder` | 需 `hb_vid` | unique 约束 + 发布者 visitorId 校验 | 无 |
-| `GET /api/my/events?contact=` | 是 | **明文联系方式反查，无二次凭证**，且有标记已读副作用 | 无 |
+| `GET /api/my/events` | `hb_vid` | `?contact=` 明文反查分支已移除 | 无 |
+| `*/verify-code`（items / listings / events） | 是 | 编辑密码校验；items 成功时返回所有者联系方式供编辑预填 | 10 次尝试 / 15 分钟 / IP（计数先于比较，并发不可绕） |
 | `GET /api/events/[id]/og-data` · 三个 `api/og/*` · `sitemap.ts` | 是 | 白名单，不含联系方式 | 60s / 1h 缓存 |
+
+同卖家过滤已改为 `?sameSellerAs=<itemId>`，服务端由 item 反查卖家，联系方式不进 URL、不进响应。
 
 ## 6. 反滥用现状
 
-访客标识与 bot 判断已统一进 `lib/rateLimit.ts`；通用配额 `checkQuota` 可用但尚无调用方（9A / 9E 接入）。各业务域的窗口计数仍是内联查各自的表：IP 发布限流（items / listings 1h 10 条，applications 1h 5 条，inquiries 1h N 条）；visitor 限流（用户活动每日 3 条，评论 60s 一条 + 1h 20 条）；magic-link 同邮箱 60s；recovery 同 IP 24h 3 次、3 个不同 IP 自动标 abuse；举报 3 个不同 IP 自动隐藏；view / click / cart 靠 throttle 表去重；bot UA 过滤 6 处（click / view×2 / pageview 用 full 档，events POST / comments 用 basic 档，沿用各自原有词表）。**无限流的面**：所有列表 GET、两个 reveal-contact、by-contact GET、verify-code。进程内存态：`eventArchive.ts` 的 5 分钟节流、`uploader.ts` 的配置缓存，多实例即失效。
+访客标识与 bot 判断已统一进 `lib/rateLimit.ts`；通用配额 `checkQuota` 由 `contactQuota.ts`（披露）与三处 `verify-code`（失败限流）使用。各业务域的窗口计数仍是内联查各自的表：IP 发布限流（items / listings 1h 10 条，applications 1h 5 条，inquiries 1h N 条）；visitor 限流（用户活动每日 3 条，评论 60s 一条 + 1h 20 条）；magic-link 同邮箱 60s；recovery 同 IP 24h 3 次、3 个不同 IP 自动标 abuse；举报 3 个不同 IP 自动隐藏；view / click / cart 靠 throttle 表去重；bot UA 过滤 6 处（click / view×2 / pageview 用 full 档，events POST / comments 用 basic 档，沿用各自原有词表）。**无限流的面**：各列表 GET（已不含联系方式）、`listings/by-contact` GET（已脱敏）。进程内存态：`eventArchive.ts` 的 5 分钟节流、`uploader.ts` 的配置缓存，多实例即失效。
 
 ## 7. 外部依赖与失败模式
 
@@ -111,14 +115,14 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 
 1. `GET /api/items` 的 `NOT: { category: 'housing' }`：历史 housing 行仍在表里，靠它隐藏；`utils.ts` 多处保留 housing 展示兜底。
 2. `bumpedAt` = 最近活跃；只有实质性编辑（标题 / 描述 / 价格 / 图 / 类型 / 类目）、新询价、卖家回复、新申请、草稿转正会刷新；改联系方式 / 自定义标签**故意不刷新**。
-3. `editCodeHash` 永不出网。当前靠每处手写 `undefined`，不是白名单，**新增返回字段极易连带泄漏**（`ipAddress` 已经泄漏了两处）。
+3. `editCodeHash` 永不出网。列表 GET 仍靠手写 `undefined`（items 已补 `ipAddress` / `utmSource`），两个 by-contact GET 已改白名单 select。新增返回字段时优先白名单。
 4. `EventContactSend @@unique(eventId, fromVisitorId, toVisitorId)`：同方向一条；双向两条 = 互见。这就是整个非对称协议。
 5. `Event @@unique(source, sourceUrl)`：scraper 去重基础；用户发帖用 `internal:u-<ts>-<rand>` 占位。
 6. `[skip ci]` 与 `railway.json` `watchPatterns: ["**", "!.github/**"]` 互锁：Railway 不认 `[skip ci]`，改任一侧 = 每周一次无谓生产部署。
 7. localStorage / cookie 键名不可改：`hb_vid` `hb_session` `hb_admin` `hb_locale` `hb_recent_views` `hb_my_contact_*` `hb_last_contact`，老用户已有数据。
 8. `schema.production.prisma` 与 dev schema 手工同步；`db:push:prod --accept-data-loss` 在 preDeploy 跑，**漏同步 = 生产直接掉列**。9F 起 CI 用 `scripts/check-schema-sync.mjs` 归一化后逐行比对，不一致即红。
 9. 改 OG 卡片必须 bump `shareText.ts` 的 `OG_VERSION` 和 event 页的 `OG_IMG_VERSION`（微信缓存）。
-10. （Sprint 9 起）任何公开列表接口不得携带联系方式；联系方式只能经带配额的逐条接口或双向同意流程下发；序列化一律白名单；每一种需要人处理的状态必须有一条出站路径。
+10. （Sprint 9 起）任何公开列表接口不得携带联系方式；联系方式只能经 `gateReveal` 配额的逐条接口或双向同意流程下发；序列化一律白名单；每一种需要人处理的状态必须有一条出站路径。前端「展开即见」只在展开态取数，桌面端折叠态不再直显。
 
 ## 9. 雷区与技术债
 

@@ -1,7 +1,9 @@
 // GET  /api/items/by-contact?value=xxx&excludeId=yyy&limit=N
-//   返回该联系方式下所有 active 商品（公开查询，任何人都能看 —— 联系方式本来就公开）
-//   - excludeId（可选）：排除某商品 id（UX-13 "同卖家其他物品曝光" 用，排除当前正加入心愿单的商品）
-//   - limit（可选，默认 200，上限 200）：cap 数量
+//   返回该联系方式下的 active 商品。Sprint 9A 起:
+//   - 响应走白名单 select,不含联系方式 / IP / hash(调用方已经知道这个联系方式,不需要回传)
+//   - 计入联系方式披露配额(一次调用 = 一次 reveal,tag = by:<value>,同 visitor 重复不计)
+//   - limit 默认与上限 30(唯一调用方 ItemCard 的同卖家曝光传的就是 30)
+//   - excludeId（可选）：排除某商品 id（UX-13 "同卖家其他物品曝光" 用）
 //
 // POST /api/items/by-contact  body { value, editCode }
 //   私有查询：必须提供 editCode (≥6 位)，只返回该 editCode 精确匹配的 active + draft
@@ -12,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { parsePhotoUrls } from '@/lib/utils';
+import { gateReveal } from '@/lib/contactQuota';
 
 function serialize(item: any) {
   return {
@@ -23,13 +26,22 @@ function serialize(item: any) {
   };
 }
 
+const PUBLIC_ITEM_SELECT = {
+  id: true, type: true, title: true, description: true, price: true, category: true, customTag: true,
+  contactType: true, photoUrls: true, status: true, createdAt: true, updatedAt: true, bumpedAt: true, viewCount: true,
+  _count: { select: { cartEntries: true } },
+} as const;
+
 export async function GET(req: NextRequest) {
   const value = req.nextUrl.searchParams.get('value')?.trim();
   const excludeId = req.nextUrl.searchParams.get('excludeId')?.trim() || null;
   const limitRaw = req.nextUrl.searchParams.get('limit');
-  const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 200, 1), 200) : 200;
+  const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 30, 1), 30) : 30;
 
   if (!value) return NextResponse.json({ error: 'value 不能为空' }, { status: 400 });
+
+  const gate = await gateReveal(req, `by:${value}`);
+  if (!gate.ok) return gate.res;
 
   const items = await prisma.item.findMany({
     where: {
@@ -39,13 +51,20 @@ export async function GET(req: NextRequest) {
     },
     orderBy: { bumpedAt: 'desc' },
     take: limit,
-    include: {
-      inquiries: { where: { status: 'active' }, orderBy: { createdAt: 'asc' } },
-      _count: { select: { cartEntries: true } },
-    },
+    select: PUBLIC_ITEM_SELECT,
   });
 
-  return NextResponse.json({ items: items.map(serialize) });
+  return gate.withCookie(NextResponse.json({
+    items: items.map(it => ({
+      ...it,
+      photoUrls: parsePhotoUrls(it.photoUrls),
+      contactValue: '',
+      customContactLabel: null,
+      cartCount: it._count?.cartEntries ?? 0,
+      _count: undefined,
+      inquiries: [],
+    })),
+  }));
 }
 
 export async function POST(req: NextRequest) {
