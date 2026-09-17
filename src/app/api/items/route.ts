@@ -78,11 +78,13 @@ export async function GET(req: NextRequest) {
     ...it,
     photoUrls: parsePhotoUrls(it.photoUrls),
     editCodeHash: undefined,         // 别返回 hash
-    // UX C10(Sean 拍板恢复直显):卖家联系方式随公开 GET 返回,展开卡直接可见。
-    // tradeoff:联系方式可被爬虫直接抓取(reveal 门此前客观上有防爬作用);
-    // 后续如需补救走服务端限流。留言人联系方式仍脱敏(点 reveal 才出现)。
-    contactValue: it.contactValue,
-    customContactLabel: it.customContactLabel,
+    ipAddress: undefined,
+    utmSource: undefined,
+    // Sprint 9A:公开列表不携带联系方式(不变量 ARCHITECTURE.md §8.10)。
+    // 展开卡片时客户端调 POST /api/items/[id]/reveal-contact 逐条取,经配额。
+    // 「展开即见」的体验保留(UX C10),只是批量抓取的成本变了。contactType 不敏感,保留供占位渲染。
+    contactValue: '',
+    customContactLabel: null,
     inquiries: it.inquiries.map(inq => ({
       ...inq,
       contactValue: '',

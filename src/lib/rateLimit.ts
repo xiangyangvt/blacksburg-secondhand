@@ -168,3 +168,14 @@ export async function checkQuota(
   }
   return admit(used);
 }
+
+/** 只看不记:窗口内已达上限返回 false。用于"失败才计数"的场景(先 peek,失败后再 checkQuota 记一笔) */
+export async function peekQuota(
+  opts: Pick<QuotaOpts, 'key' | 'windowMs' | 'max'>,
+  db: QuotaDb = prisma as unknown as QuotaDb,
+  now: () => number = Date.now,
+): Promise<boolean> {
+  const since = new Date(now() - opts.windowMs);
+  const used = await db.rateLimitHit.count({ where: { key: opts.key, createdAt: { gt: since } } });
+  return used < opts.max;
+}

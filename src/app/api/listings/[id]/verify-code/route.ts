@@ -7,6 +7,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { getClientIp } from '@/lib/utils';
+import { checkQuota, peekQuota } from '@/lib/rateLimit';
+
+// Sprint 9A:编辑密码校验失败限流 —— 同 IP 10 次 / 15 分钟(只记失败;见 spec 9A 第 10 条)
+const VERIFY_WINDOW_MS = 15 * 60e3;
+const VERIFY_MAX_FAILS = 10;
+const verifyKey = (req: NextRequest) => `verify:ip:${getClientIp(req)}`;
 
 export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
   const { id } = ctx.params;
@@ -24,8 +31,12 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
     return NextResponse.json({ valid: false, error: 'listing 不存在' }, { status: 404 });
   }
 
+  if (!(await peekQuota({ key: verifyKey(req), windowMs: VERIFY_WINDOW_MS, max: VERIFY_MAX_FAILS }))) {
+    return NextResponse.json({ valid: false, error: '尝试次数过多,请 15 分钟后再试' }, { status: 429 });
+  }
   const ok = await bcrypt.compare(editCode, listing.editCodeHash);
   if (!ok) {
+    await checkQuota({ key: verifyKey(req), windowMs: VERIFY_WINDOW_MS, max: VERIFY_MAX_FAILS });
     return NextResponse.json({ valid: false, error: '密码错误' }, { status: 401 });
   }
 

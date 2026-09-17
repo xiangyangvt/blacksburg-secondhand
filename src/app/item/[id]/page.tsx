@@ -106,9 +106,9 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
     category: item.category,
     customTag: item.customTag,
     contactType: item.contactType,
-    // UX C10:卖家联系方式直显(Sean 拍板恢复「所有信息一屏全开」);留言人联系方式仍脱敏
-    contactValue: item.contactValue,
-    customContactLabel: item.customContactLabel,
+    // Sprint 9A:SSR 不下发联系方式,ItemDetailView 挂载后调 reveal-contact 逐条取(经配额)
+    contactValue: '',
+    customContactLabel: null,
     photoUrls: parsePhotoUrls(item.photoUrls),
     createdAt: item.createdAt.toISOString(),
     viewCount: (item as any).viewCount ?? 0,

@@ -136,6 +136,8 @@ export async function GET(req: NextRequest) {
   const responseCountMap = new Map(responseRows.map(r => [r.eventId, r._count.id]));
 
   // Strip 敏感字段 — posterCodeHash / posterVisitorId 不能返客户端
+  // Sprint 9A:posterContactPublic 在服务端生效 —— 非公开的联系方式置 null,
+  // 响应者通过 contact-send → reveal-to-responder 双向流程获得(之前只是前端开关)。
   // 同时把 photoUrls 从 JSON string parse 成数组方便前端用
   const safe = sorted.map((e: any) => {
     const { posterCodeHash, posterVisitorId, photoUrls: pu, ...rest } = e;
@@ -143,7 +145,10 @@ export async function GET(req: NextRequest) {
     if (pu) {
       try { photoUrls = JSON.parse(pu); } catch { photoUrls = []; }
     }
-    return { ...rest, photoUrls, responseCount: responseCountMap.get(e.id) ?? 0 };
+    const contactFields = rest.posterContactPublic
+      ? {}
+      : { posterContact: null, posterContactType: null, posterContactLabel: null };
+    return { ...rest, ...contactFields, photoUrls, responseCount: responseCountMap.get(e.id) ?? 0 };
   });
 
   return NextResponse.json({
