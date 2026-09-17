@@ -120,7 +120,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 5. `Event @@unique(source, sourceUrl)`：scraper 去重基础；用户发帖用 `internal:u-<ts>-<rand>` 占位。
 6. `[skip ci]` 与 `railway.json` `watchPatterns: ["**", "!.github/**"]` 互锁：Railway 不认 `[skip ci]`，改任一侧 = 每周一次无谓生产部署。
 7. localStorage / cookie 键名不可改：`hb_vid` `hb_session` `hb_admin` `hb_locale` `hb_recent_views` `hb_my_contact_*` `hb_last_contact`，老用户已有数据。
-8. `schema.production.prisma` 与 dev schema 手工同步；`db:push:prod --accept-data-loss` 在 preDeploy 跑，**漏同步 = 生产直接掉列**。
+8. `schema.production.prisma` 与 dev schema 手工同步；`db:push:prod --accept-data-loss` 在 preDeploy 跑，**漏同步 = 生产直接掉列**。9F 起 CI 用 `scripts/check-schema-sync.mjs` 归一化后逐行比对，不一致即红。
 9. 改 OG 卡片必须 bump `shareText.ts` 的 `OG_VERSION` 和 event 页的 `OG_IMG_VERSION`（微信缓存）。
 10. （Sprint 9 起）任何公开列表接口不得携带联系方式；联系方式只能经 `gateReveal` 配额的逐条接口或双向同意流程下发；序列化一律白名单；每一种需要人处理的状态必须有一条出站路径。前端「展开即见」只在展开态取数，桌面端折叠态不再直显。
 
@@ -133,7 +133,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 
 ## 10. 测试与门禁现状
 
-vitest 4 个文件，全是活动侧纯函数；e2e 一个 smoke；**CI 只跑 typecheck / lint / build，从不跑 `npm test` 与 e2e**。零覆盖：所有 API route（鉴权、限流、by-contact 过滤、非对称交换）、所有校验 lib、所有组件、schema 一致性。
+vitest：活动侧纯函数 + 9C 起的 `rateLimit` / `contactQuota` / `adminAuth`；e2e 一个 smoke（13 条：SSR 路由、发布弹窗、API 形状）。**9F 起 CI 门禁 = typecheck → lint → vitest → schema 一致性 → build → e2e smoke（`next start`，空 SQLite）**。仍零覆盖：大部分 API route 的业务逻辑、校验 lib、组件。
 
 ## 11. 风险分级（AI 开 PR 先自报）
 
