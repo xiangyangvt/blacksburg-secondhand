@@ -10,17 +10,16 @@ function memDb() {
   const rows: Row[] = [];
   let seq = 0;
   const tick = () => new Promise<void>(r => setTimeout(r, 0));
-  const inWin = (where: { key: string; createdAt: { gt: Date }; tag?: string; bucket?: number }) =>
+  const inWin = (where: { key: string; createdAt: { gt: Date }; tag?: string }) =>
     rows.filter(r => r.key === where.key && r.createdAt > where.createdAt.gt
-      && (where.tag === undefined || r.tag === where.tag)
-      && (where.bucket === undefined || r.bucket === where.bucket));
+      && (where.tag === undefined || r.tag === where.tag));
   const db: QuotaDb = {
     rateLimitHit: {
       async count({ where }) { await tick(); return inWin(where).length; },
       async findFirst({ where }) {
         await tick();
         const h = inWin(where)[0];
-        return h ? { id: h.id, admitted: h.admitted } : null;
+        return h ? { id: h.id, admitted: h.admitted, createdAt: h.createdAt } : null;
       },
       async findMany({ where, skip, take }) {
         await tick();
@@ -157,17 +156,27 @@ describe('checkQuota · 第 2 轮互审场景', () => {
     expect(r.remaining).toBe(0);
   });
 
-  it('同 tag 去重跨桶边界会再计一次(已知且接受的桶语义)', async () => {
+  it('同 tag 去重按滑动窗口:跨桶边界刷新不再计一次,窗口过后才计', async () => {
     const { db, rows, clock, now } = memDb();
     const opts = { key: 'k', windowMs: 60e3, max: 5, tag: 'item-1' };
-    clock.t = 60e3 * 1000; // 桶起点
+    clock.t = 60e3 * 1000 + 50_000; // 桶结束前 10s
     await checkQuota(opts, db, now, () => 1);
-    clock.t += 59_000;
-    await checkQuota(opts, db, now, () => 1);
+    clock.t += 15_000; // 跨桶,距首次 15s,仍在 60s 窗口内
+    expect((await checkQuota(opts, db, now, () => 1)).ok).toBe(true);
     expect(rows.length).toBe(1);
-    clock.t += 2_000; // 跨桶
+    clock.t += 60_000; // 首行已出窗口
     await checkQuota(opts, db, now, () => 1);
     expect(rows.length).toBe(2);
+  });
+
+  it('Codex 9A:整点前取满 30 个目标,整点后立刻刷新其中一个仍放行', async () => {
+    const { db, clock, now } = memDb();
+    const opts = { key: 'k', windowMs: 3600e3, max: 30 };
+    clock.t = 3600e3 * 100 - 10_000; // 整点前 10s
+    for (let i = 0; i < 30; i++) expect((await checkQuota({ ...opts, tag: `item-${i}` }, db, now, () => 1)).ok).toBe(true);
+    clock.t += 20_000; // 整点后 10s
+    expect((await checkQuota({ ...opts, tag: 'item-7' }, db, now, () => 1)).ok).toBe(true);
+    expect((await checkQuota({ ...opts, tag: 'item-new' }, db, now, () => 1)).ok).toBe(false);
   });
 });
 
@@ -238,7 +247,7 @@ describe('checkQuota · 第 5 轮互审场景', () => {
 });
 
 describe('checkQuota · 第 6 轮互审场景', () => {
-  it('带 tag 被拒后的 retryAfter 不早于本桶结束(同 tag 本桶内不可能再放行)', async () => {
+  it('带 tag 被拒后的 retryAfter 不早于同 tag 行过期(同 tag 窗口内不可能再放行)', async () => {
     const { db, rows, clock, now } = memDb();
     const opts = { key: 'k', windowMs: 60e3, max: 3 };
     clock.t = 60e3 * 1000; // 桶起点
@@ -253,7 +262,7 @@ describe('checkQuota · 第 6 轮互审场景', () => {
       const again = await checkQuota({ ...opts, tag: 'a' }, db, now, () => 1);
       expect(again.ok).toBe(false);
       expect(again.retryAfterSec).toBeGreaterThanOrEqual(40);
-      clock.t += 40_000; // 进入下个桶
+      clock.t += 45_001; // 同 tag 的被拒行(5s 时写入)过期
       expect((await checkQuota({ ...opts, tag: 'a' }, db, now, () => 1)).ok).toBe(true);
     }
   });

@@ -71,6 +71,9 @@ export const messages = {
 
   // 商品卡片
   'card.copyContact':      { zh: '复制联系方式',                              en: 'Copy contact' },
+  'card.contactLoading':   { zh: '联系方式加载中…',                            en: 'Loading contact…' },
+  'card.contactQuota':     { zh: '联系方式查看次数已达上限,请稍后再试',            en: 'Contact reveal limit reached, try again later' },
+  'card.contactError':     { zh: '联系方式暂时无法获取',                        en: 'Contact unavailable right now' },
   'card.copyTitle':        { zh: '复制物品信息',                              en: 'Copy item info' },
   'card.share':            { zh: '分享',                                    en: 'Share' },
   'card.shareItem':        { zh: '分享物品信息',                              en: 'Share item info' },

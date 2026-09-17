@@ -17,7 +17,7 @@ export type Filters = {
   /** 只看我最近浏览过的（localStorage 里的 recentViewIds） — client-side 过滤 */
   onlyRecent?: boolean;
   /** Sprint 6.7g:按卖家 contactValue 过滤(同卖家曝光 toast "去看看"触发);设置后 banner 显示 + ✕ 清除 */
-  seller?:    string;
+  sameSellerAs?: string;  // 9A:同卖家过滤用 item id,不再用联系方式
 };
 
 export function FilterSidebar({
