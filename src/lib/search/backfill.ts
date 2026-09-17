@@ -18,6 +18,8 @@ export interface BackfillKindResult {
   scanned: number;
   embedded: number;
   failed: number;
+  /** 写回时版本已过期(回填期间被编辑)——不算失败,下一轮会以新版本重来 */
+  stale: number;
   apiCalls: number;
   /** true = 该类型没有剩余待回填行 */
   drained: boolean;
@@ -45,12 +47,12 @@ export interface BackfillOpts {
   deps?: Partial<BackfillDeps>;
 }
 
-export interface PendingRow { id: string; text: string }
+export interface PendingRow { id: string; text: string; version: number }
 
 export interface BackfillDeps {
   /** 取一批待回填的行(已构造好文本) */
   fetchPending: (kind: EmbedKind, take: number) => Promise<PendingRow[]>;
-  embedMany: (texts: string[]) => Promise<number[][]>;
+  embedMany: (texts: string[], opts?: { timeoutMs?: number }) => Promise<number[][]>;
   store: () => VectorStore;
   sleep: (ms: number) => Promise<void>;
   now: () => number;
@@ -60,18 +62,19 @@ const PENDING_WHERE = { status: 'active', embeddedAt: null } as const;
 
 export async function fetchPendingRows(kind: EmbedKind, take: number): Promise<PendingRow[]> {
   const args = { where: PENDING_WHERE, orderBy: { id: 'asc' as const }, take };
+  const V = { embedVersion: true } as const;
   switch (kind) {
     case 'item': {
-      const rows = await prisma.item.findMany({ ...args, select: ITEM_EMBED_SELECT });
-      return rows.map(r => ({ id: r.id, text: embedTextFor('item', r) }));
+      const rows = await prisma.item.findMany({ ...args, select: { ...ITEM_EMBED_SELECT, ...V } });
+      return rows.map(r => ({ id: r.id, text: embedTextFor('item', r), version: r.embedVersion }));
     }
     case 'listing': {
-      const rows = await prisma.listing.findMany({ ...args, select: LISTING_EMBED_SELECT });
-      return rows.map(r => ({ id: r.id, text: embedTextFor('listing', r) }));
+      const rows = await prisma.listing.findMany({ ...args, select: { ...LISTING_EMBED_SELECT, ...V } });
+      return rows.map(r => ({ id: r.id, text: embedTextFor('listing', r), version: r.embedVersion }));
     }
     default: {
-      const rows = await prisma.event.findMany({ ...args, select: EVENT_EMBED_SELECT });
-      return rows.map(r => ({ id: r.id, text: embedTextFor('event', r) }));
+      const rows = await prisma.event.findMany({ ...args, select: { ...EVENT_EMBED_SELECT, ...V } });
+      return rows.map(r => ({ id: r.id, text: embedTextFor('event', r), version: r.embedVersion }));
     }
   }
 }
@@ -101,16 +104,22 @@ export async function backfillEmbeddings(opts: BackfillOpts = {}): Promise<Backf
   const delayMs = opts.delayMs ?? 200;
   const log = opts.log ?? (() => {});
   const t0 = deps.now();
-  const overdue = () => opts.deadlineMs !== undefined && deps.now() - t0 >= opts.deadlineMs;
+  /** 剩余预算 ms;无截止时 Infinity */
+  const remaining = () => (opts.deadlineMs === undefined ? Infinity : opts.deadlineMs - (deps.now() - t0));
+  const overdue = () => remaining() <= 0;
+  /** 一次 embedding 请求给多少时间:不超过剩余预算(截止时间是硬的,互审 #6 两轮) */
+  const requestTimeout = (): number | undefined => (opts.deadlineMs === undefined ? undefined : Math.min(30_000, remaining()));
+  const MIN_RETRY_BUDGET_MS = 5_000;
   const perKind: BackfillKindResult[] = [];
 
   for (const kind of kinds) {
-    const r: BackfillKindResult = { kind, scanned: 0, embedded: 0, failed: 0, apiCalls: 0, drained: false };
+    const r: BackfillKindResult = { kind, scanned: 0, embedded: 0, failed: 0, stale: 0, apiCalls: 0, drained: false };
     perKind.push(r);
     if (overdue()) continue;
-    // 建索引只在这条路径(不在请求路径);失败只 warn
+    // 建索引只在这条路径(不在请求路径);失败只 warn。有截止时间时不等它(CONCURRENTLY 与写入并存),无截止时等完再写
     const store = deps.store();
-    if (store.ensureIndex) await store.ensureIndex(kind);
+    const indexing = store.ensureIndex?.(kind);
+    if (indexing && opts.deadlineMs === undefined) await indexing;
     let batches = 0;
     // 失败的 id 记下来,下一批查询时排除,避免同一批反复失败卡住
     const failedIds = new Set<string>();
@@ -128,9 +137,11 @@ export async function backfillEmbeddings(opts: BackfillOpts = {}): Promise<Backf
       for (let attempt = 0; attempt < 2 && !vectors; attempt++) {
         try {
           r.apiCalls++;
-          vectors = await deps.embedMany(rows.map(x => x.text));
+          vectors = await deps.embedMany(rows.map(x => x.text), { timeoutMs: requestTimeout() });
         } catch (e) {
           log(`[backfill] ${kind} 第 ${batches} 批 embed 失败(第 ${attempt + 1} 次):${(e as Error)?.message ?? e}`);
+          // 剩余预算不够再来一次就不重试,把时间留给返回
+          if (remaining() < MIN_RETRY_BUDGET_MS) break;
           if (attempt === 0) await deps.sleep(delayMs * 5);
         }
       }
@@ -142,8 +153,9 @@ export async function backfillEmbeddings(opts: BackfillOpts = {}): Promise<Backf
 
       for (let i = 0; i < rows.length; i++) {
         try {
-          await store.upsert(kind, rows[i]!.id, vectors[i]!);
-          r.embedded++;
+          const written = await store.upsert(kind, rows[i]!.id, vectors[i]!, rows[i]!.version);
+          if (written) r.embedded++;
+          else { r.stale++; log(`[backfill] ${kind}:${rows[i]!.id} 回填期间被编辑(版本过期),下一轮重来`); }
         } catch (e) {
           r.failed++;
           failedIds.add(rows[i]!.id);

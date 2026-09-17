@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { validateListingFields, normalizeListingFields } from '@/lib/listingValidation';
 import { schedulePendingCloudinaryDeletion } from '@/lib/uploader';
-import { scheduleEmbed, scheduleRemove, substantiveChanged } from '@/lib/search/indexer';
+import { scheduleEmbed, scheduleRemove, substantiveChanged, INVALIDATE_EMBEDDING } from '@/lib/search/indexer';
 
 export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
   const { id } = ctx.params;
@@ -48,7 +48,7 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
 
   // Sprint 10A:实质性字段(标题 / 描述 / 类型 / 区域 / 预算 / 户型)真的变了才重算向量;同一条 update 置空 embeddedAt
   const reembed = substantiveChanged('listing', listing, data);
-  if (reembed) data.embeddedAt = null;
+  if (reembed) Object.assign(data, INVALIDATE_EMBEDDING);
 
   await prisma.listing.update({ where: { id }, data });
 

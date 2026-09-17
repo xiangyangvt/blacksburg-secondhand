@@ -40,6 +40,7 @@ model Item {
   // (两份 schema 唯一允许的字段差异,白名单在 scripts/check-schema-sync.mjs)
   embeddingJson       String?
   embeddedAt          DateTime?
+  embedVersion        Int       @default(0) // 实质性编辑 +1;向量写回时校验版本,防乱序覆盖(Codex 互审)
 
   inquiries   Inquiry[]
   reports     Report[]     @relation("ItemReports")
@@ -194,6 +195,7 @@ model Listing {
   // (两份 schema 唯一允许的字段差异,白名单在 scripts/check-schema-sync.mjs)
   embeddingJson       String?
   embeddedAt          DateTime?
+  embedVersion        Int       @default(0) // 实质性编辑 +1;向量写回时校验版本,防乱序覆盖(Codex 互审)
 
   applications        Application[]
   attachedTo          Application[] @relation("AttachedListing")
@@ -313,6 +315,7 @@ model Event {
   // (两份 schema 唯一允许的字段差异,白名单在 scripts/check-schema-sync.mjs)
   embeddingJson       String?
   embeddedAt          DateTime?
+  embedVersion        Int       @default(0) // 实质性编辑 +1;向量写回时校验版本,防乱序覆盖(Codex 互审)
 
   status          String    @default("active")  // active | fulfilled | canceled | expired | hidden | deleted
 

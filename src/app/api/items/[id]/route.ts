@@ -8,7 +8,7 @@ import {
   parsePhotoUrls,
 } from '@/lib/utils';
 import { schedulePendingCloudinaryDeletion } from '@/lib/uploader';
-import { scheduleEmbed, scheduleRemove, substantiveChanged } from '@/lib/search/indexer';
+import { scheduleEmbed, scheduleRemove, substantiveChanged, INVALIDATE_EMBEDDING } from '@/lib/search/indexer';
 
 const VALID_CATEGORIES = CATEGORIES.map(c => c.id);
 const VALID_CONTACT_TYPES = CONTACT_TYPES.map(c => c.id);
@@ -80,7 +80,7 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
   // Sprint 10A:标题 / 描述 / 类目 / 标签 / 类型**真的变了**才重算向量(表单提交完整字段,只看有没有传会每次都算);
   // 同一条 update 里把 embeddedAt 置空,embed 失败时回填能捞回
   const reembed = substantiveChanged('item', item, data);
-  if (reembed) data.embeddedAt = null;
+  if (reembed) Object.assign(data, INVALIDATE_EMBEDDING);
 
   await prisma.item.update({ where: { id }, data });
 

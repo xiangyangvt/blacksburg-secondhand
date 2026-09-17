@@ -27,8 +27,11 @@ export interface NearestFilter {
 
 export interface VectorStore {
   readonly backend: 'pgvector' | 'json';
-  /** 只对仍可检索(status ∈ SEARCHABLE_STATUSES)的行写入;行已删除 / 隐藏则静默不写(乱序防线,互审 #1) */
-  upsert(kind: EmbedKind, id: string, vector: number[]): Promise<void>;
+  /**
+   * 带乐观版本的写入:同一条 UPDATE 里校验 `embedVersion = version AND status ∈ SEARCHABLE_STATUSES`,
+   * 不匹配(embed 期间又被编辑 / 删除 / 隐藏)就不写,返回 false(乱序防线,互审 #1 两轮)。
+   */
+  upsert(kind: EmbedKind, id: string, vector: number[], version: number): Promise<boolean>;
   remove(kind: EmbedKind, id: string): Promise<void>;
   nearest(kind: EmbedKind, vector: number[], filter: NearestFilter, k: number): Promise<NearestHit[]>;
   /** 可选:建索引等一次性维护,只在回填 / admin 路径调,不在请求路径调 DDL(互审 #3) */
@@ -101,12 +104,14 @@ export class PgVectorStore implements VectorStore {
     return p;
   }
 
-  async upsert(kind: EmbedKind, id: string, vector: number[]): Promise<void> {
+  async upsert(kind: EmbedKind, id: string, vector: number[], version: number): Promise<boolean> {
     assertDim(vector);
-    await this.db.$executeRawUnsafe(
-      `UPDATE "${TABLE[kind]}" SET embedding = $1::vector, "embeddedAt" = now() WHERE id = $2 AND status = ANY($3::text[])`,
-      toVectorLiteral(vector), id, [...SEARCHABLE_STATUSES],
+    const n = await this.db.$executeRawUnsafe(
+      `UPDATE "${TABLE[kind]}" SET embedding = $1::vector, "embeddedAt" = now()
+        WHERE id = $2 AND status = ANY($3::text[]) AND "embedVersion" = $4`,
+      toVectorLiteral(vector), id, [...SEARCHABLE_STATUSES], version,
     );
+    return n > 0;
   }
 
   async remove(kind: EmbedKind, id: string): Promise<void> {
@@ -145,7 +150,7 @@ interface JsonRow { id: string; embeddingJson: string | null }
 /** 只用到三个 delegate 的两个方法;prod 客户端没有 embeddingJson 字段,所以经 unknown 强转,不直接依赖生成类型 */
 export interface JsonVectorDelegate {
   update(args: { where: { id: string }; data: { embeddingJson: string | null; embeddedAt: Date | null } }): Promise<unknown>;
-  updateMany(args: { where: { id: string; status: { in: string[] } }; data: { embeddingJson: string | null; embeddedAt: Date | null } }): Promise<unknown>;
+  updateMany(args: { where: { id: string; status: { in: string[] }; embedVersion: number }; data: { embeddingJson: string | null; embeddedAt: Date | null } }): Promise<{ count: number }>;
   findMany(args: { where: { id: { in: string[] }; embeddingJson: { not: null } }; select: { id: true; embeddingJson: true } }): Promise<JsonRow[]>;
 }
 export type JsonVectorDb = Record<EmbedKind, JsonVectorDelegate>;
@@ -158,12 +163,13 @@ export class JsonVectorStore implements VectorStore {
 
   constructor(private db: JsonVectorDb = prisma as unknown as JsonVectorDb) {}
 
-  async upsert(kind: EmbedKind, id: string, vector: number[]): Promise<void> {
+  async upsert(kind: EmbedKind, id: string, vector: number[], version: number): Promise<boolean> {
     assertDim(vector);
-    await this.db[kind].updateMany({
-      where: { id, status: { in: [...SEARCHABLE_STATUSES] } },
+    const r = await this.db[kind].updateMany({
+      where: { id, status: { in: [...SEARCHABLE_STATUSES] }, embedVersion: version },
       data: { embeddingJson: JSON.stringify(vector), embeddedAt: new Date() },
     });
+    return r.count > 0;
   }
 
   async remove(kind: EmbedKind, id: string): Promise<void> {

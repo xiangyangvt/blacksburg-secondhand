@@ -4,7 +4,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { translateToChineseSummary } from '@/lib/llm';
-import { scheduleEmbed, substantiveChanged } from '@/lib/search/indexer';
+import { scheduleEmbed, substantiveChanged, INVALIDATE_EMBEDDING } from '@/lib/search/indexer';
 import type { SourceDefinition, RawEvent, ScrapeResult } from './types';
 
 export async function runScraper(def: SourceDefinition): Promise<ScrapeResult> {
@@ -91,7 +91,7 @@ export async function runScraper(def: SourceDefinition): Promise<ScrapeResult> {
         const textChanged = substantiveChanged('event', existing, data);
         await prisma.event.update({
           where: { id: existing.id },
-          data: { ...data, scrapedAt: new Date(), ...(textChanged ? { embeddedAt: null } : {}) }, // bump scrapedAt 标识最近一次更新
+          data: { ...data, scrapedAt: new Date(), ...(textChanged ? INVALIDATE_EMBEDDING : {}) }, // bump scrapedAt 标识最近一次更新
         });
         itemsUpdated++;
         if (textChanged || !existing.embeddedAt) scheduleEmbed('event', existing.id);

@@ -75,6 +75,7 @@ curl -X POST https://$YOUR_DOMAIN/api/admin/cleanup-reddit \
   `schema.production.prisma` 的 `extensions = [vector]` 让 preDeploy 的 `db push` 自动 `CREATE EXTENSION IF NOT EXISTS vector`。
 - HNSW 索引 Prisma 不能声明，由 `src/lib/search/vectorStore.ts` 用 `CREATE INDEX CONCURRENTLY IF NOT EXISTS` 幂等建，
   只在下面的探针 GET 与回填路径触发（发布请求不跑 DDL）；就算 `db push` 把它当 drift 删了，下次探针 / 回填会重建。
+  `CONCURRENTLY` 不能在事务里跑：Railway 的 `DATABASE_URL` 是直连，Prisma 单条 raw 调用不包事务，可以执行；若将来 URL 加了 `pgbouncer=true` 需改回普通 `CREATE INDEX`。
 - 部署后核对 + 回填（需先登录 `/admin` 拿到 `hb_admin` cookie）：
 
 ```bash

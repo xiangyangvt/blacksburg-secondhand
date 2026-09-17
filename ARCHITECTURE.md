@@ -47,7 +47,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 
 ## 2. 数据模型与个人数据
 
-19 个 model（Sprint 9C 加 `RateLimitHit`）。两份 schema 字段一致，差异仅 provider、`binaryTargets`、`extensions`、注释，CI 用 `scripts/check-schema-sync.mjs` 逐行比对（9F）。**唯一的字段级豁免**（10A）：`Item` / `Listing` / `Event` 的向量列，dev 是 `embeddingJson String?`，prod 是 `embedding Unsupported("vector(1536)")?`，白名单写死在检查脚本里；`embeddedAt DateTime?` 两边相同。向量列不含个人数据（输入文本见 §8.11），Prisma 客户端看不见 prod 的 `embedding`，只能经 `vectorStore.ts` 的 raw SQL 读写。
+19 个 model（Sprint 9C 加 `RateLimitHit`；10A 给 `Item` / `Listing` / `Event` 加 `embeddedAt` `embedVersion` 与向量列）。两份 schema 字段一致，差异仅 provider、`binaryTargets`、`extensions`、注释，CI 用 `scripts/check-schema-sync.mjs` 逐行比对（9F）。**唯一的字段级豁免**（10A）：`Item` / `Listing` / `Event` 的向量列，dev 是 `embeddingJson String?`，prod 是 `embedding Unsupported("vector(1536)")?`，白名单写死在检查脚本里；`embeddedAt DateTime?` 两边相同。向量列不含个人数据（输入文本见 §8.11），Prisma 客户端看不见 prod 的 `embedding`，只能经 `vectorStore.ts` 的 raw SQL 读写。
 
 关系：`Item 1-N Inquiry / CartEntry / ItemViewThrottle / Report`；`Listing 1-N Inquiry / Application / ListingViewThrottle / Report`；`Application.attachedListingId → Listing`。`Event` 与 `EventComment` / `EventContactSend` / `EventClickThrottle` **无外键**，仅 `eventId` 字符串软关联，删除必须手工级联。
 
@@ -134,7 +134,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 - 权宜实现：event 举报用 `reason` 前缀 `[event:<id>]` 匹配（无外键）；`listingMatch.ts` v1 仅 2 维。
 - HNSW 索引不在 Prisma schema 里（索引类型不支持），由 `vectorStore.ensureIndex` 用 `CREATE INDEX CONCURRENTLY IF NOT EXISTS` 幂等建，**只在回填脚本与 admin 探针路径调用，发布请求路径不跑 DDL**；preDeploy 的 `db push` 是否会把它当 drift 删掉未实测，删了下次回填重建。当前 `nearest` 用 `OFFSET 0` 栅栏强制"先过滤后精确排序"，不走 HNSW 近似（候选集小时 HNSW 会漏结果），索引留给以后的全局查询。
 - `vectorStore.nearest` 的过滤是"调用方先用 Prisma where 查出候选 id 再传入"，不是 spec 里的 `filterSql`；两个后端共用一份过滤逻辑，代价是候选 id 列表随数据量线性增长（几百行无感，上万行再改）。
-- 向量生命周期规则：只为 `active` / `draft` 行维护（`upsert` 自带 status 守卫）；删除与举报隐藏清向量，admin 恢复补向量；`fulfilled` / `canceled` / `expired` 不清，靠查询侧 status 过滤。实质性编辑在同一条 update 里把 `embeddedAt` 置空，embed 失败由回填捞回；embed 是异步的，写回前会重读文本与状态，变了就丢弃这次结果（乱序 / 删后写回防线）。
+- 向量生命周期规则：只为 `active` / `draft` 行维护（`upsert` 自带 status 守卫）；删除与举报隐藏清向量，admin 恢复补向量；`fulfilled` / `canceled` / `expired` 不清，靠查询侧 status 过滤。实质性编辑在同一条 update 里 `embeddedAt = null, embedVersion += 1`（`INVALIDATE_EMBEDDING`），embed 失败由回填捞回；embed 是异步的，`upsert` 在同一条 UPDATE 里校验 `embedVersion = 读取时版本 AND status 可检索`，不匹配返回 false 丢弃结果（乱序 / 删后写回防线，indexer 与回填共用）。
 - dev / SQLite 的 `embeddingJson` 靠 `lib/prisma.ts` 的全局 `omit`（`omitApi` preview）挡在默认 select 之外，否则任何 `...row` spread 的响应都会带出 30KB 向量；omit 按 `DATABASE_URL` 分支（Postgres 没这列，omit 不存在的字段会报错）。显式 `select` 可越过 omit，这是 `JsonVectorStore` 读向量的方式。
 
 ## 10. 测试与门禁现状

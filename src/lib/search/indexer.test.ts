@@ -49,7 +49,8 @@ function fakeStore() {
   const ops: string[] = [];
   const store: VectorStore = {
     backend: 'json',
-    async upsert(kind, id, v) { ops.push(`upsert ${kind}:${id}:${v.length}`); },
+    // 模拟乐观守卫:版本 99 视为已过期
+    async upsert(kind, id, v, version) { ops.push(`upsert ${kind}:${id}:${v.length}:v${version}`); return version !== 99; },
     async remove(kind, id) { ops.push(`remove ${kind}:${id}`); },
     async nearest() { return []; },
   };
@@ -62,7 +63,7 @@ function deps(over: Partial<IndexerDeps> = {}): Deps {
   const { store, ops } = fakeStore();
   const logs: string[] = [];
   return {
-    load: async (k, id): Promise<EmbedSnapshot | null> => (id === 'missing' ? null : { text: `${k} text for ${id}`, status: 'active' }),
+    load: async (k, id): Promise<EmbedSnapshot | null> => (id === 'missing' ? null : { text: `${k} text for ${id}`, status: 'active', version: 3 }),
     embed: async () => new Array(EMBED_DIM).fill(0.1),
     store: () => store,
     configured: () => true,
@@ -73,10 +74,10 @@ function deps(over: Partial<IndexerDeps> = {}): Deps {
 }
 
 describe('embedOne', () => {
-  it('正常路径:读文本 → embed → 复核未变 → upsert', async () => {
+  it('正常路径:读文本 → embed → 带读取时版本 upsert', async () => {
     const d = deps();
     expect(await embedOne('item', 'i1', d)).toBe('ok');
-    expect(d.ops).toEqual(['upsert item:i1:1536']);
+    expect(d.ops).toEqual(['upsert item:i1:1536:v3']);
   });
 
   it('key 未配:跳过,一行 warn,不调 embed', async () => {
@@ -91,25 +92,17 @@ describe('embedOne', () => {
   it('行不存在 / 状态不可检索:skipped,不写', async () => {
     const d = deps();
     expect(await embedOne('event', 'missing', d)).toBe('skipped');
-    const hidden = deps({ load: async () => ({ text: 'x', status: 'hidden' }) });
+    const hidden = deps({ load: async () => ({ text: 'x', status: 'hidden', version: 0 }) });
     expect(await embedOne('item', 'h', hidden)).toBe('skipped');
     expect(d.ops).toEqual([]);
     expect(hidden.ops).toEqual([]);
   });
 
-  it('乱序防线:embed 期间文本被改 → 放弃本次结果,不写旧向量', async () => {
-    let n = 0;
-    const d = deps({ load: async () => ({ text: n++ === 0 ? '版本 A' : '版本 B', status: 'active' }) });
+  it('乱序防线:upsert 的版本守卫拒绝(embed 期间被编辑 / 删除)→ skipped,一行日志', async () => {
+    const d = deps({ load: async () => ({ text: '版本 A', status: 'active', version: 99 }) });
     expect(await embedOne('item', 'i1', d)).toBe('skipped');
-    expect(d.ops).toEqual([]);
-    expect(d.logs[0]).toMatch(/放弃本次结果/);
-  });
-
-  it('乱序防线:embed 期间被删除 → 不写回', async () => {
-    let n = 0;
-    const d = deps({ load: async () => ({ text: '同一文本', status: n++ === 0 ? 'active' : 'deleted' }) });
-    expect(await embedOne('listing', 'l1', d)).toBe('skipped');
-    expect(d.ops).toEqual([]);
+    expect(d.ops).toEqual(['upsert item:i1:1536:v99']); // 尝试了,但被守卫拒绝
+    expect(d.logs[0]).toMatch(/版本 99 已过期/);
   });
 
   it('embed API 失败:failed,一行日志,不抛', async () => {

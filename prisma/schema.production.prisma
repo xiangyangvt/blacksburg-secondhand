@@ -41,6 +41,7 @@ model Item {
   // HNSW 索引 Prisma 不能声明,由 src/lib/search/vectorStore.ts 首次使用时 CREATE INDEX IF NOT EXISTS
   embedding           Unsupported("vector(1536)")?
   embeddedAt          DateTime?
+  embedVersion        Int       @default(0) // 实质性编辑 +1;向量写回时校验版本,防乱序覆盖(Codex 互审)
 
   inquiries   Inquiry[]
   reports     Report[]     @relation("ItemReports")
@@ -175,6 +176,7 @@ model Listing {
   // HNSW 索引 Prisma 不能声明,由 src/lib/search/vectorStore.ts 首次使用时 CREATE INDEX IF NOT EXISTS
   embedding           Unsupported("vector(1536)")?
   embeddedAt          DateTime?
+  embedVersion        Int       @default(0) // 实质性编辑 +1;向量写回时校验版本,防乱序覆盖(Codex 互审)
 
   applications        Application[]
   attachedTo          Application[] @relation("AttachedListing")
@@ -289,6 +291,7 @@ model Event {
   // HNSW 索引 Prisma 不能声明,由 src/lib/search/vectorStore.ts 首次使用时 CREATE INDEX IF NOT EXISTS
   embedding           Unsupported("vector(1536)")?
   embeddedAt          DateTime?
+  embedVersion        Int       @default(0) // 实质性编辑 +1;向量写回时校验版本,防乱序覆盖(Codex 互审)
 
   status          String    @default("active")  // active | fulfilled | canceled | expired | hidden | deleted
 

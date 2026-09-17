@@ -81,12 +81,13 @@ export function isEmbedConfigured(): boolean {
  * 批量 embedding:一次 API 调用,按输入顺序返回(OpenAI 返回带 index,不保证顺序)。
  * 调用方负责每批 ≤ 50 条(回填脚本);单条用 embed()。
  */
-export async function embedMany(texts: string[]): Promise<number[][]> {
+export async function embedMany(texts: string[], opts: { timeoutMs?: number } = {}): Promise<number[][]> {
   if (texts.length === 0) return [];
-  const res = await embedClient.embeddings.create({
-    model: EMBED_MODEL,
-    input: texts,
-  });
+  const res = await embedClient.embeddings.create(
+    { model: EMBED_MODEL, input: texts },
+    // 回填带整体截止时间时,把剩余预算传进来;不传用客户端默认(30s)。超时后 SDK 不再重试(maxRetries 由剩余预算决定)
+    opts.timeoutMs !== undefined ? { timeout: Math.max(1_000, opts.timeoutMs), maxRetries: 0 } : undefined,
+  );
   const out: number[][] = new Array(texts.length);
   for (const d of res.data) out[d.index] = d.embedding;
   for (let i = 0; i < texts.length; i++) {
