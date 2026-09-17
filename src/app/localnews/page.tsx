@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { ChevronDown, Plus, Leaf } from 'lucide-react';
 import { PlatformTabs } from '@/components/PlatformTabs';
+import { SiteFooter } from '@/components/SiteFooter';
 import { SearchBox } from '@/components/SearchBox';
 import { EventCard, type EventCardData } from '@/components/EventCard';
 import { EventWishlistButton } from '@/components/EventWishlistButton';
@@ -493,6 +494,7 @@ export default function LocalNewsPage() {
 
       {/* 回顶部按钮 — 滚动 > 400px 显;左下角半透明 */}
       <ScrollToTop />
+      <SiteFooter />
     </main>
   );
 }
