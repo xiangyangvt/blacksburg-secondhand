@@ -90,10 +90,10 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 | `GET /api/events` · event SSR 页 | 是 | **`posterContactPublic` 在服务端生效**：非公开时 `posterContact` / type / label 置 null | 无 |
 | `POST /api/events/[id]/contact-send` · `reveal-to-responder` | 需 `hb_vid` | unique 约束 + 发布者 visitorId 校验 | 无 |
 | `GET /api/my/events` | `hb_vid` | `?contact=` 明文反查分支已移除 | 无 |
-| `*/verify-code`（items / listings / events） | 是 | 编辑密码校验 | 失败 10 次 / 15 分钟 / IP（`peekQuota` + 失败后 `checkQuota`） |
+| `*/verify-code`（items / listings / events） | 是 | 编辑密码校验；items 成功时返回所有者联系方式供编辑预填 | 10 次尝试 / 15 分钟 / IP（计数先于比较，并发不可绕） |
 | `GET /api/events/[id]/og-data` · 三个 `api/og/*` · `sitemap.ts` | 是 | 白名单，不含联系方式 | 60s / 1h 缓存 |
 
-已知遗留：`/?seller=<contactValue>` 的同卖家过滤把联系方式放在 URL 里（Referer / 历史可见），`GET /api/items?seller=` 按联系方式过滤无配额。待单独处理。
+同卖家过滤已改为 `?sameSellerAs=<itemId>`，服务端由 item 反查卖家，联系方式不进 URL、不进响应。
 
 ## 6. 反滥用现状
 

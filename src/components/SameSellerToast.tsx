@@ -5,7 +5,7 @@
 // 通过 sonner toast.custom 渲染富内容
 //
 // Sprint 6.7g 行为调整:
-//   - 主按钮 "去看看 (N)" → 跳 /?seller=X 用 seller 过滤显示该卖家所有商品
+//   - 主按钮 "去看看 (N)" → 跳 /?sameSellerAs=<itemId> 显示该卖家所有商品(9A:联系方式不进 URL)
 //   - 缩略图点击 → 跳 /?focus=ID 直接看那个商品(关闭 toast)
 //   - 不再就地加入(避免不可逆动作)
 
@@ -37,12 +37,12 @@ export function showSameSellerToast(items: SameSellerItem[]): boolean {
 
 function SameSellerCard({ items, onClose }: { items: SameSellerItem[]; onClose: () => void }) {
   const router = useRouter();
-  const contactValue = items[0]?.contactValue ?? '';
+  const anchorId = items[0]?.id ?? ''; // 9A:同卖家过滤按 item id 反查,联系方式不进 URL
 
   const goCheckAll = () => {
     onClose();
-    if (contactValue) {
-      router.push(`/?seller=${encodeURIComponent(contactValue)}`);
+    if (anchorId) {
+      router.push(`/?sameSellerAs=${encodeURIComponent(anchorId)}`);
     }
   };
 

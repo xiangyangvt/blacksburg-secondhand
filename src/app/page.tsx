@@ -38,7 +38,7 @@ function parseFiltersFromSearchParams(sp: ReadonlyURLSearchParams | URLSearchPar
     since:    since === '1d' || since === '1w' || since === '1m' ? since : 'all',
     // Phase 3C: 默认 'random' — 同日 jitter 随机展示;用户主动选 'newest' 才严格时间序
     sort:     sort === 'newest' || sort === 'oldest' || sort === 'priceAsc' || sort === 'priceDesc' ? sort : 'random',
-    seller:   get('seller'),  // Sprint 6.7g:同卖家曝光 toast 触发,?seller=contactValue
+    sameSellerAs: get('sameSellerAs'),  // Sprint 6.7g / 9A:同卖家曝光 toast 触发,?sameSellerAs=<itemId>
   };
 }
 
@@ -53,7 +53,7 @@ function buildFiltersSearch(f: Filters, debouncedQ: string): string {
   if (f.maxPrice)           sp.set('maxPrice', f.maxPrice);
   if (f.since !== 'all')    sp.set('since', f.since);
   if (f.sort  !== 'random') sp.set('sort', f.sort);
-  if (f.seller)             sp.set('seller', f.seller);
+  if (f.sameSellerAs)       sp.set('sameSellerAs', f.sameSellerAs);
   const s = sp.toString();
   return s ? `?${s}` : '';
 }
@@ -183,7 +183,7 @@ function HomePageInner() {
     if (filters.minPrice)           sp.set('minPrice', filters.minPrice);
     if (filters.maxPrice)           sp.set('maxPrice', filters.maxPrice);
     if (filters.since !== 'all')    sp.set('since', filters.since);
-    if (filters.seller)             sp.set('seller', filters.seller);
+    if (filters.sameSellerAs)       sp.set('sameSellerAs', filters.sameSellerAs);
     // Phase 3C: random 是前端 jitter 模式,API 不认识 — 映射成 newest(API 按时间倒序返回,前端再 jitter)
     sp.set('sort', filters.sort === 'random' ? 'newest' : filters.sort);
 
@@ -202,17 +202,17 @@ function HomePageInner() {
     }
     // 故意不把 filters.q 放进依赖：q 通过 debouncedQ 才触发 fetch
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.type, filters.category, debouncedQ, filters.minPrice, filters.maxPrice, filters.since, filters.sort, filters.seller]);
+  }, [filters.type, filters.category, debouncedQ, filters.minPrice, filters.maxPrice, filters.since, filters.sort, filters.sameSellerAs]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
   // Sprint 6.7g:同卖家曝光 toast → router.push(/?seller=X),需要在 URL 变化时把 seller 同步进 state
-  const sellerFromUrl = searchParams.get('seller') ?? undefined;
+  const sameSellerFromUrl = searchParams.get('sameSellerAs') ?? undefined;
   useEffect(() => {
-    if (sellerFromUrl !== filters.seller) {
-      setFiltersRaw(f => ({ ...f, seller: sellerFromUrl }));
+    if (sameSellerFromUrl !== filters.sameSellerAs) {
+      setFiltersRaw(f => ({ ...f, sameSellerAs: sameSellerFromUrl }));
     }
-  }, [sellerFromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sameSellerFromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEdit = async (code: string, item: Item) => {
     // 用专门的 verify-code 端点（之前是发"假 PATCH"验证，hack 性质，改用干净的方式）
@@ -227,7 +227,16 @@ function HomePageInner() {
       return;
     }
     setCodePrompt(null);
-    setPostModal({ mode: 'edit', item });
+    // 9A:列表 item 的联系方式是脱敏的,用 verify-code 返回的所有者联系方式补回,编辑表单才能预填
+    setPostModal({
+      mode: 'edit',
+      item: {
+        ...item,
+        contactType: data.contactType ?? item.contactType,
+        contactValue: data.contactValue ?? item.contactValue,
+        customContactLabel: data.customContactLabel ?? item.customContactLabel,
+      },
+    });
   };
 
   const handleDelete = async (code: string, item: Item) => {
@@ -336,11 +345,11 @@ function HomePageInner() {
           )}
 
           {/* Sprint 6.7g:seller 过滤激活时的 banner */}
-          {filters.seller && (
+          {filters.sameSellerAs && (
             <div className="mb-3 p-3 rounded-lg bg-brand/5 border border-brand/20 text-stone-800 text-sm flex items-center gap-2">
-              <span>正在看 <strong className="font-mono">{filters.seller}</strong> 的所有商品</span>
+              <span>正在看同一卖家的所有商品</span>
               <button
-                onClick={() => updateFilter({ seller: undefined })}
+                onClick={() => updateFilter({ sameSellerAs: undefined })}
                 className="ml-auto text-brand hover:text-brand-dark underline whitespace-nowrap"
               >
                 ✕ 清除

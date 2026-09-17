@@ -52,7 +52,8 @@ export async function gateReveal(
   const checks = [
     { key: `reveal:vid:${visitorId}:h`, windowMs: HOUR, max: REVEAL_LIMITS.visitorPerHour, tag },
     { key: `reveal:vid:${visitorId}:d`, windowMs: DAY, max: REVEAL_LIMITS.visitorPerDay, tag },
-    { key: `reveal:ip:${ip}:h`, windowMs: HOUR, max: REVEAL_LIMITS.ipPerHour, tag: `${visitorId}:${tag}` },
+    // visitorId 已校验为 UUID(定长、不含 |),所以 `${visitorId}|${tag}` 不可能被 tag 内容构造出碰撞
+    { key: `reveal:ip:${ip}:h`, windowMs: HOUR, max: REVEAL_LIMITS.ipPerHour, tag: `${visitorId}|${tag}` },
   ];
   let retryAfterSec = 0;
   let limited = false;

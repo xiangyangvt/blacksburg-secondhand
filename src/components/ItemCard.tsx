@@ -299,6 +299,8 @@ export function ItemCard({
         // 展开 = 用户对这件商品感兴趣 → 记进"最近浏览"
         markRecentView(item.id);
         reportView();
+        // 9A:上次取联系方式网络失败的,重新展开时再试一次(不在 effect 里自动重试,避免持续失败时死循环)
+        if (contactState === 'error') setContactState('idle');
 
         // 双 rAF 等 col-span-2 + 内容渲染都完成
         requestAnimationFrame(() =>
