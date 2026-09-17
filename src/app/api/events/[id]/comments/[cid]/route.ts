@@ -6,14 +6,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { readVisitorId } from '@/lib/rateLimit';
 
-const VID_COOKIE = 'hb_vid';
 
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string; cid: string } },
 ) {
-  const visitorId = req.cookies.get(VID_COOKIE)?.value;
+  const visitorId = readVisitorId(req);
   if (!visitorId) {
     return NextResponse.json({ ok: false, error: '请先发过评论再删除' }, { status: 401 });
   }
@@ -44,7 +44,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string; cid: string } },
 ) {
-  const visitorId = req.cookies.get(VID_COOKIE)?.value;
+  const visitorId = readVisitorId(req);
   if (!visitorId) {
     return NextResponse.json({ ok: false, error: '请先发过评论再修改' }, { status: 401 });
   }

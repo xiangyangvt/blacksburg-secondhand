@@ -4,11 +4,9 @@
 // 同 visitor 同 listing 24 小时内只计一次，避免刷新/误触刷高。
 
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { getVisitorId, isBotUA, setVisitorCookie } from '@/lib/rateLimit';
 
-const VID_COOKIE = 'hb_vid';
-const VID_MAX_AGE = 60 * 60 * 24 * 365;
 const THROTTLE_HOURS = 24;
 const db = prisma as any;
 
@@ -19,13 +17,11 @@ export async function POST(
   const listingId = params.id;
   if (!listingId) return NextResponse.json({ ok: false }, { status: 400 });
 
-  const ua = (req.headers.get('user-agent') ?? '').toLowerCase();
-  if (ua.includes('bot') || ua.includes('crawler') || ua.includes('spider') || ua.includes('preview') || ua.includes('headless')) {
+  if (isBotUA(req, 'full')) {
     return NextResponse.json({ ok: true, skipped: 'bot' });
   }
 
-  const existing = req.cookies.get(VID_COOKIE)?.value;
-  const visitorId = existing || randomUUID();
+  const { visitorId, isNew } = getVisitorId(req);
   const cutoff = new Date(Date.now() - THROTTLE_HOURS * 3600e3);
 
   try {
@@ -39,7 +35,7 @@ export async function POST(
         select: { viewCount: true },
       });
       const res = NextResponse.json({ ok: true, counted: false, viewCount: listing?.viewCount ?? 0 });
-      if (!existing) setVisitorCookie(res, visitorId);
+      if (isNew) setVisitorCookie(res, visitorId);
       return res;
     }
 
@@ -56,19 +52,10 @@ export async function POST(
     });
 
     const res = NextResponse.json({ ok: true, counted: true, viewCount: listing.viewCount });
-    if (!existing) setVisitorCookie(res, visitorId);
+    if (isNew) setVisitorCookie(res, visitorId);
     return res;
   } catch {
     return NextResponse.json({ ok: false }, { status: 404 });
   }
 }
 
-function setVisitorCookie(res: NextResponse, visitorId: string) {
-  res.cookies.set(VID_COOKIE, visitorId, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: VID_MAX_AGE,
-    path: '/',
-  });
-}

@@ -7,11 +7,9 @@
 // - 单条 ≤ 300 字,昵称 ≤ 20 字
 
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { getVisitorId, isBotUA, readVisitorId, setVisitorCookie } from '@/lib/rateLimit';
 
-const VID_COOKIE = 'hb_vid';
-const VID_MAX_AGE = 60 * 60 * 24 * 365;
 const PER_EVENT_THROTTLE_S = 60;
 const GLOBAL_LIMIT_PER_HOUR = 20;
 
@@ -33,13 +31,11 @@ export async function POST(
   if (!content)  return NextResponse.json({ ok: false, error: '请填写评论内容' }, { status: 400 });
 
   // bot UA 过滤
-  const ua = (req.headers.get('user-agent') ?? '').toLowerCase();
-  if (ua.includes('bot') || ua.includes('crawler') || ua.includes('spider')) {
+  if (isBotUA(req, 'basic')) {
     return NextResponse.json({ ok: true, skipped: 'bot' });
   }
 
-  const existing = req.cookies.get(VID_COOKIE)?.value;
-  const visitorId = existing || randomUUID();
+  const { visitorId, isNew } = getVisitorId(req);
 
   // 防刷 1:同 visitor + event 60s 内一条
   const oneMinAgo = new Date(Date.now() - PER_EVENT_THROTTLE_S * 1000);
@@ -69,7 +65,7 @@ export async function POST(
   });
 
   const res = NextResponse.json({ ok: true, comment: { ...comment, isMine: true } });
-  if (!existing) setVisitorCookie(res, visitorId);
+  if (isNew) setVisitorCookie(res, visitorId);
   return res;
 }
 
@@ -87,7 +83,7 @@ export async function GET(
   });
 
   // visitorId 不暴露给客户端,只告诉客户端"哪些是我的"
-  const myVid = req.cookies.get(VID_COOKIE)?.value;
+  const myVid = readVisitorId(req);
   const result = comments.map(c => ({
     id: c.id,
     nickname: c.nickname,
@@ -99,12 +95,3 @@ export async function GET(
   return NextResponse.json({ comments: result });
 }
 
-function setVisitorCookie(res: NextResponse, visitorId: string) {
-  res.cookies.set(VID_COOKIE, visitorId, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: VID_MAX_AGE,
-    path: '/',
-  });
-}

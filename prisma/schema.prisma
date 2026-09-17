@@ -436,3 +436,18 @@ model UserSession {
   @@index([sessionToken])
   @@index([email])
 }
+
+// 反滥用配额计数(Sprint 9C)。key 由调用方拼,如 reveal:vid:<visitorId>;tag 用于窗口内去重。
+// 只增不改,机会式清理 48h 前的行。见 src/lib/rateLimit.ts
+model RateLimitHit {
+  id        String   @id @default(cuid())
+  key       String
+  tag       String?
+  bucket    Int?
+  admitted  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([key, tag, bucket])
+  @@index([key, createdAt])
+  @@index([createdAt])
+}

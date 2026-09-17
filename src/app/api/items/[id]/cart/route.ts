@@ -5,11 +5,9 @@
 // visitor 用现有的 hb_vid cookie（跟 PageView 共用）；如果没有就生成一个并回写 Set-Cookie
 
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { getVisitorId, setVisitorCookie } from '@/lib/rateLimit';
 
-const VID_COOKIE = 'hb_vid';
-const VID_MAX_AGE = 60 * 60 * 24 * 365;
 
 export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
   const { id } = ctx.params;
@@ -30,8 +28,7 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
     }
   }
 
-  const existing = req.cookies.get(VID_COOKIE)?.value;
-  const visitorId = existing || randomUUID();
+  const { visitorId, isNew } = getVisitorId(req);
 
   try {
     if (action === 'add') {
@@ -49,14 +46,6 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
   }
 
   const res = NextResponse.json({ ok: true });
-  if (!existing) {
-    res.cookies.set(VID_COOKIE, visitorId, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: VID_MAX_AGE,
-      path: '/',
-    });
-  }
+  if (isNew) setVisitorCookie(res, visitorId);
   return res;
 }

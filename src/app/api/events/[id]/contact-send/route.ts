@@ -10,11 +10,9 @@
 // 安全:visitorId 不暴露给客户端(只用 toCommentId 或 event.posterVisitorId 间接路由)
 
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { getVisitorId, setVisitorCookie } from '@/lib/rateLimit';
 
-const VID_COOKIE = 'hb_vid';
-const VID_MAX_AGE = 60 * 60 * 24 * 365;
 const ALLOWED_CONTACT_TYPES = new Set(['wechat', 'phone', 'discord', 'email', 'other']);
 
 export async function POST(
@@ -45,8 +43,7 @@ export async function POST(
   }
 
   // 取 visitorId(发送者)
-  const existing = req.cookies.get(VID_COOKIE)?.value;
-  const fromVisitorId = existing || randomUUID();
+  const { visitorId: fromVisitorId, isNew } = getVisitorId(req);
 
   // 确定 toVisitorId — 两种来源:
   //   1. toCommentId 指向某评论 → 评论作者
@@ -130,19 +127,10 @@ export async function POST(
     });
 
     const res = NextResponse.json({ ok: true, send: { id: send.id, createdAt: send.createdAt } });
-    if (!existing) setVisitorCookie(res, fromVisitorId);
+    if (isNew) setVisitorCookie(res, fromVisitorId);
     return res;
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: '发送失败' }, { status: 500 });
   }
 }
 
-function setVisitorCookie(res: NextResponse, visitorId: string) {
-  res.cookies.set(VID_COOKIE, visitorId, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: VID_MAX_AGE,
-    path: '/',
-  });
-}

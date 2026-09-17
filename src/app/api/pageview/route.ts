@@ -7,11 +7,9 @@
 // 这是 admin 后台访客统计的数据源；Plausible 等 SaaS 替代但数据要发外网，自建更轻
 
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { getVisitorId, isBotUA, setVisitorCookie } from '@/lib/rateLimit';
 
-const VID_COOKIE = 'hb_vid';
-const VID_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 
 export async function POST(req: NextRequest) {
   let body: any;
@@ -24,14 +22,12 @@ export async function POST(req: NextRequest) {
   const userAgent = (req.headers.get('user-agent') ?? '').slice(0, 200);
 
   // 排除明显是 bot 的请求（粗略匹配 — 不严密但能滤掉绝大多数爬虫）
-  const ua = userAgent.toLowerCase();
-  if (ua.includes('bot') || ua.includes('crawler') || ua.includes('spider') || ua.includes('preview') || ua.includes('headless')) {
+  if (isBotUA(userAgent, 'full')) {
     return NextResponse.json({ ok: true, skipped: 'bot' });
   }
 
   // 1 年 cookie 跟踪 visitor
-  const existing = req.cookies.get(VID_COOKIE)?.value;
-  const visitorId = existing || randomUUID();
+  const { visitorId, isNew } = getVisitorId(req);
 
   try {
     await prisma.pageView.create({
@@ -42,14 +38,6 @@ export async function POST(req: NextRequest) {
   }
 
   const res = NextResponse.json({ ok: true });
-  if (!existing) {
-    res.cookies.set(VID_COOKIE, visitorId, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: VID_MAX_AGE,
-      path: '/',
-    });
-  }
+  if (isNew) setVisitorCookie(res, visitorId);
   return res;
 }

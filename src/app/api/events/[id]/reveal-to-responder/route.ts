@@ -16,15 +16,15 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { readVisitorId } from '@/lib/rateLimit';
 
-const VID_COOKIE = 'hb_vid';
 const ALLOWED_CONTACT_TYPES = new Set(['wechat', 'phone', 'discord', 'email', 'other']);
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const visitorId = req.cookies.get(VID_COOKIE)?.value;
+  const visitorId = readVisitorId(req);
   if (!visitorId) return NextResponse.json({ ok: false, error: 'no visitor' }, { status: 401 });
 
   let body: any;

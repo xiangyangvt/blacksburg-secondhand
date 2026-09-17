@@ -45,3 +45,6 @@ backups/
 # Playwright
 test-results/
 playwright-report/
+
+# 跨厂互审的输入/输出（本地流程产物，不进仓库）
+.review/

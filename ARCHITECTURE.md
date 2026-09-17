@@ -2,7 +2,7 @@
 
 > 读者两类：不读代码的项目所有者（建立"改哪炸哪"的直觉），和进来干活的 AI agent（拆任务、判风险、找雷区）。
 > 只放结构、边界、不变量和指针，不放实现细节。细节在指向的文件里。
-> 勘察基线：2026-09-16 · main `dd2ce74`。改动触及本文任一节时，PR 必须同步更新本文。
+> 勘察基线：2026-09-16 · main `dd2ce74`；9C 更新 2026-09-17。改动触及本文任一节时，PR 必须同步更新本文。
 
 ## 0. 一屏概览
 
@@ -41,12 +41,12 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 | 图床 | `lib/uploader.ts` · `api/upload` · `lib/cloudinary.ts` · `PendingCloudinaryDeletion` 延迟删除队列（由 items / listings 列表 GET 机会式触发） | Cloudinary env | 三个发布表单 |
 | LLM | `lib/llm.ts`：`llmCall` / `chat`（DeepSeek）· `embed`（OpenAI 兼容端点，**无调用方，为搜索预埋**） | env | scraper |
 | admin | `app/admin/page.tsx`（1329 行，server actions 内联）· `admin/recovery` · `api/recovery/**` | `adminAuth.isAdmin()` | — |
-| 反滥用 | **无共用模块**。限流、`hb_vid` 生成、bot UA 判断在 ≥7 个 route 各自内联（见 §6） | — | — |
+| 反滥用 | `src/lib/rateLimit.ts`（**唯一入口**）：`getVisitorId` / `readVisitorId` / `setVisitorCookie`（`hb_vid`）、`isBotUA`（basic / full 两档）、`checkQuota`（`RateLimitHit` 表计数的滑动窗口；行只增不减、被拒尝试也计入；tag 去重靠 `(key, tag, bucket)` 唯一约束 + `admitted` 标记，Codex 互审六轮定稿）。12 个 route 的 visitor cookie 与 6 处 bot 判断已迁入；各业务域自己的窗口计数（发布 / 评论 / 申请等）仍读各自的表，见 §6 | prisma | 所有需要访客标识或配额的 route；9A / 9E / 10B / 10C 的配额 |
 | 数据与运维 | `prisma/schema.prisma`（dev）· `schema.production.prisma`（prod，手工同步）· `scripts/{backup,restore-local}.sh` · `.github/workflows/{ci,backup,scrape-events}.yml` · `railway.json` | — | — |
 
 ## 2. 数据模型与个人数据
 
-18 个 model。两份 schema 目前字段一致，差异仅 provider、`binaryTargets`、注释；**没有 CI 保证它们一致**（雷区 8）。
+19 个 model（Sprint 9C 加 `RateLimitHit`）。两份 schema 目前字段一致，差异仅 provider、`binaryTargets`、注释；**没有 CI 保证它们一致**（雷区 8）。
 
 关系：`Item 1-N Inquiry / CartEntry / ItemViewThrottle / Report`；`Listing 1-N Inquiry / Application / ListingViewThrottle / Report`；`Application.attachedListingId → Listing`。`Event` 与 `EventComment` / `EventContactSend` / `EventClickThrottle` **无外键**，仅 `eventId` 字符串软关联，删除必须手工级联。
 
@@ -58,7 +58,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 | 邮箱 | `MagicLinkToken.email` · `UserSession.email` | 私有 |
 | IP | `Item/Inquiry/Listing/Application.ipAddress` · `Report.reporterIp` · `RecoveryRequest.ipAddress`（`PageView` 不存 IP） | 私有，**永不出网** |
 | 凭证 | `*.editCodeHash` `Event.posterCodeHash`（bcrypt 10）· `UserSession.sessionToken`（明文）· `RecoveryRequest.resolvedEditCode`（**明文新密码**） | 私有 |
-| 伪标识 | `hb_vid` 派生的各 `visitorId` | 私有 |
+| 伪标识 | `hb_vid` 派生的各 `visitorId`、`RateLimitHit.key`（含 visitorId / IP） | 私有 |
 
 ## 3. 身份与鉴权
 
@@ -67,7 +67,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 | editCode + bcrypt | 各 `route.ts` 写入；`[id]` / `publish` / `verify-code` 校验 | 编辑、删除、发布草稿、卖家回复、申请同意 / 撤回 | 不可找回；`verify-code` **无限流** |
 | contactValue + editCode 双凭证 | `*/by-contact` POST | 「我的」面板 | 先取 ≤200 行再逐行 bcrypt，O(N) CPU |
 | contactValue 单凭证 | `*/by-contact` GET · `api/my/events?contact=` | 基本不构成保护 | 知道微信号即可反查，见 §5 |
-| `hb_vid` cookie（HttpOnly，1 年） | 7 处 route 各自生成 | 活动评论作者、联系方式交换、reveal-to-responder 的发布者鉴权、view / cart 去重、UV | 无共用 helper |
+| `hb_vid` cookie（HttpOnly，1 年） | `lib/rateLimit.ts` 统一生成与读取 | 活动评论作者、联系方式交换、reveal-to-responder 的发布者鉴权、view / cart 去重、UV | 统一 helper，属性：httpOnly · lax · secure(prod) · 1 年 |
 | magic-link session | `api/auth/magic-link/*` · `lib/auth.ts` · `hb_session` | **不保护任何资源**，只做预填与身份连续性 | 15 分钟 token，同邮箱 60s 限流 |
 | admin cookie | `lib/adminAuth.ts` · `hb_admin` | `/admin` `/api/recovery` `api/admin/*` | **cookie 值 = 明文 `ADMIN_PASSWORD`**，非常量时间比较 |
 | `SCRAPER_SECRET` bearer | `api/scraper/run` | 触发抓取 | 未配置直接拒跑 |
@@ -93,7 +93,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 
 ## 6. 反滥用现状
 
-全部内联、无共用模块。IP 发布限流（items / listings 1h 10 条，applications 1h 5 条，inquiries 1h N 条）；visitor 限流（用户活动每日 3 条，评论 60s 一条 + 1h 20 条）；magic-link 同邮箱 60s；recovery 同 IP 24h 3 次、3 个不同 IP 自动标 abuse；举报 3 个不同 IP 自动隐藏；view / click / cart 靠 throttle 表去重；bot UA 字符串过滤 5 处。**无限流的面**：所有列表 GET、两个 reveal-contact、by-contact GET、verify-code。进程内存态：`eventArchive.ts` 的 5 分钟节流、`uploader.ts` 的配置缓存，多实例即失效。
+访客标识与 bot 判断已统一进 `lib/rateLimit.ts`；通用配额 `checkQuota` 可用但尚无调用方（9A / 9E 接入）。各业务域的窗口计数仍是内联查各自的表：IP 发布限流（items / listings 1h 10 条，applications 1h 5 条，inquiries 1h N 条）；visitor 限流（用户活动每日 3 条，评论 60s 一条 + 1h 20 条）；magic-link 同邮箱 60s；recovery 同 IP 24h 3 次、3 个不同 IP 自动标 abuse；举报 3 个不同 IP 自动隐藏；view / click / cart 靠 throttle 表去重；bot UA 过滤 6 处（click / view×2 / pageview 用 full 档，events POST / comments 用 basic 档，沿用各自原有词表）。**无限流的面**：所有列表 GET、两个 reveal-contact、by-contact GET、verify-code。进程内存态：`eventArchive.ts` 的 5 分钟节流、`uploader.ts` 的配置缓存，多实例即失效。
 
 ## 7. 外部依赖与失败模式
 
