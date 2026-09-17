@@ -402,6 +402,7 @@ model RateLimitHit {
   key       String
   tag       String?
   bucket    Int?
+  admitted  Boolean  @default(false)
   createdAt DateTime @default(now())
 
   @@unique([key, tag, bucket])

@@ -4,6 +4,7 @@ CREATE TABLE "RateLimitHit" (
     "key" TEXT NOT NULL,
     "tag" TEXT,
     "bucket" INTEGER,
+    "admitted" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

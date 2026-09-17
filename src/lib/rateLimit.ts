@@ -71,12 +71,19 @@ export interface QuotaDb {
   rateLimitHit: {
     count(args: { where: { key: string; createdAt: { gt: Date } } }): Promise<number>;
     findFirst(args: {
+      where: { key: string; createdAt: { gt: Date }; tag?: string; bucket?: number };
+      select: { id: true; admitted: true };
+    }): Promise<{ id: string; admitted: boolean } | null>;
+    findMany(args: {
       where: { key: string; createdAt: { gt: Date } };
       orderBy: { createdAt: 'asc' };
+      skip: number;
+      take: number;
       select: { createdAt: true };
-    }): Promise<{ createdAt: Date } | null>;
+    }): Promise<{ createdAt: Date }[]>;
     /** 违反 @@unique([key, tag, bucket]) 时必须抛出 { code: 'P2002' }(Prisma 语义) */
     create(args: { data: { key: string; tag: string | null; bucket: number | null }; select: { id: true } }): Promise<{ id: string }>;
+    update(args: { where: { id: string }; data: { admitted: true } }): Promise<unknown>;
     deleteMany(args: { where: { createdAt: { lt: Date } } }): Promise<unknown>;
   };
 }
@@ -88,15 +95,17 @@ function isUniqueViolation(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002';
 }
 
-// 并发语义(Codex 互审 2026-09-17 四轮,最终设计):
-// 核心不变量:**行只增不减,被拒的尝试也计入配额,绝不回滚。**
-//   - 前三轮的所有反例都源于"临时行"(插入后可能被删):另一方读到它就可能空手放行。行永久后这个概念消失。
-//   - 行单调增长 ⇒ 第 k 个被放行的请求在计数时至少看到 k 行 ⇒ 放行数 ≤ max,数学上不可能超额。
-//   - 放行 ⇒ 自己的行(或去重命中的同 tag 行)永久存在 ⇒ 不可能"放行但无记录"。
-// 代价:被拒的请求也占一行、也占配额。对反滥用这是想要的方向(刷的人越刷锁得越久),
-//   正常用户不会撞到上限。插入前做一次预检,已超额就不插行,攻击下表增长上限 ≈ max + 并发数。
-// 去重:数据库唯一约束 (key, tag, bucket),bucket = floor(now / windowMs)。同 tag 并发第二个 insert 被
-//   数据库拒绝(P2002),视为去重命中,同样按当前计数判定。桶边界处同 tag 可能计两次,已接受。
+// 并发语义(Codex 互审 2026-09-17 五轮,最终设计):
+// 核心不变量:**行只增不减,被拒的尝试也占行、也计入配额,绝不回滚。**
+//   - 早期方案的所有反例都源于"临时行"(插入后可能被删):另一方读到它就可能空手放行。行永久后这个概念消失。
+//   - 行单调增长 ⇒ 第 k 条被放行的**计费记录**在计数时至少看到 k 行 ⇒ 计费记录数 ≤ max。
+//     (同 tag 去重命中共用一条计费记录,所以"放行次数"可以大于记录数,这是去重的定义。)
+//   - 放行 ⇒ 自己的行或去重命中的 admitted 行存在 ⇒ 不可能"放行但无记录"。
+//     前提:请求在 CLEANUP_AGE_MS(48h)内结束,清理只删更老的行;HTTP 请求做不到挂 48h。
+// 去重:数据库唯一约束 (key, tag, bucket),bucket = floor(now / windowMs)。行带 admitted 标记:
+//   去重命中时只有当初被放行的行才放行(否则被拒的 tag 行会被重访漏过);并发同 tag 第二个请求
+//   在第一个标记 admitted 前到达会被拒,属过严,客户端按卡片缓存,不影响体验。桶边界同 tag 可能计两次,已接受。
+// retryAfter:被拒尝试也占行,所以"最早一行过期"不等于有名额;返回第 (used - max + 1) 条最早行的过期时间。
 export async function checkQuota(
   opts: QuotaOpts,
   db: QuotaDb = prisma as unknown as QuotaDb,
@@ -109,32 +118,50 @@ export async function checkQuota(
   const where = { key: opts.key, createdAt: { gt: since } };
   const bucket = tag ? Math.floor(t / opts.windowMs) : null;
 
-  const reject = async (): Promise<QuotaResult> => {
-    const oldest = await db.rateLimitHit.findFirst({ where, orderBy: { createdAt: 'asc' }, select: { createdAt: true } });
-    const retryAfterSec = oldest
-      ? Math.max(1, Math.ceil((oldest.createdAt.getTime() + opts.windowMs - t) / 1000))
+  const reject = async (used: number): Promise<QuotaResult> => {
+    // 需要 used - max + 1 行过期才有名额 → 第 (used - max) 个(0 基)最早行的过期时刻
+    const k = Math.max(0, used - opts.max);
+    const [kth] = await db.rateLimitHit.findMany({ where, orderBy: { createdAt: 'asc' }, skip: k, take: 1, select: { createdAt: true } });
+    const retryAfterSec = kth
+      ? Math.max(1, Math.ceil((kth.createdAt.getTime() + opts.windowMs - t) / 1000))
       : Math.ceil(opts.windowMs / 1000);
     return { ok: false, remaining: 0, retryAfterSec };
   };
 
-  // 预检:已经超额就不再写行(只为控制表增长;正确性不依赖它)
-  if ((await db.rateLimitHit.count({ where })) >= opts.max) return reject();
+  const admit = (used: number): QuotaResult => ({ ok: true, remaining: Math.max(0, opts.max - used), retryAfterSec: 0 });
 
-  let inserted = false;
-  try {
-    await db.rateLimitHit.create({ data: { key: opts.key, tag, bucket }, select: { id: true } });
-    inserted = true;
-  } catch (e) {
-    if (!isUniqueViolation(e)) throw e;
-    // 去重命中:同 key 同 tag 本桶已有永久行
+  // 去重快路径:同 tag 本桶已有行 → 按它当初的结果
+  if (tag && bucket !== null) {
+    const prior = await db.rateLimitHit.findFirst({ where: { ...where, tag, bucket }, select: { id: true, admitted: true } });
+    if (prior) {
+      const used = await db.rateLimitHit.count({ where });
+      return prior.admitted ? admit(used) : reject(used);
+    }
   }
 
-  const used = await db.rateLimitHit.count({ where }); // 含自己或含已有的同 tag 行;行永不回滚
-  if (used > opts.max) return reject();
+  // 预检:已经超额就不再写行(只为控制表增长;正确性不依赖它)
+  const pre = await db.rateLimitHit.count({ where });
+  if (pre >= opts.max) return reject(pre);
 
-  if (inserted && rand() < CLEANUP_PROBABILITY) {
+  let mine: { id: string } | null = null;
+  try {
+    mine = await db.rateLimitHit.create({ data: { key: opts.key, tag, bucket }, select: { id: true } });
+  } catch (e) {
+    if (!isUniqueViolation(e)) throw e;
+    // 并发同 tag,对方先插入且尚未(或已)标记 admitted → 走它的结果
+    const prior = await db.rateLimitHit.findFirst({ where: { ...where, tag: tag!, bucket: bucket! }, select: { id: true, admitted: true } });
+    const used = await db.rateLimitHit.count({ where });
+    return prior?.admitted ? admit(used) : reject(used);
+  }
+
+  const used = await db.rateLimitHit.count({ where }); // 含自己;行永不回滚
+  if (used > opts.max) return reject(used);
+
+  await db.rateLimitHit.update({ where: { id: mine.id }, data: { admitted: true } });
+
+  if (rand() < CLEANUP_PROBABILITY) {
     // 机会式清理 48h 前的行,失败不影响主流程
     db.rateLimitHit.deleteMany({ where: { createdAt: { lt: new Date(t - CLEANUP_AGE_MS) } } }).catch(() => {});
   }
-  return { ok: true, remaining: opts.max - used, retryAfterSec: 0 };
+  return admit(used);
 }
