@@ -39,7 +39,8 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run dev',
+    // 本地:dev server(热更);CI(PLAYWRIGHT_WEB_SERVER=start):复用 build 产物起 next start,稳定且快
+    command: process.env.PLAYWRIGHT_WEB_SERVER === 'start' ? 'npm run start' : 'npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
