@@ -19,6 +19,7 @@ import {
   setLastEventTemplate,
 } from '@/lib/eventNickname';
 import { SessionTopBar } from './SessionTopBar';
+import { ContactVisibleHint } from './ContactVisibleHint';
 import { ImageUpload } from './ImageUpload';
 
 // 跟二手/室友共用 — 三平台都从同一处读取/写入上次用的密码
@@ -513,6 +514,7 @@ export function EventPostModal({
                 className="mt-2 w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-brand"
               />
             )}
+            <ContactVisibleHint variant="public" />
             {contact && (
               <label className="flex items-center gap-2 mt-2 text-xs text-stone-600 cursor-pointer">
                 <input

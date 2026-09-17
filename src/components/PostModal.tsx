@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Copy, Plus } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
+import { ContactVisibleHint } from './ContactVisibleHint';
 import { BatchImportPanel } from './BatchImportPanel';
 import { CATEGORIES, CONTACT_TYPES } from '@/lib/utils';
 import { getStoredUtmSource } from '@/lib/utm';
@@ -315,6 +316,7 @@ export function PostModal({
                 className="border border-stone-300 rounded-md px-3 py-2 flex-1 min-w-[180px]"
               />
             </div>
+            <ContactVisibleHint />
           </div>
 
           <div className="border-t border-stone-200 pt-4">

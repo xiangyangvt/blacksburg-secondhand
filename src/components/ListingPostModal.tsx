@@ -11,6 +11,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Copy, Plus } from 'lucide-react';
 import { ImageUpload } from './ImageUpload';
+import { ContactVisibleHint } from './ContactVisibleHint';
 import {
   LISTING_TYPES,
   LISTING_AREAS,
@@ -760,6 +761,7 @@ export function ListingPostModal({
                 />
               )}
             </div>
+            <ContactVisibleHint />
           </section>
 
           <section>

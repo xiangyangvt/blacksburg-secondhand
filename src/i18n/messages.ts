@@ -201,6 +201,11 @@ export const messages = {
   // 页脚
   'footer.opensource':     { zh: 'MIT 开源 · 欢迎在 GitHub 提建议',            en: 'MIT · Feedback welcome on GitHub' },
   'footer.prohibited':     { zh: '⚠️ 禁止发布枪支、毒品、活物、违法物品。',         en: '⚠️ No firearms, drugs, live animals, or illegal items.' },
+  'footer.privacy':        { zh: '隐私政策',                                  en: 'Privacy' },
+  'footer.terms':          { zh: '服务条款',                                  en: 'Terms' },
+  'post.contactVisibleHint': { zh: '你的联系方式将对本站访客可见 ·',              en: 'Your contact will be visible to site visitors ·' },
+  'post.contactVisibleHintPublic': { zh: '勾选公开后对本站访客可见 ·',           en: 'Visible to site visitors when set to public ·' },
+  'post.privacyLink':      { zh: '隐私政策',                                  en: 'Privacy policy' },
 
   // 我的发布（G4）
   'my.title':              { zh: '我的',                                     en: 'My Posts' },
