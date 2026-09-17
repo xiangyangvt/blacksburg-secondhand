@@ -4,21 +4,27 @@
 // 值是 HMAC-SHA256 签名的会话令牌 `base64url(payload).base64url(sig)`,payload 只有签发时间与随机 nonce。
 // **cookie 里不再出现密码**(9E 之前 cookie 值就是明文 ADMIN_PASSWORD)。
 //
-// 签名密钥:ADMIN_SESSION_SECRET;未配置时用 sha256(ADMIN_PASSWORD + 固定盐)派生 —— 换密码即全部会话失效。
+// 签名密钥 = HMAC(keyMaterial, 当前密码):
+//   - keyMaterial 优先 sha256(ADMIN_SESSION_SECRET)(生产必配,见 DEPLOY.md);
+//   - 未配置时退回 scrypt(ADMIN_PASSWORD)(N=2^15,进程内只算一次)并在日志警告 ——
+//     Codex 9E 互审:直接 sha256 派生会让拿到一个令牌的人离线字典爆破密码,scrypt 把每次猜测拉到 ~50ms 级,
+//     但仍不如独立密钥,所以只是兜底。
+//   - 混入当前密码 ⇒ 删除 / 改回默认 / 轮换密码都会让所有会话立即失效,即使配了独立密钥。
 // 密码比对与签名校验都走 timingSafeEqual(先 sha256 等长再比)。
-// 登录尝试限流:同 IP 5 次 / 15 分钟,走 rateLimit.checkQuota,计数插入先于比较(并发不可绕)。
+// 登录尝试限流:同 IP 10 次尝试 / 15 分钟(计所有尝试,插入先于比较,并发不可绕;成功登录也占额度,
+//   10 次的上限让单管理员正常使用不会撞到)。
 //
 // 一次性影响:9E 上线后旧格式 cookie 校验失败,需重新登录一次。
 
 import { cookies } from 'next/headers';
-import { createHmac, createHash, randomBytes, timingSafeEqual } from 'crypto';
+import { createHmac, createHash, randomBytes, timingSafeEqual, scryptSync } from 'crypto';
 import { checkQuota, type QuotaDb } from '@/lib/rateLimit';
 
 export const ADMIN_COOKIE = 'hb_admin';
 const DEFAULT_PASS = 'changeme-in-production';
 const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 天
 export const LOGIN_WINDOW_MS = 15 * 60e3;
-export const LOGIN_MAX_ATTEMPTS = 5;
+export const LOGIN_MAX_ATTEMPTS = 10;
 
 export function getAdminPassword(): string | null {
   const p = process.env.ADMIN_PASSWORD;
@@ -26,12 +32,26 @@ export function getAdminPassword(): string | null {
   return p;
 }
 
-function sessionSecret(): Buffer | null {
+let scryptCache: { pw: string; key: Buffer } | null = null;
+let warned = false;
+
+function keyMaterial(pw: string): Buffer {
   const explicit = process.env.ADMIN_SESSION_SECRET;
   if (explicit && explicit.length >= 16) return createHash('sha256').update(explicit).digest();
+  if (!warned) {
+    warned = true;
+    console.warn('[adminAuth] ADMIN_SESSION_SECRET 未配置,会话密钥退回 scrypt(ADMIN_PASSWORD) 派生。生产环境请配置独立密钥。');
+  }
+  if (scryptCache && scryptCache.pw === pw) return scryptCache.key;
+  const key = scryptSync(pw, 'hb-admin-session-v1', 32, { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+  scryptCache = { pw, key };
+  return key;
+}
+
+function sessionSecret(): Buffer | null {
   const pw = getAdminPassword();
-  if (!pw) return null;
-  return createHash('sha256').update(`hb-admin-session:${pw}`).digest();
+  if (!pw) return null; // 密码未配 / 默认 ⇒ 不签发也不验证,无论有没有独立密钥
+  return createHmac('sha256', keyMaterial(pw)).update(pw).digest();
 }
 
 const b64u = (b: Buffer) => b.toString('base64url');

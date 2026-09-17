@@ -69,7 +69,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 | contactValue 单凭证 | `*/by-contact` GET · `api/my/events?contact=` | 基本不构成保护 | 知道微信号即可反查，见 §5 |
 | `hb_vid` cookie（HttpOnly，1 年） | `lib/rateLimit.ts` 统一生成与读取 | 活动评论作者、联系方式交换、reveal-to-responder 的发布者鉴权、view / cart 去重、UV | 统一 helper，属性：httpOnly · lax · secure(prod) · 1 年 |
 | magic-link session | `api/auth/magic-link/*` · `lib/auth.ts` · `hb_session` | **不保护任何资源**，只做预填与身份连续性 | 15 分钟 token，同邮箱 60s 限流 |
-| admin 会话 | `lib/adminAuth.ts` · `hb_admin` | `/admin` `/api/recovery` `api/admin/*` | 9E 起：HMAC 签名令牌（iat + nonce），密钥 `ADMIN_SESSION_SECRET` 或由密码派生；常量时间比较；登录同 IP 5 次 / 15 分钟 |
+| admin 会话 | `lib/adminAuth.ts` · `hb_admin` | `/admin` `/api/recovery` `api/admin/*` | 9E 起：HMAC 签名令牌（iat + nonce），密钥 = HMAC(`ADMIN_SESSION_SECRET` 或 scrypt(密码), 密码)，密码变动即全部失效；常量时间比较；登录同 IP 10 次尝试 / 15 分钟；IP 取 XFF 最后一段（`TRUSTED_PROXY_HOPS`） |
 | `SCRAPER_SECRET` bearer | `api/scraper/run` | 触发抓取 | 未配置直接拒跑 |
 
 ## 4. 数据流（一次发布到一次被看见）

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { issueAdminToken, verifyAdminToken, safeEqual, attemptAdminLogin, LOGIN_MAX_ATTEMPTS } from './adminAuth';
+import { getClientIpFromHeaders } from './utils';
 import type { QuotaDb } from './rateLimit';
 
 function memDb(): QuotaDb {
@@ -55,15 +56,29 @@ describe('admin session token', () => {
     expect(verifyAdminToken(t, () => t0 - 1000)).toBe(false);
   });
 
-  it('换密码即全部会话失效;配置 ADMIN_SESSION_SECRET 后换密码不影响会话', () => {
+  it('换密码 / 删密码 / 改回默认 ⇒ 全部会话失效,配了独立密钥也一样(Codex 9E 互审)', () => {
     const t = issueAdminToken()!;
     process.env.ADMIN_PASSWORD = 'another-password-1';
     expect(verifyAdminToken(t)).toBe(false);
     process.env.ADMIN_SESSION_SECRET = 'a-long-independent-secret';
     process.env.ADMIN_PASSWORD = PW;
     const t2 = issueAdminToken()!;
-    process.env.ADMIN_PASSWORD = 'another-password-2';
     expect(verifyAdminToken(t2)).toBe(true);
+    process.env.ADMIN_PASSWORD = 'another-password-2';
+    expect(verifyAdminToken(t2)).toBe(false);
+    process.env.ADMIN_PASSWORD = 'changeme-in-production';
+    expect(verifyAdminToken(t2)).toBe(false);
+    delete process.env.ADMIN_PASSWORD;
+    expect(verifyAdminToken(t2)).toBe(false);
+  });
+
+  it('独立密钥与密码派生的令牌互不相认', () => {
+    const tDerived = issueAdminToken()!;
+    process.env.ADMIN_SESSION_SECRET = 'a-long-independent-secret';
+    expect(verifyAdminToken(tDerived)).toBe(false);
+    const tExplicit = issueAdminToken()!;
+    delete process.env.ADMIN_SESSION_SECRET;
+    expect(verifyAdminToken(tExplicit)).toBe(false);
   });
 
   it('默认密码或未配置时不签发、不验证', () => {
@@ -81,16 +96,33 @@ describe('safeEqual', () => {
 });
 
 describe('attemptAdminLogin', () => {
-  it('正确密码 ok,错误 wrong,第 6 次尝试 limited(无论对错)', async () => {
+  it('正确密码 ok,错误 wrong,第 11 次尝试 limited(无论对错)', async () => {
     const db = memDb();
     expect(await attemptAdminLogin('nope', '1.1.1.1', db)).toBe('wrong');
     for (let i = 1; i < LOGIN_MAX_ATTEMPTS; i++) expect(await attemptAdminLogin('nope', '1.1.1.1', db)).toBe('wrong');
-    expect(await attemptAdminLogin(PW, '1.1.1.1', db)).toBe('limited'); // 第 6 次即便正确也拒
+    expect(await attemptAdminLogin(PW, '1.1.1.1', db)).toBe('limited'); // 第 11 次即便正确也拒
     expect(await attemptAdminLogin(PW, '2.2.2.2', db)).toBe('ok');       // 换 IP 正常
   });
 
   it('未配置密码 → disabled', async () => {
     process.env.ADMIN_PASSWORD = 'changeme-in-production';
     expect(await attemptAdminLogin('x', '1.1.1.1', memDb())).toBe('disabled');
+  });
+});
+
+describe('getClientIpFromHeaders(Codex 9E 互审:XFF 取可信代理追加的最后一段)', () => {
+  it('客户端伪造的首段不被采信', () => {
+    const h = new Headers({ 'x-forwarded-for': '6.6.6.6, 203.0.113.9' });
+    expect(getClientIpFromHeaders(h)).toBe('203.0.113.9');
+  });
+  it('单段 / 无头 / x-real-ip 回退', () => {
+    expect(getClientIpFromHeaders(new Headers({ 'x-forwarded-for': '203.0.113.9' }))).toBe('203.0.113.9');
+    expect(getClientIpFromHeaders(new Headers({ 'x-real-ip': '198.51.100.1' }))).toBe('198.51.100.1');
+    expect(getClientIpFromHeaders(new Headers())).toBe('unknown');
+  });
+  it('TRUSTED_PROXY_HOPS=2 取倒数第二段', () => {
+    process.env.TRUSTED_PROXY_HOPS = '2';
+    expect(getClientIpFromHeaders(new Headers({ 'x-forwarded-for': 'a, b, c' }))).toBe('b');
+    delete process.env.TRUSTED_PROXY_HOPS;
   });
 });

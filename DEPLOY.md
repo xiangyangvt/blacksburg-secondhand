@@ -102,3 +102,9 @@ curl -X POST https://$YOUR_DOMAIN/api/admin/cleanup-reddit \
 | 部署后 `/admin` 404 | `ADMIN_PASSWORD` 没配 | Railway dashboard 补 |
 | Scraper Action 失败 401 | `SCRAPER_SECRET` 不一致 | Railway / GH repo secrets 两边对齐 |
 | 图片上传失败 | Cloudinary 三件套缺 / 错 | 看 server log，或临时不配走本地存储 |
+
+## 管理员会话密钥（Sprint 9E）
+
+Railway 变量里新增 `ADMIN_SESSION_SECRET`（随机 ≥16 字符，`openssl rand -base64 32`）。不配也能跑，但会话密钥退回由 `ADMIN_PASSWORD` 经 scrypt 派生并在日志打警告，拿到一个会话 cookie 的人可以离线猜密码。`ADMIN_PASSWORD` 轮换、删除或改回默认值都会让所有管理员会话立即失效。9E 上线后需要重新登录一次。
+
+若在 Railway 前再套一层代理（Cloudflare 等），把 `TRUSTED_PROXY_HOPS` 设为 2，否则按 IP 的限流会取到代理 IP。

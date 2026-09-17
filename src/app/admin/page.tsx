@@ -1,10 +1,11 @@
 // 管理员后台 — 看举报、管隐藏商品、清理灌水
 // 路由：/admin
-// 认证：签名会话 cookie（密码 = ADMIN_PASSWORD env var;9E 起 cookie 不含密码,登录同 IP 5 次 / 15 分钟）
+// 认证：签名会话 cookie（密码 = ADMIN_PASSWORD env var;9E 起 cookie 不含密码,登录同 IP 10 次尝试 / 15 分钟）
 // robots.txt 已禁止抓取此路径
 
 import { isAdmin, setAdminCookie, clearAdminCookie, attemptAdminLogin, getAdminPassword } from '@/lib/adminAuth';
 import { headers } from 'next/headers';
+import { getClientIpFromHeaders } from '@/lib/utils';
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -17,8 +18,7 @@ export const dynamic = 'force-dynamic'; // 永远拿最新
 async function loginAction(formData: FormData) {
   'use server';
   const password = String(formData.get('password') ?? '');
-  const h = headers();
-  const ip = h.get('x-forwarded-for')?.split(',')[0].trim() || h.get('x-real-ip') || 'unknown';
+  const ip = getClientIpFromHeaders(headers());
   const result = await attemptAdminLogin(password, ip);
   if (result === 'ok') {
     setAdminCookie();
