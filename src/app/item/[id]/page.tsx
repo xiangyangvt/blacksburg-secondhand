@@ -106,14 +106,17 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
     category: item.category,
     customTag: item.customTag,
     contactType: item.contactType,
-    // UX C10:卖家联系方式直显(Sean 拍板恢复「所有信息一屏全开」);留言人联系方式仍脱敏
-    contactValue: item.contactValue,
-    customContactLabel: item.customContactLabel,
+    // Sprint 9A:SSR 不下发联系方式,ItemDetailView 挂载后调 reveal-contact 逐条取(经配额)
+    contactValue: '',
+    customContactLabel: null,
     photoUrls: parsePhotoUrls(item.photoUrls),
     createdAt: item.createdAt.toISOString(),
     viewCount: (item as any).viewCount ?? 0,
+    // 留言对象白名单:ipAddress / utmSource 不进 HTML
     inquiries: item.inquiries.map(inq => ({
-      ...inq,
+      id: inq.id, itemId: inq.itemId, listingId: inq.listingId, contactType: inq.contactType,
+      message: inq.message, sellerReply: inq.sellerReply, status: inq.status,
+      updatedAt: inq.updatedAt.toISOString(),
       createdAt: inq.createdAt.toISOString(),
       sellerRepliedAt: inq.sellerRepliedAt?.toISOString() ?? null,
       // 留言人联系方式也脱敏：用户点"查看联系方式"才会调 API 拿

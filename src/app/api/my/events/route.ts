@@ -8,7 +8,7 @@
 //
 // 身份解析:
 //   - 默认用 cookie 里的 hb_vid
-//   - 如果带 ?contact=xxx,通过 Event.posterContact + EventContactSend.fromContact
+//   - (Sprint 9A 起不再支持 ?contact= 反查)
 //     反查关联的 visitorIds(支持跨设备「软登录」),并入 cookie visitorId
 //
 // matched 状态:对于每一条 send,如果反向 send 也存在(双方都发了),matched=true
@@ -23,34 +23,12 @@ import { readVisitorId } from '@/lib/rateLimit';
 
 export async function GET(req: NextRequest) {
   const cookieVid = readVisitorId(req);
-  const url = new URL(req.url);
-  const contact = url.searchParams.get('contact')?.trim() || '';
-
-  // === 解析身份集合 ===
+  // Sprint 9A:移除 ?contact= 明文反查分支 —— 知道某人微信号即可读其收到的联系方式列表,
+  // 且带"标记已读"副作用,属披露面漏洞。身份只认 hb_vid cookie。
+  // 跨设备找回走 magic-link(hb_session);spec 9A 第 9 条二选一,选"去掉"而非"加 posterCode",
+  // 因为一个联系方式可对应多个活动、多个密码,无法用单一 code 校验。
   const visitorIds = new Set<string>();
   if (cookieVid) visitorIds.add(cookieVid);
-
-  if (contact) {
-    // 通过用户发的活动反查
-    const postedEvents = await prisma.event.findMany({
-      where: {
-        source: 'user',
-        posterContact: contact,
-        posterVisitorId: { not: null },
-      },
-      select: { posterVisitorId: true },
-    });
-    postedEvents.forEach(e => {
-      if (e.posterVisitorId) visitorIds.add(e.posterVisitorId);
-    });
-
-    // 通过用户发出的联系方式反查
-    const sentByContact = await prisma.eventContactSend.findMany({
-      where: { fromContact: contact },
-      select: { fromVisitorId: true },
-    });
-    sentByContact.forEach(s => visitorIds.add(s.fromVisitorId));
-  }
 
   if (visitorIds.size === 0) {
     return NextResponse.json({ comments: [], sent: [], received: [], posts: [] });

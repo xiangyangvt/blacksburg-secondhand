@@ -156,10 +156,9 @@ export function ItemCard({
     }
     setCartBusy(true);
     try {
-      // 加入心愿单 = 用户的明确购买意向 → 顺便 reveal 联系方式拿 contactValue（同时给卖家 reveal count +1）
-      const res = await fetch(`/api/items/${item.id}/reveal-contact`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) { showError(data.error || '加入失败'); return; }
+      // 加入心愿单 = 用户的明确购买意向 → 需要联系方式拍进 snapshot;展开时已取过就复用,不重复消耗配额
+      const data = await revealContact();
+      if (!data) { showError(contactState === 'limited' ? t('card.contactQuota') : '加入失败'); return; }
       const ret = addToCart({
         id: item.id,
         title: item.title,
@@ -192,8 +191,9 @@ export function ItemCard({
               category: it.category,
               photoUrls: it.photoUrls ?? [],
               contactType: it.contactType,
-              contactValue: it.contactValue,
-              customContactLabel: it.customContactLabel,
+              // Sprint 9A:by-contact 响应已脱敏,同卖家的联系方式就是刚 reveal 到的这一份
+              contactValue: data.contactValue,
+              customContactLabel: data.customContactLabel,
             }));
             if (!showSameSellerToast(mapped)) {
               showSuccess('已加入心愿单');
@@ -211,6 +211,30 @@ export function ItemCard({
   };
   // 统一的展开状态 —— 三种 click 来源都 toggle 它
   const [expanded, setExpanded] = useState(autoExpand);
+  // Sprint 9A:联系方式不随列表下发,展开时逐条取(经配额)。同卡片同会话只取一次。
+  type RevealedContact = { contactType: string; contactValue: string; customContactLabel: string | null };
+  const [contact, setContact] = useState<RevealedContact | null>(item.contactValue ? { contactType: item.contactType, contactValue: item.contactValue, customContactLabel: item.customContactLabel } : null);
+  const [contactState, setContactState] = useState<'idle' | 'loading' | 'ok' | 'limited' | 'error'>(item.contactValue ? 'ok' : 'idle');
+  const revealContact = useCallback(async (): Promise<RevealedContact | null> => {
+    if (contact) return contact;
+    setContactState('loading');
+    try {
+      const res = await fetch(`/api/items/${item.id}/reveal-contact`, { method: 'POST' });
+      if (res.status === 429) { setContactState('limited'); return null; }
+      if (!res.ok) { setContactState('error'); return null; }
+      const data = await res.json();
+      const c: RevealedContact = { contactType: data.contactType, contactValue: data.contactValue, customContactLabel: data.customContactLabel ?? null };
+      setContact(c);
+      setContactState('ok');
+      return c;
+    } catch {
+      setContactState('error');
+      return null;
+    }
+  }, [contact, item.id]);
+  useEffect(() => {
+    if (expanded && contactState === 'idle') void revealContact();
+  }, [expanded, contactState, revealContact]);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const photos = item.photoUrls;
   const cardRef = useRef<HTMLDivElement>(null);
@@ -275,6 +299,8 @@ export function ItemCard({
         // 展开 = 用户对这件商品感兴趣 → 记进"最近浏览"
         markRecentView(item.id);
         reportView();
+        // 9A:上次取联系方式网络失败的,重新展开时再试一次(不在 effect 里自动重试,避免持续失败时死循环)
+        if (contactState === 'error') setContactState('idle');
 
         // 双 rAF 等 col-span-2 + 内容渲染都完成
         requestAnimationFrame(() =>
@@ -518,19 +544,25 @@ export function ItemCard({
         </div>
       )}
 
-      {/* === 联系方式 — UX C10 直显(Sean 拍板恢复「所有信息一屏全开」):
-            展开卡即见「微信: xxx + 复制」,不再有 reveal 按钮拦一道。
-            guard:某些 feed(如 admin)可能仍返回空 contactValue,空值不渲染 === */}
-      <div className={`${expanded ? 'flex' : 'hidden md:flex'} items-center gap-1.5 mb-2 flex-wrap text-xs md:text-sm`}>
-        {item.contactValue && (
+      {/* === 联系方式 — 展开即见(UX C10 的体验保留),但数据在展开时逐条经配额取(Sprint 9A)。
+            桌面端此前折叠态也直显(hidden md:flex),现改为与手机一致只在展开态显示:
+            否则一页几十张卡等于几十次 reveal,配额没有意义。 === */}
+      <div className={`${expanded ? 'flex' : 'hidden'} items-center gap-1.5 mb-2 flex-wrap text-xs md:text-sm`}>
+        {contact ? (
           <>
             <span className="text-stone-600 truncate min-w-0">
-              {contactTypeLabel(item.contactType, item.customContactLabel, locale)}：
-              <span className="font-mono text-stone-900 select-all ml-1">{item.contactValue}</span>
+              {contactTypeLabel(contact.contactType, contact.customContactLabel, locale)}：
+              <span className="font-mono text-stone-900 select-all ml-1">{contact.contactValue}</span>
             </span>
-            <CopyButton text={item.contactValue} />
+            <CopyButton text={contact.contactValue} />
           </>
-        )}
+        ) : contactState === 'loading' ? (
+          <span className="text-stone-400">{t('card.contactLoading')}</span>
+        ) : contactState === 'limited' ? (
+          <span className="text-amber-700">{t('card.contactQuota')}</span>
+        ) : contactState === 'error' ? (
+          <span className="text-stone-400">{t('card.contactError')}</span>
+        ) : null}
         {/* 加入心愿单 / 已加入：买家批量买的入口（展开模式文字按钮） */}
         <button
           onClick={toggleCart}

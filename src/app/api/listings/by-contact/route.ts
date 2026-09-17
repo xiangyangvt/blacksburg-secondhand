@@ -35,6 +35,14 @@ function serialize(listing: any, includeApplications = false) {
   return base;
 }
 
+// Sprint 9A:公开 GET 走白名单 select。调用方(ListingApplyModal「附上我自己的 listing」)只用 id/title/type;
+// 多给几个不敏感的展示字段,联系方式 / IP / hash / utm 一律不出网。
+const PUBLIC_LISTING_SELECT = {
+  id: true, type: true, title: true, description: true, photoUrls: true, hasPlace: true, housingLayout: true,
+  moveInStart: true, moveInEnd: true, moveInFuzzy: true, budgetMin: true, budgetMax: true, areas: true,
+  status: true, createdAt: true, updatedAt: true, bumpedAt: true, viewCount: true,
+} as const;
+
 export async function GET(req: NextRequest) {
   const value = req.nextUrl.searchParams.get('value')?.trim();
   if (!value) return NextResponse.json({ error: 'value 不能为空' }, { status: 400 });
@@ -43,8 +51,17 @@ export async function GET(req: NextRequest) {
     where: { contactValue: value, status: 'active' },
     orderBy: { bumpedAt: 'desc' },
     take: 100,
+    select: PUBLIC_LISTING_SELECT,
   });
-  return NextResponse.json({ items: listings.map(l => serialize(l)) });
+  return NextResponse.json({
+    items: listings.map(l => ({
+      ...l,
+      photoUrls: parseJsonArray(l.photoUrls),
+      areas: parseJsonArray(l.areas),
+      contactValue: '',
+      customContactLabel: null,
+    })),
+  });
 }
 
 export async function POST(req: NextRequest) {
