@@ -6,19 +6,13 @@
 // 阈值可由调用方(workflow env)传入,0 = 关闭该项;缺省见 lib/digest.ts DEFAULT_THRESHOLDS。
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createHash, timingSafeEqual } from 'node:crypto';
-import { isAdmin } from '@/lib/adminAuth';
+import { isAdmin, safeEqual } from '@/lib/adminAuth';
 import { sendEmail } from '@/lib/email';
 import { computeDigest, evaluateThresholds, parseThresholds, renderDigestEmail } from '@/lib/digest';
 
 export const dynamic = 'force-dynamic';
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://blacksburg-secondhand-production.up.railway.app').replace(/\/$/, '');
-
-// 常量时间比较(与 9E 的 adminAuth.safeEqual 同款;9E 合并后可改为复用)
-function safeEqual(a: string, b: string): boolean {
-  return timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
-}
 
 function bearerOk(req: NextRequest): boolean {
   const secret = process.env.DIGEST_SECRET;
