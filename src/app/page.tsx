@@ -88,6 +88,8 @@ function HomePageInner() {
   // Sprint 10B:第 1 层语义结果;无 q 时始终 EMPTY(整块不渲染)
   const [semantic, setSemantic] = useState<SemanticState>(EMPTY_SEMANTIC);
   // Sprint 11E:统一问询栏。搜索栏回车 / 点发送 = 把当前输入交给对话;id 自增,SearchChat 见 id 变就发一次
+  // Sprint 11F:搜索词与某位卖家的联系方式整串相等 → 接口直接给这位卖家的在售,并带回一件锚点物品 id(接「相似的」用)
+  const [sellerMatchAnchor, setSellerMatchAnchor] = useState<string | null>(null);
   const [ask, setAsk] = useState<{ id: number; text: string } | null>(null);
   // chatEnabled 跟着每次搜索响应来,换词瞬间会短暂回到 false;对话开着时不该因此闪没 → 记住"见过可用"
   const [chatSeen, setChatSeen] = useState(false);
@@ -189,12 +191,14 @@ function HomePageInner() {
   // 这样用户可以复制当前 URL 分享筛选状态
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const search = buildFiltersSearch(filters, debouncedQ);
+    // 11F:搜索词命中了某位卖家的联系方式时,不把它写进地址栏(个人信息不进 URL:地址会留在历史记录、被复制转发)。
+    // 分享这位卖家请用长图 / 摊位短链
+    const search = buildFiltersSearch(filters, sellerMatchAnchor ? '' : debouncedQ);
     const target = `${window.location.pathname}${search}${window.location.hash}`;
     if (target !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
       window.history.replaceState(null, '', target);
     }
-  }, [filters, debouncedQ]);
+  }, [filters, debouncedQ, sellerMatchAnchor]);
 
   const buildListParams = useCallback(() => {
     const sp = new URLSearchParams();
@@ -259,12 +263,14 @@ function HomePageInner() {
         keywordIdsRef.current = new Set(fetched.map(it => it.id));
         setSemantic({ aiEnabled: !!data.aiEnabled, trigger: data.trigger ?? null, list: [], loading: false, requested: false, limited: false, chatEnabled: !!data.chatEnabled });
         autoSemantic = !!data.aiEnabled && data.trigger === 'auto';
+        setSellerMatchAnchor(typeof data.sellerMatch?.anchorId === 'string' ? data.sellerMatch.anchorId : null);
       } else {
         const res = await fetch(`/api/items?${sp}`);
         const data = await res.json();
         if (seq !== reqSeq.current) return;
         fetched = data.items ?? [];
         setSemantic(EMPTY_SEMANTIC);
+        setSellerMatchAnchor(null);
       }
       setItems(fetched);
       // 跟购物清单同步：找不到 id 的 cart item 静默移除；找到的更新 snapshot
@@ -441,11 +447,12 @@ function HomePageInner() {
 
           {/* Sprint 6.7g / 11A:卖家筛选激活时的 banner。扫长图二维码进来的人第一眼看到的就是它:
               说清楚「这是谁的东西、有几件」,并给一个一步回到全站的出口(原地清筛选,不跳页) */}
-          {sellerFilterOn && (
+          {(sellerFilterOn || sellerMatchAnchor) && (
             <div className="mb-3 p-3 rounded-lg bg-brand/5 border border-brand/20 text-stone-800 text-sm flex items-center gap-2" data-testid="seller-banner">
               <span>{loading ? t('seller.bannerLoading') : t('seller.banner', { n: visibleItems.length })}</span>
               <button
-                onClick={() => updateFilter({ sameSellerAs: undefined, shelf: undefined })}
+                // 按联系方式搜到的(11F):这位卖家是搜索词带出来的,清掉搜索词就回到全站
+                onClick={() => updateFilter(sellerMatchAnchor && !sellerFilterOn ? { q: '' } : { sameSellerAs: undefined, shelf: undefined })}
                 className="ml-auto text-brand hover:text-brand-dark underline whitespace-nowrap"
               >
                 {t('seller.seeAll')}
@@ -547,9 +554,9 @@ function HomePageInner() {
 
           {/* Sprint 11A / 11B:卖家筛选下,列表不在卖家的最后一件戛然而止 —— 接「相似的」,再接全站在售。
               卖家发长图是在替平台打广告,进站的新用户要能顺着滑下去(Sean 2026-09-18)。有关键词 / 只看最近浏览时不接 */}
-          {sellerFilterOn && !loading && !debouncedQ.trim() && !filters.onlyRecent && (
+          {!loading && !filters.onlyRecent && ((sellerFilterOn && !debouncedQ.trim()) || (sellerMatchAnchor && !sellerFilterOn)) && (
             <SellerExplore
-              seller={filters.shelf ? { key: 'shelf', value: filters.shelf } : { key: 'sameSellerAs', value: filters.sameSellerAs! }}
+              seller={filters.shelf ? { key: 'shelf', value: filters.shelf } : { key: 'sameSellerAs', value: (filters.sameSellerAs ?? sellerMatchAnchor)! }}
               excludeIds={visibleItems.map(i => i.id)}
               cardProps={semanticCardProps}
             />
