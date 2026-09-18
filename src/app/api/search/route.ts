@@ -21,7 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { setVisitorCookie } from '@/lib/rateLimit';
 import {
-  parseItemsQuery, buildItemsWhere, itemsOrderBy, resolveSellerContact, serializePublicItem, ITEM_LIST_INCLUDE,
+  parseItemsQuery, buildItemsWhere, itemsOrderBy, resolveSeller, serializePublicItem, ITEM_LIST_INCLUDE,
 } from '@/lib/itemsQuery';
 import {
   parseListingsQuery, buildListingsWhere, listingsOrderBy, filterListingsByAreas, serializePublicListing, LISTING_LIST_INCLUDE,
@@ -64,7 +64,7 @@ async function itemsHandler(sp: URLSearchParams): Promise<HandlerResult> {
   const qy = parseItemsQuery(sp);
   if (!qy.q) return { error: '缺少 q;无关键词请用列表接口' };
   const q = qy.q;
-  const sellerContact = await resolveSellerContact(qy.sameSellerAs, prisma);
+  const sellerContact = await resolveSeller(qy, prisma);
   const whereOpts = sellerContact != null ? { sellerContact } : {};
   return {
     kind: 'item', q, chat: true,

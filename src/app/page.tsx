@@ -17,6 +17,8 @@ import { getRecentViewIds } from '@/lib/recentViews';
 import { useUnreadCount, markSeen } from '@/lib/notifications';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
+import { SellerExplore } from '@/components/SellerExplore';
+import { ITEM_FILTER_KEYS } from '@/lib/itemsQuery';
 import { SemanticResults, EMPTY_SEMANTIC, type SemanticState } from '@/components/SemanticResults';
 import { SearchChat } from '@/components/SearchChat';
 import { FeedbackLink } from '@/components/FeedbackCard';
@@ -43,6 +45,7 @@ function parseFiltersFromSearchParams(sp: ReadonlyURLSearchParams | URLSearchPar
     // Phase 3C: 默认 'random' — 同日 jitter 随机展示;用户主动选 'newest' 才严格时间序
     sort:     sort === 'newest' || sort === 'oldest' || sort === 'priceAsc' || sort === 'priceDesc' ? sort : 'random',
     sameSellerAs: get('sameSellerAs'),  // Sprint 6.7g / 9A:同卖家曝光 toast 触发,?sameSellerAs=<itemId>
+    shelf: get('shelf'),                // Sprint 11A:长图二维码 /s/<slug> 跳进来,?shelf=<slug>
   };
 }
 
@@ -58,6 +61,7 @@ function buildFiltersSearch(f: Filters, debouncedQ: string): string {
   if (f.since !== 'all')    sp.set('since', f.since);
   if (f.sort  !== 'random') sp.set('sort', f.sort);
   if (f.sameSellerAs)       sp.set('sameSellerAs', f.sameSellerAs);
+  if (f.shelf)              sp.set('shelf', f.shelf);
   const s = sp.toString();
   return s ? `?${s}` : '';
 }
@@ -202,11 +206,12 @@ function HomePageInner() {
     if (filters.maxPrice)           sp.set('maxPrice', filters.maxPrice);
     if (filters.since !== 'all')    sp.set('since', filters.since);
     if (filters.sameSellerAs)       sp.set('sameSellerAs', filters.sameSellerAs);
+    if (filters.shelf)              sp.set('shelf', filters.shelf);
     // Phase 3C: random 是前端 jitter 模式,API 不认识 — 映射成 newest(API 按时间倒序返回,前端再 jitter)
     sp.set('sort', filters.sort === 'random' ? 'newest' : filters.sort);
     return { sp, q };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.type, filters.category, debouncedQ, filters.minPrice, filters.maxPrice, filters.since, filters.sort, filters.sameSellerAs]);
+  }, [filters.type, filters.category, debouncedQ, filters.minPrice, filters.maxPrice, filters.since, filters.sort, filters.sameSellerAs, filters.shelf]);
 
   // Sprint 10B:语义层单独一段请求(semantic=1)。trigger=auto 时关键词层渲染后自动发;trigger=button 时用户点按钮才发。
   // 关键词层永远不等 embedding;失败时 requested 复位,按钮回来可以重试(互审 #4 #7)
@@ -284,6 +289,10 @@ function HomePageInner() {
       setFiltersRaw(f => ({ ...f, sameSellerAs: sameSellerFromUrl }));
     }
   }, [sameSellerFromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shelfFromUrl = searchParams.get('shelf') ?? undefined;
+  useEffect(() => {
+    if (shelfFromUrl !== filters.shelf) setFiltersRaw(f => ({ ...f, shelf: shelfFromUrl }));
+  }, [shelfFromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEdit = async (code: string, item: Item) => {
     // 用专门的 verify-code 端点（之前是发"假 PATCH"验证，hack 性质，改用干净的方式）
@@ -344,6 +353,7 @@ function HomePageInner() {
   };
 
   // 第 1、2 层里的卡片与第 0 层共用同一套回调
+  const sellerFilterOn = !!(filters.shelf || filters.sameSellerAs);
   const semanticCardProps = {
     onEdit: (it: Item) => setCodePrompt({ kind: 'edit', item: it }),
     onMarkSold: (it: Item) => setCodePrompt({ kind: 'delete', item: it }),
@@ -429,15 +439,16 @@ function HomePageInner() {
             </div>
           )}
 
-          {/* Sprint 6.7g:seller 过滤激活时的 banner */}
-          {filters.sameSellerAs && (
-            <div className="mb-3 p-3 rounded-lg bg-brand/5 border border-brand/20 text-stone-800 text-sm flex items-center gap-2">
-              <span>正在看同一卖家的所有商品</span>
+          {/* Sprint 6.7g / 11A:卖家筛选激活时的 banner。扫长图二维码进来的人第一眼看到的就是它:
+              说清楚「这是谁的东西、有几件」,并给一个一步回到全站的出口(原地清筛选,不跳页) */}
+          {sellerFilterOn && (
+            <div className="mb-3 p-3 rounded-lg bg-brand/5 border border-brand/20 text-stone-800 text-sm flex items-center gap-2" data-testid="seller-banner">
+              <span>{loading ? t('seller.bannerLoading') : t('seller.banner', { n: visibleItems.length })}</span>
               <button
-                onClick={() => updateFilter({ sameSellerAs: undefined })}
+                onClick={() => updateFilter({ sameSellerAs: undefined, shelf: undefined })}
                 className="ml-auto text-brand hover:text-brand-dark underline whitespace-nowrap"
               >
-                ✕ 清除
+                {t('seller.seeAll')}
               </button>
             </div>
           )}
@@ -474,7 +485,7 @@ function HomePageInner() {
             <SearchChat
               ask={ask}
               filters={Object.fromEntries(
-                [...buildListParams().sp.entries()].filter(([k]) => ['type', 'category', 'minPrice', 'maxPrice', 'since', 'sameSellerAs'].includes(k)),
+                [...buildListParams().sp.entries()].filter(([k]) => (ITEM_FILTER_KEYS as readonly string[]).includes(k)), // 含 shelf:卖家筛选下问 AI,检索范围也跟着收窄
               )}
               cardProps={semanticCardProps}
               onClose={() => setAsk(null)}
@@ -531,6 +542,16 @@ function HomePageInner() {
               onRequestMore={fetchMoreSimilar}
               renderCard={(item, badge) => <ItemCard key={item.id} item={item} badge={badge} {...semanticCardProps} />}
               onAsk={() => { const text = debouncedQ.trim(); if (text) { setAsk(a => ({ id: (a?.id ?? 0) + 1, text })); window.scrollTo({ top: 0, behavior: 'smooth' }); } }}
+            />
+          )}
+
+          {/* Sprint 11A / 11B:卖家筛选下,列表不在卖家的最后一件戛然而止 —— 接「相似的」,再接全站在售。
+              卖家发长图是在替平台打广告,进站的新用户要能顺着滑下去(Sean 2026-09-18)。有关键词 / 只看最近浏览时不接 */}
+          {sellerFilterOn && !loading && !debouncedQ.trim() && !filters.onlyRecent && (
+            <SellerExplore
+              seller={filters.shelf ? { key: 'shelf', value: filters.shelf } : { key: 'sameSellerAs', value: filters.sameSellerAs! }}
+              excludeIds={visibleItems.map(i => i.id)}
+              cardProps={semanticCardProps}
             />
           )}
         </section>

@@ -19,6 +19,7 @@ function world(counts: { item?: number; listing?: number; event?: number }) {
     },
     async remove() {},
     async nearest() { return []; },
+    async nearestToRows() { return []; },
     async ensureIndex(k) { indexed.push(k); },
   };
   let clock = 0;
