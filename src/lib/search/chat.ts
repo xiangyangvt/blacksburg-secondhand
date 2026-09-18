@@ -193,8 +193,9 @@ const CHANNEL_KEYWORD = /微信|威信|薇信|微x|wechat|weixin|(?<![a-z])wx(?!
 /**
  * 明确的"渠道 + 账号"表达:关键词后面(可夹 号 / id / 账号 / is / 是 / 为 / 冒号 / 等号 / 空白)紧跟一个 ≥ 4 位的拉丁串,
  * 纯字母、下划线开头都算("微信: sellerabc" "Discord: _alice")。中文里关键词后面直接跟拉丁串几乎只可能是账号。
+ * `line` 不在这条规则里:它是普通英文词("fishing line works well"),只参与下面需要"像账号的串"的组合判定。
  */
-const CHANNEL_THEN_ACCOUNT = /(?:微信|威信|薇信|微x|wechat|weixin|(?<![a-z])wx(?![a-z])|(?<![a-z])vx(?![a-z])|v信|加v|qq|扣扣|discord|telegram|whatsapp|(?<![a-z])line(?![a-z]))(?:\s|号|账号|帐号|id|is|是|为|[:：=])*[A-Za-z0-9_#.@-]{4,}/i;
+const CHANNEL_THEN_ACCOUNT = /(?:微信|威信|薇信|微x|wechat|weixin|(?<![a-z])wx(?![a-z])|(?<![a-z])vx(?![a-z])|v信|加v|qq|扣扣|discord|telegram|whatsapp)(?:\s|号|账号|帐号|id|is|是|为|[:：=])*[A-Za-z0-9_#.@-]{4,}/i;
 /** 像账号的串:≥ 5 位的字母数字下划线串,且含数字 / 下划线 / 连字符 / #(纯英文单词如 "IKEA" "Foxridge" 不算) */
 const ACCOUNT_LIKE = /(?<![A-Za-z0-9_#-])(?=[A-Za-z0-9_#-]*[\d_#-])[A-Za-z0-9][A-Za-z0-9_#-]{4,}(?![A-Za-z0-9_#-])/;
 

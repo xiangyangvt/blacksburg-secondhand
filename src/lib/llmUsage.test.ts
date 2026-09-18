@@ -150,9 +150,11 @@ describe('预算:先预留后结算', () => {
   it('Postgres 下事务内先取按日咨询锁', async () => {
     const db = memDb(); const sqls: any[] = [];
     const orig = db.$transaction.bind(db);
-    db.$transaction = (fn: any) => orig((tx: any) => fn({ ...tx, $queryRawUnsafe: async (...a: any[]) => { sqls.push(a); } }));
+    // 必须走 $executeRawUnsafe:该函数返回 void 列,query 路径在真实 Prisma + Postgres 上会反序列化失败
+    db.$transaction = (fn: any) => orig((tx: any) => fn({ ...tx, $executeRawUnsafe: async (...a: any[]) => { sqls.push(a); }, $queryRawUnsafe: async () => { throw new Error('void column: UnsupportedColumnType'); } }));
     await reserveBudget(R, db, { DATABASE_URL: 'postgresql://x' } as any, now);
     expect(sqls).toEqual([['SELECT pg_advisory_xact_lock(hashtext($1))', 'llm-budget:2026-09-18']]);
+    expect(db.rows.filter((r: any) => String(r.endpoint).endsWith(':reserved'))).toHaveLength(1); // 取锁没把预留搞成 unavailable
     sqls.length = 0;
     await reserveBudget(R, db, { DATABASE_URL: 'file:./dev.db' } as any, now);
     expect(sqls).toEqual([]);

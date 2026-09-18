@@ -143,7 +143,7 @@ describe('parseChatOutput', () => {
     }
   });
   it('普通句子与价格数字不误杀', () => {
-    for (const s of ['这张 $35 的书桌最合适', '两件都在 50 以内', '2026 年款的 iPad', '点开卡片可以查看卖家微信', 'IKEA MALM 书桌离 Foxridge 近', '想要联系方式请点开卡片,微信在卡片里', '这台 iPad 64G 成色不错']) expect(containsContact(s)).toBe(false);
+    for (const s of ['这张 $35 的书桌最合适', '两件都在 50 以内', '2026 年款的 iPad', '点开卡片可以查看卖家微信', 'IKEA MALM 书桌离 Foxridge 近', '想要联系方式请点开卡片,微信在卡片里', '这台 iPad 64G 成色不错', 'This fishing line works well for beginners.', 'Open the card to see the seller\'s WeChat']) expect(containsContact(s)).toBe(false);
   });
   it('超长 summary 截到 60 字', () => {
     const r = parseChatOutput(JSON.stringify({ summary: '好'.repeat(100), itemIds: [] }), ids);

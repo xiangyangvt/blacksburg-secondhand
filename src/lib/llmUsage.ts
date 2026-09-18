@@ -55,7 +55,8 @@ export interface UsageTx {
     create(args: { data: UsageRow; select?: { id: true } }): Promise<{ id: string }>;
     aggregate(args: { where: { day: string }; _sum: { estCostUsd: true } }): Promise<{ _sum: { estCostUsd: number | null } }>;
   };
-  $queryRawUnsafe?(sql: string, ...params: unknown[]): Promise<unknown>;
+  /** 取咨询锁用 execute 而不是 query:pg_advisory_xact_lock 返回 void 列,Prisma 5.22 的 query 路径反序列化会报 UnsupportedColumnType(Codex 互审三轮 #1) */
+  $executeRawUnsafe?(sql: string, ...params: unknown[]): Promise<unknown>;
 }
 
 export interface UsageDb extends UsageTx {
@@ -132,7 +133,7 @@ export async function reserveBudget(
   const day = dayKey(now());
   try {
     const id = await db.$transaction(async (tx) => {
-      if (isPostgres(env) && tx.$queryRawUnsafe) await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `llm-budget:${day}`);
+      if (isPostgres(env) && tx.$executeRawUnsafe) await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `llm-budget:${day}`);
       const row = await tx.llmUsage.create({
         data: { endpoint: `${r.endpoint}:reserved`, model: r.model, promptTokens: 0, completionTokens: 0, estCostUsd: reservedUsd, day },
         select: { id: true },
