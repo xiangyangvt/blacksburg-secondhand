@@ -52,7 +52,7 @@ export interface WhereOpts {
   /** 是否加关键词 OR 子句。语义路(10B)用同样的过滤条件但不带关键词 */
   includeKeyword?: boolean;
   /** resolveSellerContact 的结果;传了就按卖家过滤 */
-  sellerContact?: string;
+  sellerContact?: string | readonly string[];
   now?: () => number;
 }
 
@@ -63,7 +63,8 @@ export function buildItemsWhere(qy: ItemsQuery, opts: WhereOpts = {}): any {
   const where: any = { status: 'active', NOT: { category: 'housing' } };
   if (qy.type) where.type = qy.type;
   if (qy.category) where.category = qy.category;
-  if (opts.sellerContact !== undefined) where.contactValue = opts.sellerContact;
+  // 数组 = 同一位卖家的大小写变体(11F 精确搜:`WX_Alice` 与 `wx_alice` 当同一个人)
+  if (opts.sellerContact !== undefined) where.contactValue = typeof opts.sellerContact === 'string' ? opts.sellerContact : { in: [...opts.sellerContact] };
   if (qy.q && opts.includeKeyword !== false) {
     // 搜索匹配标题、描述、自定义标签
     // 不再**子串**匹配 contactValue —— 联系方式现在隐藏,子串搜索能逐字反推出别人的联系方式。
