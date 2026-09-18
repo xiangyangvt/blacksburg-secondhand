@@ -134,6 +134,7 @@ export function ListingCard({
   onDelete,
   onReport,
   autoExpand = false,
+  badge,
 }: {
   listing: Listing;
   onApply: (l: Listing) => void;
@@ -142,6 +143,8 @@ export function ListingCard({
   onReport?: (l: Listing) => void;
   /** 分享链接 /roommates?focus=ID 打开时，对应卡片自动展开 + scroll */
   autoExpand?: boolean;
+  /** Sprint 10B-2:标签行的小标签(语义匹配结果的「相似」),不传不渲染 */
+  badge?: string;
 }) {
   const [imgIdx, setImgIdx] = useState(0);
   const [expanded, setExpanded] = useState(autoExpand);
@@ -430,6 +433,9 @@ export function ListingCard({
               <span className={`w-1.5 h-1.5 rounded-full ${typeColor.dot}`} />
               {typeMeta?.label ?? listing.type}
             </span>
+            {badge && (
+              <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">{badge}</span>
+            )}
 
             {/* A/B（合租）：显示发布人性别年龄；C/D（租赁）：隐藏 */}
             {!isRental && (

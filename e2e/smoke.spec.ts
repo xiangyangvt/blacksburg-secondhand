@@ -120,9 +120,25 @@ test.describe('API smoke', () => {
     expect(res.status()).toBe(404);
   });
 
-  test('GET /api/search 无 q → 400;site 非 items → 400', async ({ request }) => {
+  test('GET /api/search 无 q → 400;未知 site → 400', async ({ request }) => {
     expect((await request.get('/api/search?site=items')).status()).toBe(400);
-    expect((await request.get('/api/search?site=events&q=x')).status()).toBe(400);
+    expect((await request.get('/api/search?site=bogus&q=x')).status()).toBe(400);
+  });
+
+  test('GET /api/search site=listings / events(10B-2):同一响应形状,chatEnabled 恒 false,白名单', async ({ request }) => {
+    for (const site of ['listings', 'events']) {
+      const res = await request.get(`/api/search?site=${site}&q=x&kw=0`);
+      expect(res.status(), site).toBe(200);
+      const data = await res.json();
+      expect(data.keyword).toEqual([]);
+      expect(data.semantic).toEqual([]);
+      expect(data.aiEnabled).toBe(false);
+      expect(data.chatEnabled).toBe(false);
+      expect(data.trigger).toBe('auto');
+      expect(JSON.stringify(data)).not.toMatch(/ipAddress|editCodeHash|posterCodeHash|posterVisitorId|embeddingJson/);
+    }
+    const many = await (await request.get('/api/search?site=events&q=x&kw=9')).json();
+    expect(many.trigger).toBe('button');
   });
 
   test('GET /api/events?category=discussion 永久返空(spec §3.4)', async ({ request }) => {

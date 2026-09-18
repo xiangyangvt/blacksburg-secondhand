@@ -42,3 +42,39 @@ describe('serializePublicListing', () => {
     expect('anythingElse' in serializePublicInquiry({ id: 'x', anythingElse: 'leak', ipAddress: '1.1.1.1' })).toBe(false);
   });
 });
+
+import { parseListingsQuery, buildListingsWhere, listingsOrderBy, filterListingsByAreas } from './listingsQuery';
+
+const sp = (s: string) => new URLSearchParams(s);
+
+describe('listings 查询(与旧 GET /api/listings 逐项一致)', () => {
+  it('解析:非法 type / 性别 / sort 退回默认;areas 逗号分隔去空', () => {
+    expect(parseListingsQuery(sp('type=x&canApplyAs=z&sort=weird&areas=Foxridge,%20,Downtown&q=%20sublet%20'))).toEqual({
+      type: undefined, canApplyAs: undefined, areas: ['Foxridge', 'Downtown'], budgetMin: undefined, budgetMax: undefined, q: 'sublet', sort: 'newest',
+    });
+    expect(parseListingsQuery(sp('type=sublet&canApplyAs=F&budgetMin=400&budgetMax=900&sort=budgetAsc'))).toMatchObject({ type: 'sublet', canApplyAs: 'F', budgetMin: 400, budgetMax: 900, sort: 'budgetAsc' });
+  });
+  it('where:性别容纳、预算区间相交、关键词 OR', () => {
+    expect(buildListingsWhere(parseListingsQuery(sp('')))).toEqual({ status: 'active' });
+    expect(buildListingsWhere(parseListingsQuery(sp('canApplyAs=F'))).lookingForGender).toEqual({ in: ['F-only', 'any'] });
+    expect(buildListingsWhere(parseListingsQuery(sp('canApplyAs=M'))).lookingForGender).toEqual({ in: ['M-only', 'any'] });
+    expect(buildListingsWhere(parseListingsQuery(sp('canApplyAs=nb'))).lookingForGender).toEqual({ in: ['any'] });
+    expect(buildListingsWhere(parseListingsQuery(sp('budgetMin=400'))).AND).toEqual([
+      { OR: [{ budgetMin: null }, { budgetMin: { lte: Number.MAX_SAFE_INTEGER } }] },
+      { OR: [{ budgetMax: null }, { budgetMax: { gte: 400 } }] },
+    ]);
+    expect(buildListingsWhere(parseListingsQuery(sp('q=sublet'))).OR).toEqual([{ title: { contains: 'sublet' } }, { description: { contains: 'sublet' } }]);
+  });
+  it('includeKeyword=false:同样过滤条件但不带关键词', () => {
+    const q = parseListingsQuery(sp('q=x&type=sublet&budgetMax=900'));
+    const { OR: _o, ...rest } = buildListingsWhere(q);
+    expect(buildListingsWhere(q, { includeKeyword: false })).toEqual(rest);
+  });
+  it('orderBy 与 areas JS 过滤', () => {
+    expect(listingsOrderBy('newest')).toEqual({ bumpedAt: 'desc' });
+    expect(listingsOrderBy('budgetDesc')).toEqual({ budgetMax: 'desc' });
+    const rows = [{ id: 'a', areas: '["Foxridge"]' }, { id: 'b', areas: '["Downtown"]' }, { id: 'c', areas: 'bad json' }];
+    expect(filterListingsByAreas(rows, []).map(r => r.id)).toEqual(['a', 'b', 'c']);
+    expect(filterListingsByAreas(rows, ['Foxridge', 'Hethwood']).map(r => r.id)).toEqual(['a']);
+  });
+});
