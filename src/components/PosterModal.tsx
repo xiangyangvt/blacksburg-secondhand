@@ -6,7 +6,7 @@
 //   - 走异步剪贴板 API:ClipboardItem 的值传 Promise<Blob>(Safari 要求 ClipboardItem 在点击的同步调用栈里创建)
 //   - 复制成功:图上浮出一枚磨砂圆章、对勾一笔画出,按钮变成绿色「已复制 · 去微信粘贴」,约 2 秒后还原
 //   - 浏览器不支持(部分内置浏览器)或被拒:按钮不出现 / 提示改用长按保存
-// 图本身仍是服务端出的真实 PNG(<img src="/api/poster/<slug>?page=N">),所以长按保存、桌面下载链接都还在,作为兜底。
+// 「下载图片」是并排的次要按钮,手机、桌面都显示。图本身仍是服务端出的真实 PNG(<img src="/api/poster/<slug>?page=N">),长按保存也还能用。
 // 物品多时分成几张(每张都带二维码),一张一张往下排,每张各有自己的复制按钮。
 
 import { useEffect, useRef, useState } from 'react';
@@ -115,9 +115,11 @@ export function PosterModal({ slug, pages, onClose }: { slug: string; pages: num
                     <a
                       href={src}
                       download={`blacksburg-${slug}-${page}.png`}
-                      className={`items-center gap-1.5 text-sm text-stone-600 hover:text-stone-900 ${canCopy ? 'hidden sm:inline-flex' : 'inline-flex'}`}
+                      // 手机端也保留下载(Sean 2026-09-18):做成次要按钮,触控目标够大;没有复制按钮时它独占一行
+                      className={`inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg border border-stone-300 bg-white text-sm font-medium text-stone-700 hover:border-stone-400 shadow-card ${canCopy ? 'shrink-0' : 'flex-1'}`}
+                      data-testid="download-poster"
                     >
-                      <Download size={14} />
+                      <Download size={16} />
                       {t('poster.download')}
                     </a>
                   </div>
