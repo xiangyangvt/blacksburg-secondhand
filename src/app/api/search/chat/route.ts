@@ -20,7 +20,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { setVisitorCookie } from '@/lib/rateLimit';
 import { chatWithUsage, CHAT_MODEL_NAME } from '@/lib/llm';
-import { isBudgetExceeded, reserveBudget, settleUsage } from '@/lib/llmUsage';
+import { isBudgetExceeded, reserveBudget, settleUsage, recordRejection } from '@/lib/llmUsage';
 import { buildItemsWhere, parseItemsQuery, resolveSellerContact, serializePublicItem, ITEM_LIST_INCLUDE } from '@/lib/itemsQuery';
 import { getVectorStore } from '@/lib/search/vectorStore';
 import { isSearchAiEnabled, getQueryEmbeddingCache } from '@/lib/search/hybrid';
@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
   }
   if (!gate.ok) {
     if (gate.reason === 'bot') return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    recordRejection(ENDPOINT, 429); // 10D:admin 面板与摘要数这个
     const res = NextResponse.json(
       { error: CHAT_LIMIT_MESSAGE[locale], message: CHAT_LIMIT_MESSAGE, retryAfterSec: gate.retryAfterSec },
       { status: 429, headers: { 'Retry-After': String(gate.retryAfterSec) } },
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 预算前置(只读,fail closed):熔断或计费表不可用时,连查询 embedding 都不花(Codex 互审二轮 #3)。真正的原子扣减在下面的 reserveBudget
-  if (await isBudgetExceeded()) return unavailable(locale);
+  if (await isBudgetExceeded()) { recordRejection(ENDPOINT, 503); return unavailable(locale); }
   if (req.signal.aborted) return new NextResponse(null, { status: 499 });
 
   // filters 走与列表接口同一个解析器;q 不参与(语义检索用向量)
@@ -121,7 +122,7 @@ export async function POST(req: NextRequest) {
   if (candidates.length > 0 && !req.signal.aborted) {
     const msgs = buildChatMessages({ candidates, history, message });
     const reservation = await reserveBudget({ endpoint: ENDPOINT, model: CHAT_MODEL_NAME, estPromptTokens: estimatePromptTokens(msgs), maxCompletionTokens: MAX_COMPLETION_TOKENS });
-    if (!reservation.ok) return unavailable(locale); // 预算用完,或计费表不可用(fail closed)
+    if (!reservation.ok) { recordRejection(ENDPOINT, 503); return unavailable(locale); } // 预算用完,或计费表不可用(fail closed)
     try {
       const out = await chatWithUsage({
         messages: msgs, temperature: 0.2, max_tokens: MAX_COMPLETION_TOKENS,

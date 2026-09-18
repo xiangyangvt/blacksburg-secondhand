@@ -8,6 +8,7 @@ import { headers } from 'next/headers';
 import { getClientIpFromHeaders } from '@/lib/utils';
 import { prisma } from '@/lib/prisma';
 import { scheduleEmbed, scheduleRemove } from '@/lib/search/indexer';
+import { AiCostSection } from '@/components/admin/AiCostSection';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formatPrice, timeAgo, categoryLabel, parsePhotoUrls } from '@/lib/utils';
@@ -547,6 +548,9 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
       </section>
 
       {/* === 各源活跃 events:单独一区 === */}
+      {/* Sprint 10D:AI 费用(独立服务端组件,自己取数) */}
+      <AiCostSection />
+
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">📊 各源活跃 events</h2>
         {sourceBreakdown.length === 0 ? (

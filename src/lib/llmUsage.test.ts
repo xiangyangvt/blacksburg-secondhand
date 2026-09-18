@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   estimateCostUsd, dayKey, recordUsage, todayCostUsd, dailyBudgetUsd, isBudgetExceeded,
-  reserveBudget, settleUsage, releaseReservation, type UsageDb,
+  reserveBudget, settleUsage, releaseReservation, summarize, usageSummary, recordRejection, _resetRejectionThrottle, type UsageDb,
 } from './llmUsage';
 
 function memDb(): UsageDb & { rows: any[]; failTx?: boolean } {
@@ -167,5 +167,40 @@ describe('预算:先预留后结算', () => {
     db.llmUsage.update = async () => { throw new Error('x'); };
     await expect(settleUsage(r.id, { endpoint: 'search-chat', model: 'deepseek-v4-pro', promptTokens: 1, completionTokens: 1 }, db)).resolves.toBeTypeOf('number');
     expect(db.rows[0].estCostUsd).toBeCloseTo(r.reservedUsd);
+  });
+});
+
+describe('10D:汇总与被拒计数', () => {
+  it('summarize:事件行只计次数不计费用;预留行计入费用与调用并标记未结算;embed / chat 分开', () => {
+    expect(summarize([
+      { endpoint: 'embed', count: 30, costUsd: 0.0006 },
+      { endpoint: 'search-chat', count: 10, costUsd: 0.024 },
+      { endpoint: 'search-chat:reserved', count: 1, costUsd: 0.005 },
+      { endpoint: 'search-chat:429', count: 4, costUsd: 0 },
+      { endpoint: 'search:429', count: 2, costUsd: 0 },
+      { endpoint: 'search-chat:503', count: 7, costUsd: 0 },
+    ])).toEqual({ costUsd: 0.0296, calls: 41, chatCalls: 11, embedCalls: 30, unsettled: 1, rejected429: 6, rejected503: 7 });
+    expect(summarize([])).toEqual({ costUsd: 0, calls: 0, chatCalls: 0, embedCalls: 0, unsettled: 0, rejected429: 0, rejected503: 0 });
+  });
+  it('usageSummary:10 位前缀按天精确匹配,7 位前缀按月 startsWith', async () => {
+    const seen: any[] = [];
+    const db = { llmUsage: { async groupBy(args: any) { seen.push(args.where); return [{ endpoint: 'embed', _count: { _all: 2 }, _sum: { estCostUsd: 0.001 } }]; } } };
+    expect((await usageSummary('2026-09-18', db)).calls).toBe(2);
+    await usageSummary('2026-09', db);
+    expect(seen).toEqual([{ day: '2026-09-18' }, { day: { startsWith: '2026-09' } }]);
+  });
+  it('recordRejection:写一行零费用事件;每分钟最多 60 行(防被限流者反复请求造成写放大)', async () => {
+    _resetRejectionThrottle();
+    const db = memDb(); let t = 1_000_000;
+    for (let i = 0; i < 100; i++) recordRejection('search-chat', 429, db, () => t);
+    await new Promise(r => setTimeout(r, 0));
+    expect(db.rows).toHaveLength(60);
+    expect(db.rows[0]).toMatchObject({ endpoint: 'search-chat:429', estCostUsd: 0, promptTokens: 0 });
+    t += 60_001;
+    recordRejection('search-chat', 503, db, () => t);
+    await new Promise(r => setTimeout(r, 0));
+    expect(db.rows).toHaveLength(61);
+    expect(db.rows[60].endpoint).toBe('search-chat:503');
+    _resetRejectionThrottle();
   });
 });
