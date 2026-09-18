@@ -13,14 +13,14 @@
 // 偏差(写在 PR 里):不把 LLM 的 token 直接流给用户——未校验的半句话里可能带联系方式。先缓冲(≤ 300 token,约 2 秒)
 //   校验,再把通过校验的 summary 分片下发;对用户仍是流式体验,但不变量不靠运气。
 // 降级边界(Codex 互审 #7):配额 / 计费不可验证 → 受控 503(不花钱);检索、LLM、卡片查询任一失败 → 兜底文案或空卡片,绝不 500。
-// 客户端断开(req.signal)→ 不再发起 / 取消付费调用,停止推送(互审 #9)。
+// 客户端断开(req.signal)→ 不再发起 / 取消付费调用,停止推送(互审 #9);已发出的调用即使被取消,预留额也保留。
 // 对话状态不落库、不关联身份;LLM 没有任何写操作能力(无 tools)。
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { setVisitorCookie } from '@/lib/rateLimit';
 import { chatWithUsage, CHAT_MODEL_NAME } from '@/lib/llm';
-import { reserveBudget, settleUsage, releaseReservation } from '@/lib/llmUsage';
+import { isBudgetExceeded, reserveBudget, settleUsage } from '@/lib/llmUsage';
 import { buildItemsWhere, parseItemsQuery, resolveSellerContact, serializePublicItem, ITEM_LIST_INCLUDE } from '@/lib/itemsQuery';
 import { getVectorStore } from '@/lib/search/vectorStore';
 import { isSearchAiEnabled, getQueryEmbeddingCache } from '@/lib/search/hybrid';
@@ -80,6 +80,10 @@ export async function POST(req: NextRequest) {
     return res;
   }
 
+  // 预算前置(只读,fail closed):熔断或计费表不可用时,连查询 embedding 都不花(Codex 互审二轮 #3)。真正的原子扣减在下面的 reserveBudget
+  if (await isBudgetExceeded()) return unavailable(locale);
+  if (req.signal.aborted) return new NextResponse(null, { status: 499 });
+
   // filters 走与列表接口同一个解析器;q 不参与(语义检索用向量)
   const fsp = new URLSearchParams();
   if (body.filters && typeof body.filters === 'object') {
@@ -128,9 +132,8 @@ export async function POST(req: NextRequest) {
       raw = out.truncated ? '' : out.content;
       if (out.truncated) console.warn('[search/chat] LLM 输出被截断,走兜底');
     } catch (e) {
-      // 请求没成功(超时 / 取消 / 上游错误):是否计费未知。取消的撤回预留;其余保留预留额(宁可多算)
-      if (req.signal.aborted) await releaseReservation(reservation.id);
-      console.warn('[search/chat] LLM 调用失败,降级:', (e as Error)?.message ?? e);
+      // 请求已经发出去了:超时 / 取消 / 上游错误都不能证明上游没计费 → 预留额原样保留(宁可多算),绝不撤回(互审二轮 #2)
+      console.warn('[search/chat] LLM 调用失败,降级(预留额保留):', (e as Error)?.message ?? e);
     }
   }
   if (req.signal.aborted) return new NextResponse(null, { status: 499 });

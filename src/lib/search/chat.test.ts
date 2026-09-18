@@ -135,6 +135,8 @@ describe('parseChatOutput', () => {
       '卖家微信是 abc_12345,直接加', '打 540-555-0199 问问', 'email seller@example.com', '电话13812345678', '加v: good_seller',
       // Codex 互审 #1 的绕过用例:连接词、英文句式、账号在前、全角、零宽字符、QQ 纯数字
       '卖家微信号为：seller_123', 'WeChat is seller_123', 'seller_123 是他的微信', '手机 ５４０－５５５－０１９９', '微\u200b信 abc_12345', 'QQ 87654321', 'Discord: coolguy#1234',
+      // 二轮:纯字母账号、下划线开头账号、多级域名邮箱
+      '微信: sellerabc', 'Discord: _alice', '联系 alice@x.y.edu', 'vx sellerabc', 'wechat id=goodseller',
     ]) {
       const r = parseChatOutput(JSON.stringify({ summary: s, itemIds: ['a'] }), ids);
       expect(r).toEqual({ summary: FALLBACK_SUMMARY.zh, itemIds: ['a'], fallback: 'contact' });
