@@ -17,6 +17,7 @@ import { getRecentViewIds } from '@/lib/recentViews';
 import { useUnreadCount, markSeen } from '@/lib/notifications';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
+import { SemanticResults, EMPTY_SEMANTIC, type SemanticState } from '@/components/SemanticResults';
 import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
@@ -78,6 +79,8 @@ function HomePageInner() {
   const searchParams = useSearchParams();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  // Sprint 10B:第 1 层语义结果;无 q 时始终 EMPTY(整块不渲染)
+  const [semantic, setSemantic] = useState<SemanticState>(EMPTY_SEMANTIC);
   const [origin, setOrigin] = useState('');
   useEffect(() => {
     setOrigin(clientOrigin());
@@ -174,8 +177,7 @@ function HomePageInner() {
     }
   }, [filters, debouncedQ]);
 
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
+  const buildListParams = useCallback(() => {
     const sp = new URLSearchParams();
     if (filters.type     !== 'all') sp.set('type', filters.type);
     if (filters.category !== 'all') sp.set('category', filters.category);
@@ -187,11 +189,53 @@ function HomePageInner() {
     if (filters.sameSellerAs)       sp.set('sameSellerAs', filters.sameSellerAs);
     // Phase 3C: random 是前端 jitter 模式,API 不认识 — 映射成 newest(API 按时间倒序返回,前端再 jitter)
     sp.set('sort', filters.sort === 'random' ? 'newest' : filters.sort);
+    return { sp, q };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.type, filters.category, debouncedQ, filters.minPrice, filters.maxPrice, filters.since, filters.sort, filters.sameSellerAs]);
+
+  // Sprint 10B:「找更多相似」—— trigger=button 时用户点按钮才算语义层(带 semantic=1 再请求一次)
+  const fetchMoreSimilar = useCallback(async () => {
+    const { sp, q } = buildListParams();
+    if (!q) return;
+    sp.set('site', 'items');
+    sp.set('semantic', '1');
+    setSemantic(s => ({ ...s, loading: true, requested: true }));
+    try {
+      const res = await fetch(`/api/search?${sp}`);
+      const data = await res.json();
+      setSemantic(s => ({ ...s, loading: false, list: data.semantic ?? [], limited: res.status === 429 || !!data.limited }));
+    } catch {
+      setSemantic(s => ({ ...s, loading: false, list: [] }));
+    }
+  }, [buildListParams]);
+
+  const fetchItems = useCallback(async () => {
+    setLoading(true);
+    const { sp, q } = buildListParams();
 
     try {
-      const res = await fetch(`/api/items?${sp}`);
-      const data = await res.json();
-      const fetched: Item[] = data.items ?? [];
+      // Sprint 10B:有关键词走 /api/search(第 0 层 + 第 1 层);无关键词仍走列表 GET,首屏不多一次调用
+      let fetched: Item[];
+      if (q) {
+        sp.set('site', 'items');
+        setSemantic(s => ({ ...EMPTY_SEMANTIC, aiEnabled: s.aiEnabled, loading: true }));
+        const res = await fetch(`/api/search?${sp}`);
+        const data = await res.json();
+        fetched = data.keyword ?? [];
+        setSemantic({
+          aiEnabled: !!data.aiEnabled,
+          trigger: data.trigger ?? null,
+          list: data.semantic ?? [],
+          loading: false,
+          requested: data.trigger === 'auto',
+          limited: !!data.limited,
+        });
+      } else {
+        const res = await fetch(`/api/items?${sp}`);
+        const data = await res.json();
+        fetched = data.items ?? [];
+        setSemantic(EMPTY_SEMANTIC);
+      }
       setItems(fetched);
       // 跟购物清单同步：找不到 id 的 cart item 静默移除；找到的更新 snapshot
       try {
@@ -201,9 +245,7 @@ function HomePageInner() {
     } finally {
       setLoading(false);
     }
-    // 故意不把 filters.q 放进依赖：q 通过 debouncedQ 才触发 fetch
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.type, filters.category, debouncedQ, filters.minPrice, filters.maxPrice, filters.since, filters.sort, filters.sameSellerAs]);
+  }, [buildListParams]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
@@ -424,6 +466,22 @@ function HomePageInner() {
                 />
               ))}
             </div>
+          )}
+
+          {/* Sprint 10B:第 1 层「相关结果 · AI 语义匹配」。只看最近浏览时不显示(那是本地过滤视图) */}
+          {debouncedQ.trim() && !filters.onlyRecent && !loading && (
+            <SemanticResults
+              state={semantic}
+              onRequestMore={fetchMoreSimilar}
+              cardProps={{
+                onEdit: (it)        => setCodePrompt({ kind: 'edit',   item: it }),
+                onMarkSold: (it)    => setCodePrompt({ kind: 'delete', item: it }),
+                onReport: handleReport,
+                onDeleteInquiryAsSeller: (it, inqId) =>
+                  setCodePrompt({ kind: 'sellerDeleteInquiry', item: it, inquiryId: inqId }),
+                refresh: fetchItems,
+              }}
+            />
           )}
         </section>
       </div>

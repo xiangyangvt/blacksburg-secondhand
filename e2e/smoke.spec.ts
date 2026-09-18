@@ -103,6 +103,22 @@ test.describe('API smoke', () => {
     expect(data).toHaveProperty('availableCategories');
   });
 
+  test('GET /api/search?site=items&q=x 返 keyword/semantic/aiEnabled/trigger(10B;CI 无 key → aiEnabled=false)', async ({ request }) => {
+    const res = await request.get('/api/search?site=items&q=x');
+    expect(res.status()).toBe(200);
+    const data = await res.json();
+    expect(Array.isArray(data.keyword)).toBe(true);
+    expect(data.semantic).toEqual([]);
+    expect(data.aiEnabled).toBe(false);
+    expect(['auto', 'button']).toContain(data.trigger);
+    expect(JSON.stringify(data)).not.toMatch(/contactValue":"[^"]|ipAddress|editCodeHash|embeddingJson/);
+  });
+
+  test('GET /api/search 无 q → 400;site 非 items → 400', async ({ request }) => {
+    expect((await request.get('/api/search?site=items')).status()).toBe(400);
+    expect((await request.get('/api/search?site=events&q=x')).status()).toBe(400);
+  });
+
   test('GET /api/events?category=discussion 永久返空(spec §3.4)', async ({ request }) => {
     const res = await request.get('/api/events?category=discussion');
     expect(res.status()).toBe(200);
