@@ -1,13 +1,22 @@
 # 黑堡社区站 — 项目状态
 
 > 单一可信源：当前在哪、未来慢慢优化什么、文档去哪找。
-> 上次更新：2026-09-17
+> 上次更新：2026-09-18
 
 ---
 
 ## 当前状态
 
-**Sprint 9 隐私分级与可观测性已完工（2026-09-17）。** 当前 sprint：Sprint 10 混合搜索（`SPRINT_10_SEARCH.md`，待开工）。
+**Sprint 10 混合搜索与渐进式 AI 助手已完工（2026-09-18）。** 代码全部在 main，**功能默认关闭**（`SEARCH_AI_ENABLED=false`），按下面的上线待办打开。当前无进行中的 sprint。
+
+上线待办（Sprint 10，按顺序）：
+1. Railway 配 `LLM_EMBED_API_KEY`（OpenAI）。确认 `LLM_CHAT_MODEL` 是官方现行模型名（`deepseek-v4-pro` / `deepseek-flash`；`DEPLOY.md` 旧默认 `deepseek-chat` 不在现行表里）。
+2. 部署后登录 `/admin`，`GET /api/admin/backfill-embeddings` 看 `pgvector.extension` 与 `hnswIndexes`（顺便建索引），再 `POST` 回填到 `done: true`。把探针输出贴回 PR #14。
+3. 回填完成后设 `SEARCH_AI_ENABLED=true`。三个站的第 1 层与二手站的第 2 层同时生效。
+4. 真 key 验证：中文帖搜 `sofa` 看跨语言与 0.35 阈值（`SEARCH_SEMANTIC_MIN_SIM` 可调）；做 10 次问答，看 `/admin` 的「AI 费用」小节；第一次问答若在预算充足时 503，查日志 `[llmUsage] 预留事务失败`（咨询锁路径）。
+5. 部署后复跑一次 `/api/listings` 的字段计数，确认留言不再带 `ipAddress`（#19）。
+6. 可选：repo Variables 的 `DIGEST_THRESHOLDS` 加 `aiCost=1`（默认就是 1 美元，0 = 关）。
+7. 产品决定待拍板：第 2 层输入框现在只在"语义卡片真的渲染出来"时出现（spec 原文）；是否改成 0 条结果时也出现。
 
 上线待办（Sprint 9）：Railway 配 `ADMIN_SESSION_SECRET` / `DIGEST_SECRET` / `DIGEST_EMAIL_TO`，GitHub Secrets 配 `DIGEST_SECRET`，后台重新登录，用 `/api/admin/whoami` 核对 Railway 转发头行为，手动跑一次 Daily Maintenance Digest。
 
@@ -53,8 +62,7 @@ Next.js 14 · Prisma + SQLite(dev)/Postgres(prod) · Cloudinary · Resend · Dee
 来自 Sprint 7 数据洞察 + 原 BLACKSBURG_HUB_PLAN Phase 2/3 backlog。
 
 - 多源 event 去重（hash + 标题相似度）
-- 全文搜索（PG `tsvector` 或 `pg_trgm` + 中文分词 `zhparser`）
-- pgvector + RAG chatbot（DeepSeek V4 Pro + Vercel AI SDK）
+- （S10 已做语义搜索与找物对话；剩余想法：室友 / 活动站的对话、RRF 融合进第 0 层、查询改写）
 - 提醒 / 订阅机制（用户关注 category 或 keyword → magic-link 推送）
 
 ### B. SEO 与运营
@@ -97,6 +105,7 @@ Next.js 14 · Prisma + SQLite(dev)/Postgres(prod) · Cloudinary · Resend · Dee
 | S7 Phase 1+2+3B | 本地 Hub | `docs/archive/BLACKSBURG_HUB_PLAN.md` + `docs/archive/SPRINT_7_DONE.md` |
 | S8 | RESALE UX 微优化（8 项）+ backup keepalive | `docs/archive/SPRINT_8_UX_POLISH.md` |
 | S9 | 隐私分级与可观测性（限流模块 / 披露面 / admin 会话 / CI 门禁 / 法律页 / 维护摘要） | `docs/archive/SPRINT_9_PRIVACY.md` |
+| S10 | 混合搜索与渐进式 AI 助手（pgvector 向量存储 / 三站语义匹配 / 二手站对话 / AI 费用护栏与面板） | `docs/archive/SPRINT_10_SEARCH.md` |
 
 ---
 
@@ -104,7 +113,7 @@ Next.js 14 · Prisma + SQLite(dev)/Postgres(prod) · Cloudinary · Resend · Dee
 
 - **活文档**（根目录）：`README` · `DEPLOY` · `RESTORE` · **`STATE`**（本文件）
 - **历史 sprint plan**：`docs/archive/`
-- **当前 sprint plan**：`SPRINT_10_SEARCH.md`（根目录）
+- **当前 sprint plan**：无（下一个 sprint 的 spec 放根目录）
 - **架构地图**：`ARCHITECTURE.md`（根目录，改动触及其任一节的 PR 必须同步）
 
 ---

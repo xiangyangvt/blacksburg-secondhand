@@ -33,7 +33,7 @@ import type { EmbedKind } from '@/lib/search/embedText';
 import {
   isSearchAiEnabled, semanticMinSim, getQueryEmbeddingCache, pickSemantic, semanticTrigger, gateSemanticSearch,
 } from '@/lib/search/hybrid';
-import { isBudgetExceeded } from '@/lib/llmUsage';
+import { isBudgetExceeded, recordRejection } from '@/lib/llmUsage';
 
 export const dynamic = 'force-dynamic';
 
@@ -182,6 +182,7 @@ export async function GET(req: NextRequest) {
       if (!gate.ok) {
         if (gate.reason === 'limited') {
           limited = true;
+          recordRejection('search', 429); // 10D
           if (gate.isNew && gate.visitorId) cookie = { visitorId: gate.visitorId };
           if (explicit) status = 429;
         }

@@ -9,6 +9,9 @@ const base: Digest = {
   lastBackupAt: '2026-09-14T06:00:00.000Z',
   backupAgeDays: 3,
   revealRejects24h: 0,
+  aiCostUsd: 0,
+  aiBudgetTripped: false,
+  ai: { day: '2026-09-16', costUsd: 0, calls: 0, rejected429: 0, rejected503: 0, todayCostUsd: 0 },
 };
 const SITE = 'https://example.test';
 
@@ -48,5 +51,39 @@ describe('renderDigestEmail', () => {
     expect(m.text).toContain(`${SITE}/admin`);
     expect(m.html).toContain('a&lt;b');
     expect(m.html).not.toContain('a<b');
+  });
+});
+
+describe('10D:AI 费用进摘要', () => {
+  const withAi = (costUsd: number, tripped = false): Digest => ({
+    ...base, aiCostUsd: costUsd, aiBudgetTripped: tripped,
+    ai: { day: '2026-09-16', costUsd, calls: 40, rejected429: 2, rejected503: tripped ? 5 : 0, todayCostUsd: 0.1 },
+  });
+  it('默认阈值 1 美元:昨日费用 ≤ 1 不报,> 1 报', () => {
+    expect(evaluateThresholds(withAi(0.8), DEFAULT_THRESHOLDS, SITE)).toHaveLength(0);
+    expect(evaluateThresholds(withAi(1), DEFAULT_THRESHOLDS, SITE)).toHaveLength(0);
+    const alerts = evaluateThresholds(withAi(1.25), DEFAULT_THRESHOLDS, SITE);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ kind: 'decision', task: 'AI 费用偏高', ref: `${SITE}/admin` });
+    expect(alerts[0]!.note).toContain('$1.2500');
+    expect(alerts[0]!.note).toContain('429 2 次');
+  });
+  it('触发过预算熔断:费用没过阈值也报', () => {
+    const alerts = evaluateThresholds(withAi(0.3, true), DEFAULT_THRESHOLDS, SITE);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]!.task).toBe('AI 预算熔断');
+    expect(alerts[0]!.note).toContain('503 5 次');
+  });
+  it('阈值 0 = 关闭(与其他项一致);极小阈值 = 有任何费用就报', () => {
+    expect(evaluateThresholds(withAi(5, true), { ...DEFAULT_THRESHOLDS, aiCost: 0 }, SITE)).toHaveLength(0);
+    expect(evaluateThresholds(withAi(0.0007), { ...DEFAULT_THRESHOLDS, aiCost: 0.000001 }, SITE)).toHaveLength(1);
+  });
+  it('parseThresholds 认 aiCost;邮件总览含 AI 一行', () => {
+    expect(parseThresholds(new URLSearchParams('aiCost=0.5')).aiCost).toBe(0.5);
+    expect(parseThresholds(new URLSearchParams('')).aiCost).toBe(1);
+    const d = withAi(1.25);
+    const mail = renderDigestEmail(d, evaluateThresholds(d, DEFAULT_THRESHOLDS, SITE), SITE);
+    expect(mail.text).toContain('AI 2026-09-16 $1.2500 / 40 次调用');
+    expect(mail.html).toContain('AI 费用偏高');
   });
 });
