@@ -9,18 +9,7 @@
 
 **Sprint 10 混合搜索与渐进式 AI 助手已完工并上线（2026-09-18，tag `v2026.09.18-sprint10`）。** `SEARCH_AI_ENABLED=true`，三个站的第 1 层语义匹配与二手站的第 2 层对话在生产上运行。当前无进行中的 sprint。
 
-**Sprint 11「从网站到微信群」代码已全部合入 main（2026-09-18），尚未部署验证。** 规格与偏差见 `SPRINT_11_SHARE.md`，取舍见 `docs/decisions/0001-smooth-first-detect-abuse.md`。
-- 合入：#25 统一问询栏 + 用户反馈 · #26 卖家摊位 `/s/<slug>` + 相似延伸 · #30 一键长图（复制图片 / 下载）· #31 搜索栏渐变环与放大镜图标 · #32 「已复制」圆章钉在屏幕正中 · #27 异常侦测（重级发邮件并自动暂停该访客查看联系方式 24 小时）。
-- 上线待办（Sprint 11，1 / 3 / 5 已验证，见下）：
-  1. 部署时 `db push` 会新建 `Feedback`、`Shelf` 两张表；无必配 env。可选 `ALERT_EMAIL_TO`（不配则用 `DIGEST_EMAIL_TO`）、`ABUSE_AUTO_BLOCK=false`（退回只通知）、`ABUSE_*` 阈值。
-  2. 在「我的 → 在售」点「一键生成长图」：确认能出图（Railway 出站取 Google Fonts；取不到会 503 而不是出乱码图）。
-  3. 打开任一 `/api/items/similar?shelf=<slug>`，看 `mode` 是不是 `vector`（`PgVectorStore.nearestToRows` 的 SQL 没在真 Postgres 上跑过；`category` = 走了同类目兜底）。
-  4. 真机、微信内置浏览器里试：「复制图片」「下载图片」是否可用；一张 10 件的长图发到群里是否被压糊（调 `lib/poster.ts` 的 `POSTER_PAGE_SIZE`）。
-  5. 搜索栏里问一句站务问题（如「怎么删帖」），确认出的是「转给站长」卡片而不是 AI 自己作答；提交一条，到 `/admin`「用户反馈」能看到。
-- 上线验证（2026-09-18，对生产只读探测 + 一次问答 + 一条标注为测试的反馈）：新路由都在；`/api/items/similar` 的 `mode=vector`（`nearestToRows` 的 SQL 在真 pgvector 上可用）；站务问题 → `intent=ask_ops` 固定文案无卡片，找物问题正常出卡片；`POST /api/feedback` 入库成功（`Feedback` 表已建）。**还没验证**：长图在生产出图（要卖家本人的编辑码才能建摊位）、微信真机里的复制 / 下载与压缩效果。
-- 追加：搜索框按联系方式**精确**搜某卖家（11F）。只认整串相等（忽略大小写），走披露配额与异常侦测；9A 去掉的子串匹配仍然不做。忽略大小写用的原生 SQL 只在 SQLite 上实测过，**部署后请用大小写不同的写法搜一次自己的联系方式**；万一 Postgres 上报错，接口会自动退回普通关键词搜索（日志里有 `[search] 按联系方式精确搜失败`）。
-
-上线记录（2026-09-18）：
+上线记录（Sprint 10，2026-09-18）：
 - 探针：`backend=pgvector`，vector 扩展 0.8.6，三张表的 HNSW 索引都在（`CREATE INDEX CONCURRENTLY` 经 Prisma 可执行）。
 - 回填：118 条（二手 73 / 室友 19 / 活动 26），4 次 API 调用，5.6 秒，0 失败。
 - 真 key 验证：跨语言通过（`desk` → 「桌子」「带插座书桌」，`something to sit on` → 各种椅子；室友 `sublet near campus`、活动 `hiking this weekend` 均命中）；对话 3 条均 200、2–3.5 秒，预算约束与多轮上下文生效，索要卖家微信被拒且不给卡片；预算的事务 + 咨询锁路径在 Postgres 上可用；三站响应无私密字段。
@@ -31,6 +20,18 @@
 - 10 次真实问答的费用汇总没单独做；`/admin` 的「AI 费用」小节可随时看。模型偶尔会在英文回答里复述价格（prompt 要求不复述；价格来自候选数据、卡片上也有，暂不处理）。
 - Railway 上建议配 `ADMIN_SESSION_SECRET`（`openssl rand -base64 32`；配完需重新登录后台）。
 - 回退：`SEARCH_AI_ENABLED=false` 重新部署即回到纯关键词搜索；第 2 层入口的收紧方法见 `SemanticResults.tsx` 的 `showChat` 注释。
+
+**Sprint 11「从网站到微信群」已完工并上线验证（2026-09-18）。** 规格与偏差见 `SPRINT_11_SHARE.md`，取舍见 `docs/decisions/0001-smooth-first-detect-abuse.md`。
+- 合入：#25 统一问询栏 + 用户反馈 · #26 卖家摊位 `/s/<slug>` + 相似延伸 · #30 一键长图（复制图片 / 下载）· #31 搜索栏渐变环与放大镜图标 · #32 「已复制」圆章钉在屏幕正中 · #27 异常侦测（重级发邮件并自动暂停该访客查看联系方式 24 小时）· #33 / #34 搜索框按联系方式**精确**搜卖家（只认整串、忽略大小写；9A 去掉的子串匹配仍然不做）。
+- 上线记录（2026-09-18）：
+  - `db push` 建好了 `Feedback`、`Shelf` 两张表；无必配 env。
+  - 对生产的探测：新路由都在；`/api/items/similar` 的 `mode=vector`（`PgVectorStore.nearestToRows` 的 SQL 在真 pgvector 上可用）；站务问题 → `intent=ask_ops` 固定文案无卡片，找物问题正常出卡片；`POST /api/feedback` 入库成功。
+  - Sean 真机验证：生产能出长图（Railway 出站取 Google Fonts 正常）；微信内置浏览器里「复制图片」「下载图片」可用；一张 10 件的长图发到群里显示正常，`POSTER_PAGE_SIZE` 暂不用调。
+  - 精确搜卖家在生产 Postgres 上正常：不同大小写都能搜到，`lower(col) = lower(CAST(q AS TEXT))` 这条原生 SQL 可用。
+- 留意 / 可调：
+  - 异常侦测的阈值（轻 10 / 天、重 30 / 小时、同 IP 8 个身份）是猜的，按真实告警调 `ABUSE_*`；误伤在 `/admin`「异常访问」点「解除」；`ABUSE_AUTO_BLOCK=false` 退回只通知。可选 `ALERT_EMAIL_TO`（不配则用 `DIGEST_EMAIL_TO`）。
+  - 长图取不到字体会 503，不出乱码图；服务端取图只认 Cloudinary。
+  - 回退：各功能相互独立。搜索栏的「问站长」在 AI 关闭时仍可用（零结果 / 报错时的「遇到问题？告诉站长」）。
 
 2026-07 维护记录：backup workflow 加 keepalive commit 防 60 天自动禁用（#1）、pg client 升 18 修复每周 dump 失败（#2/#3）、Railway 开 serverless 休眠控成本（#4）。
 
