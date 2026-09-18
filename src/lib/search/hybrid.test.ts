@@ -16,11 +16,11 @@ describe('开关与阈值', () => {
     expect(isSearchAiEnabled({ SEARCH_AI_ENABLED: 'true' } as any)).toBe(false);
     if (saved === undefined) delete process.env.LLM_EMBED_API_KEY; else process.env.LLM_EMBED_API_KEY = saved;
   });
-  it('阈值默认 0.35,env 合法值覆盖,非法值忽略', () => {
-    expect(semanticMinSim({} as any)).toBe(0.35);
+  it('阈值默认 0.40,env 合法值覆盖,非法值忽略', () => {
+    expect(semanticMinSim({} as any)).toBe(0.4);
     expect(semanticMinSim({ SEARCH_SEMANTIC_MIN_SIM: '0.5' } as any)).toBe(0.5);
-    expect(semanticMinSim({ SEARCH_SEMANTIC_MIN_SIM: 'abc' } as any)).toBe(0.35);
-    expect(semanticMinSim({ SEARCH_SEMANTIC_MIN_SIM: '2' } as any)).toBe(0.35);
+    expect(semanticMinSim({ SEARCH_SEMANTIC_MIN_SIM: 'abc' } as any)).toBe(0.4);
+    expect(semanticMinSim({ SEARCH_SEMANTIC_MIN_SIM: '2' } as any)).toBe(0.4);
   });
 });
 

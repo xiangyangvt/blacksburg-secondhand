@@ -14,10 +14,14 @@ export function isSearchAiEnabled(env: NodeJS.ProcessEnv = process.env): boolean
   return env.SEARCH_AI_ENABLED === 'true' && isEmbedConfigured();
 }
 
-/** 余弦相似度阈值,低于它的语义候选丢弃。初值 0.35,env 可调 */
+/**
+ * 余弦相似度阈值,低于它的语义候选丢弃。env 可调。
+ * 默认 0.40:2026-09-18 上线后用真实 text-embedding-3-small 实测,相关结果在 0.42 以上,
+ * 0.35–0.40 基本是噪音(搜「书桌」带出「手工刻刀板」0.40、搜「自行车」带出「不锈钢带轮衣架」0.352)。spec 的初值是 0.35。
+ */
 export function semanticMinSim(env: NodeJS.ProcessEnv = process.env): number {
   const v = Number(env.SEARCH_SEMANTIC_MIN_SIM);
-  return Number.isFinite(v) && v > -1 && v < 1 ? v : 0.35;
+  return Number.isFinite(v) && v > -1 && v < 1 ? v : 0.4;
 }
 
 // ---------- 查询词 embedding 缓存(同一查询词 10 分钟内不重复付费) ----------

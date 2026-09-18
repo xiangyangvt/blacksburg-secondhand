@@ -7,18 +7,19 @@
 
 ## 当前状态
 
-**Sprint 10 混合搜索与渐进式 AI 助手已完工（2026-09-18）。** 代码全部在 main，**功能默认关闭**（`SEARCH_AI_ENABLED=false`），按下面的上线待办打开。当前无进行中的 sprint。
+**Sprint 10 混合搜索与渐进式 AI 助手已完工并上线（2026-09-18，tag `v2026.09.18-sprint10`）。** `SEARCH_AI_ENABLED=true`，三个站的第 1 层语义匹配与二手站的第 2 层对话在生产上运行。当前无进行中的 sprint。
 
-上线待办（Sprint 10，按顺序）：
-1. Railway 配 `LLM_EMBED_API_KEY`（OpenAI）。确认 `LLM_CHAT_MODEL` 是官方现行模型名（`deepseek-v4-pro` / `deepseek-flash`；`DEPLOY.md` 旧默认 `deepseek-chat` 不在现行表里）。
-2. 部署后登录 `/admin`，`GET /api/admin/backfill-embeddings` 看 `pgvector.extension` 与 `hnswIndexes`（顺便建索引），再 `POST` 回填到 `done: true`。把探针输出贴回 PR #14。
-3. 回填完成后设 `SEARCH_AI_ENABLED=true`。三个站的第 1 层与二手站的第 2 层同时生效。
-4. 真 key 验证：中文帖搜 `sofa` 看跨语言与 0.35 阈值（`SEARCH_SEMANTIC_MIN_SIM` 可调）；做 10 次问答，看 `/admin` 的「AI 费用」小节；第一次问答若在预算充足时 503，查日志 `[llmUsage] 预留事务失败`（咨询锁路径）。
-5. 部署后复跑一次 `/api/listings` 的字段计数，确认留言不再带 `ipAddress`（#19）。
-6. 可选：repo Variables 的 `DIGEST_THRESHOLDS` 加 `aiCost=1`（默认就是 1 美元，0 = 关）。
-7. （已定，2026-09-18）第 2 层输入框在第 1 层算过之后就出现，0 条语义结果时也出现——搜不到东西正是最需要它的时候。上线后如果发现被滥用或费用异常，把 `SemanticResults.tsx` 里 `showChat` 的条件收紧回"有卡片才显示"即可。
+上线记录（2026-09-18）：
+- 探针：`backend=pgvector`，vector 扩展 0.8.6，三张表的 HNSW 索引都在（`CREATE INDEX CONCURRENTLY` 经 Prisma 可执行）。
+- 回填：118 条（二手 73 / 室友 19 / 活动 26），4 次 API 调用，5.6 秒，0 失败。
+- 真 key 验证：跨语言通过（`desk` → 「桌子」「带插座书桌」，`something to sit on` → 各种椅子；室友 `sublet near campus`、活动 `hiking this weekend` 均命中）；对话 3 条均 200、2–3.5 秒，预算约束与多轮上下文生效，索要卖家微信被拒且不给卡片；预算的事务 + 咨询锁路径在 Postgres 上可用；三站响应无私密字段。
+- 据实测调了两处默认值：语义阈值 0.35 → 0.40（0.35–0.40 基本是噪音）；英文一句话上限 60 → 140 字符（60 会截断半句）。
+- #19 复核：`/api/listings` 的留言不再带 `ipAddress` / `utmSource`。
 
-上线待办（Sprint 9）：Railway 配 `ADMIN_SESSION_SECRET` / `DIGEST_SECRET` / `DIGEST_EMAIL_TO`，GitHub Secrets 配 `DIGEST_SECRET`，后台重新登录，用 `/api/admin/whoami` 核对 Railway 转发头行为，手动跑一次 Daily Maintenance Digest。
+还没做 / 留意：
+- 10 次真实问答的费用汇总没单独做；`/admin` 的「AI 费用」小节可随时看。模型偶尔会在英文回答里复述价格（prompt 要求不复述；价格来自候选数据、卡片上也有，暂不处理）。
+- Railway 上建议配 `ADMIN_SESSION_SECRET`（`openssl rand -base64 32`；配完需重新登录后台）。
+- 回退：`SEARCH_AI_ENABLED=false` 重新部署即回到纯关键词搜索；第 2 层入口的收紧方法见 `SemanticResults.tsx` 的 `showChat` 注释。
 
 2026-07 维护记录：backup workflow 加 keepalive commit 防 60 天自动禁用（#1）、pg client 升 18 修复每周 dump 失败（#2/#3）、Railway 开 serverless 休眠控成本（#4）。
 
