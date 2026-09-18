@@ -109,7 +109,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 |---|---|---|
 | Cloudinary | `CLOUDINARY_*` | 未配回落 `public/uploads/`（容器重启即丢）；宕机上传 500，发帖卡在图片步 |
 | Resend | `RESEND_API_KEY` `EMAIL_FROM_ADDRESS` | dev 打 console；prod 未配 magic-link 不可用，编辑码主路径不受影响 |
-| DeepSeek | `LLM_*` | scraper 该源标 failed 继续下一源；前台不受影响，只是不入新活动。**thinking 模式默认开启**（该模式下 `temperature` 无效、推理 token 计入输出并吃 `max_tokens`）：10C 的 `chatWithUsage` 显式传 `thinking: {type:'disabled'}`（仅对 DeepSeek 附带该字段）；scraper 的调用尚未处理 |
+| DeepSeek | `LLM_*` | scraper 该源标 failed 继续下一源；前台不受影响，只是不入新活动。**thinking 模式默认开启**（该模式下 `temperature` 无效、推理 token 计入输出并吃 `max_tokens`）：`llm.ts` 的所有 chat 调用默认传 `thinking: {type:'disabled'}`（仅对 DeepSeek 附带该字段；#18 处理了 scraper 的抽取 / 翻译，10C 的 `chatWithUsage` 同理，并把 `finish_reason=length` 视为截断） |
 | Embedding（OpenAI） | `LLM_EMBED_API_KEY` `LLM_EMBED_MODEL` | 未配：发帖照常成功，`embeddedAt` 留空，一行 warn；宕机：单条 embed 失败只记日志，等回填。任何 AI 侧错误都不影响发布与关键词搜索 |
 | pgvector | `DATABASE_URL`（Railway `postgres-ssl:18` 镜像自带） | 扩展缺失时 preDeploy `db push` 会失败（`extensions = [vector]`）；HNSW 索引缺失只是退化为顺序扫描 |
 | 源站 | — | 改版是最可能的静默失效点，只在 `ScrapeRun.errorMsg` 里可见 |

@@ -82,25 +82,6 @@ export async function llmCall(opts: ChatOpts): Promise<string> {
   return res.choices[0]?.message?.content ?? '';
 }
 
-/** DeepSeek 的 thinking 模式默认开启(官方文档 2026-09-18 核对):该模式下 temperature 无效,推理 token 计入输出且会吃掉 max_tokens */
-export function isDeepSeek(model: string, baseURL: string = process.env.LLM_BASE_URL ?? 'https://api.deepseek.com'): boolean {
-  return /deepseek/i.test(model) || /deepseek/i.test(baseURL);
-}
-
-/** 发给 SDK 的请求体(抽出来是为了单测断言 thinking 参数) */
-export function buildChatRequestBody(opts: Omit<ChatOpts, 'model'> & { model: string; disableThinking?: boolean }, baseURL?: string): Record<string, unknown> {
-  const body: Record<string, unknown> = {
-    model: opts.model,
-    messages: opts.messages,
-    temperature: opts.temperature ?? 0.2,
-    max_tokens: opts.max_tokens,
-    response_format: opts.response_format,
-  };
-  // 只对 DeepSeek 附带该字段:其他 OpenAI 兼容 provider 见到未知字段可能 400
-  if (opts.disableThinking && isDeepSeek(opts.model, baseURL)) body.thinking = { type: 'disabled' };
-  return body;
-}
-
 export class LlmTruncatedError extends Error {
   constructor() { super('LLM 输出被 max_tokens 截断'); this.name = 'LlmTruncatedError'; }
 }
