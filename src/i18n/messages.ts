@@ -263,6 +263,16 @@ export const messages = {
   'site.shareSite':        { zh: '分享本站',                                  en: 'Share site' },
 
   // Sprint 10B:第 1 层「AI 语义匹配」
+  'poster.make':           { zh: '一键生成长图 · 发微信群',                       en: 'Make a poster for WeChat' },
+  'poster.making':         { zh: '生成中…',                                    en: 'Working…' },
+  'poster.title':          { zh: '你的在售长图',                                en: 'Your poster' },
+  'poster.hint':           { zh: '长按图片保存，直接发到群里；群友扫码就能看到你的全部在售', en: 'Long-press to save, then post it. The QR code opens all your listings.' },
+  'poster.close':          { zh: '关闭',                                       en: 'Close' },
+  'poster.loading':        { zh: '正在出图…',                                  en: 'Rendering…' },
+  'poster.failed':         { zh: '长图没生成出来，过一会儿再试',                   en: "Couldn't make the poster. Try again shortly." },
+  'poster.alt':            { zh: '在售长图 第 {page} / {pages} 张',              en: 'Poster {page} of {pages}' },
+  'poster.download':       { zh: '下载图片',                                    en: 'Download' },
+  'poster.downloadN':      { zh: '下载第 {page} 张',                            en: 'Download #{page}' },
   'seller.banner':         { zh: '这位卖家的 {n} 件在售',                         en: "This seller's {n} listings" },
   'seller.bannerLoading':  { zh: '这位卖家的在售物品',                           en: "This seller's listings" },
   'seller.seeAll':         { zh: '看看全站 →',                                 en: 'Browse everything →' },
