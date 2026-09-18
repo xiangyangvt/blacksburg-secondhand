@@ -137,6 +137,7 @@ describe('parseChatOutput', () => {
       '卖家微信号为：seller_123', 'WeChat is seller_123', 'seller_123 是他的微信', '手机 ５４０－５５５－０１９９', '微\u200b信 abc_12345', 'QQ 87654321', 'Discord: coolguy#1234',
       // 二轮:纯字母账号、下划线开头账号、多级域名邮箱
       '微信: sellerabc', 'Discord: _alice', '联系 alice@x.y.edu', 'vx sellerabc', 'wechat id=goodseller',
+      'LINE ID: alice', '加我 LINE: sellerabc',
     ]) {
       const r = parseChatOutput(JSON.stringify({ summary: s, itemIds: ['a'] }), ids);
       expect(r).toEqual({ summary: FALLBACK_SUMMARY.zh, itemIds: ['a'], fallback: 'contact' });

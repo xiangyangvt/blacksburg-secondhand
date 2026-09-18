@@ -196,6 +196,8 @@ const CHANNEL_KEYWORD = /微信|威信|薇信|微x|wechat|weixin|(?<![a-z])wx(?!
  * `line` 不在这条规则里:它是普通英文词("fishing line works well"),只参与下面需要"像账号的串"的组合判定。
  */
 const CHANNEL_THEN_ACCOUNT = /(?:微信|威信|薇信|微x|wechat|weixin|(?<![a-z])wx(?![a-z])|(?<![a-z])vx(?![a-z])|v信|加v|qq|扣扣|discord|telegram|whatsapp)(?:\s|号|账号|帐号|id|is|是|为|[:：=])*[A-Za-z0-9_#.@-]{4,}/i;
+/** LINE 是普通英文词,只有写成明确的账号格式("LINE ID: alice" "LINE: sellerabc" "line号 abcd")才拦 */
+const LINE_ACCOUNT = /(?<![a-z])line(?![a-z])\s*(?:(?:id|号|账号|帐号)\s*[:：=]?|[:：=])\s*[A-Za-z0-9_#.@-]{4,}/i;
 /** 像账号的串:≥ 5 位的字母数字下划线串,且含数字 / 下划线 / 连字符 / #(纯英文单词如 "IKEA" "Foxridge" 不算) */
 const ACCOUNT_LIKE = /(?<![A-Za-z0-9_#-])(?=[A-Za-z0-9_#-]*[\d_#-])[A-Za-z0-9][A-Za-z0-9_#-]{4,}(?![A-Za-z0-9_#-])/;
 
@@ -206,7 +208,7 @@ export function normalizeForScan(text: string): string {
 export function containsContact(text: string): boolean {
   const t = normalizeForScan(text);
   if (HARD_PATTERNS.some(re => re.test(t))) return true;
-  if (CHANNEL_THEN_ACCOUNT.test(t)) return true;
+  if (CHANNEL_THEN_ACCOUNT.test(t) || LINE_ACCOUNT.test(t)) return true;
   if (!CHANNEL_KEYWORD.test(t)) return false;
   // 价格样式($35、35刀)不当账号:先抹掉再找
   const withoutPrices = t.replace(/\$\s?\d+(?:\.\d+)?/g, ' ');
