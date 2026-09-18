@@ -65,6 +65,23 @@ async function dismissReportAction(formData: FormData) {
   revalidatePath('/admin');
 }
 
+// Sprint 11E:用户反馈标记已处理 / 删除
+async function resolveFeedbackAction(formData: FormData) {
+  'use server';
+  if (!isAdmin()) return;
+  const id = String(formData.get('id'));
+  await prisma.feedback.update({ where: { id }, data: { status: 'done' } }).catch(() => {});
+  revalidatePath('/admin');
+}
+
+async function deleteFeedbackAction(formData: FormData) {
+  'use server';
+  if (!isAdmin()) return;
+  const id = String(formData.get('id'));
+  await prisma.feedback.delete({ where: { id } }).catch(() => {});
+  revalidatePath('/admin');
+}
+
 async function unhideItemAction(formData: FormData) {
   'use server';
   if (!isAdmin()) return;
@@ -279,6 +296,9 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
     prisma.application.count(),
     prisma.application.count({ where: { status: 'pending' } }),
   ]);
+
+  // Sprint 11E:未处理的用户反馈。新表在生产 db push 之前可能不存在——读不到当空,不拖垮整个后台
+  const feedbacks = await prisma.feedback.findMany({ where: { status: 'open' }, orderBy: { createdAt: 'desc' }, take: 100 }).catch(() => []);
 
   // 来源渠道分布：近 30 天 item 按 utmSource 聚合（单独一次查询，方便类型 cast）
   const channelBreakdown = (await (prisma.item as any).groupBy({
@@ -661,6 +681,38 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
                 onDeleteListing={deleteListingAction}
                 onDismiss={dismissReportAction}
               />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Sprint 11E:用户反馈 / 问站长。contact 是用户自愿留的回访方式,只在这里显示 */}
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-3">💬 用户反馈 ({feedbacks.length})</h2>
+        {feedbacks.length === 0 ? (
+          <EmptyBox text="✨ 没有待处理的反馈" />
+        ) : (
+          <div className="space-y-3">
+            {feedbacks.map(f => (
+              <div key={f.id} className="bg-white rounded-lg border border-stone-200 p-4">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 mb-2">
+                  <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">{f.source}</span>
+                  {f.page && <span>{f.page}</span>}
+                  <span>{f.createdAt.toLocaleString('zh-CN', { timeZone: 'America/New_York' })}</span>
+                </div>
+                <p className="text-sm text-stone-800 whitespace-pre-wrap break-words">{f.message}</p>
+                <p className="text-sm mt-2 text-stone-600">回访方式:{f.contact ? <span className="font-medium text-stone-900">{f.contact}</span> : '未留'}</p>
+                <div className="flex gap-2 mt-3">
+                  <form action={resolveFeedbackAction}>
+                    <input type="hidden" name="id" value={f.id} />
+                    <button className="px-3 py-1.5 text-sm rounded bg-stone-800 text-white hover:bg-stone-700">标记已处理</button>
+                  </form>
+                  <form action={deleteFeedbackAction}>
+                    <input type="hidden" name="id" value={f.id} />
+                    <button className="px-3 py-1.5 text-sm rounded border border-stone-300 text-stone-600 hover:border-stone-400">删除</button>
+                  </form>
+                </div>
+              </div>
             ))}
           </div>
         )}

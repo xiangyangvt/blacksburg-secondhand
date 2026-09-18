@@ -444,3 +444,18 @@ model LlmUsage {
   @@index([day])
   @@index([createdAt])
 }
+
+// Sprint 11E:用户反馈 / 问站长。入口在搜索栏对话(intent=ask_ops)与卡壳时刻的「告诉站长」。
+// contact 是用户**自愿**留的回访方式,只在 /admin 显示,永不下发、永不进 LLM / embedding。
+model Feedback {
+  id        String   @id @default(cuid())
+  message   String
+  contact   String?
+  source    String   // "chat" | "empty" | "error" | "limit"
+  page      String?  // 提交时所在路径(不含 query,防带出个人信息)
+  status    String   @default("open") // "open" | "done"
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+}

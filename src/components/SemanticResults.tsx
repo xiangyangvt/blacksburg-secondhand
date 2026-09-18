@@ -8,12 +8,11 @@
 //   - trigger=button 且未点:一个次要样式按钮「找更多相似」;点了之后同 auto
 //   - 被限流:一行灰字提示,不渲染卡片
 // 卡片由调用方用 renderCard 渲染(ItemCard / ListingCard / EventCard),这里不绑定卡片类型。
-// 第 2 层对话(10C)只在传了 chat 时出现(v1 只有二手站)。
+// 第 2 层对话(10C)自 Sprint 11E 起并入顶部搜索栏;这里只在传了 onAsk 时留一个「没找到?让 AI 帮你找」按钮(v1 只有二手站),
+// 点击 = 把当前搜索词交给对话,与在搜索栏里回车等价。
 
 import type { ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
-import type { ItemCard } from '@/components/ItemCard';
-import { SearchChat } from '@/components/SearchChat';
 import { useT } from '@/i18n/I18nProvider';
 
 export interface SemanticState<T extends { id: string } = any> {
@@ -30,30 +29,28 @@ export interface SemanticState<T extends { id: string } = any> {
 
 export const EMPTY_SEMANTIC: SemanticState = { aiEnabled: false, trigger: null, list: [], loading: false, requested: false, limited: false, chatEnabled: false };
 
-type ItemCardProps = Omit<Parameters<typeof ItemCard>[0], 'item' | 'badge' | 'autoExpand'>;
-
 export function SemanticResults<T extends { id: string }>({
   state,
   onRequestMore,
   renderCard,
-  chat,
+  onAsk,
 }: {
   state: SemanticState<T>;
   onRequestMore: () => void;
   /** 渲染一张卡片;badge 是「相似」文案,交给卡片组件显示在标签行 */
   renderCard: (item: T, badge: string) => ReactNode;
-  /** 10C:对话检索沿用的筛选条件、换搜索词时重置对话用的 key、对话里卡片的回调 */
-  chat?: { filters: Record<string, string>; chatKey: string; cardProps: ItemCardProps };
+  /** 11E:把当前搜索词交给顶部搜索栏的对话(与在栏里回车等价) */
+  onAsk?: () => void;
 }) {
   const t = useT();
   if (!state.aiEnabled || !state.trigger) return null;
 
   const showButton = state.trigger === 'button' && !state.requested && !state.loading && !state.limited;
   const showCards = state.list.length > 0;
-  // 第 2 层:第 1 层已经算过(auto,或点过「找更多相似」)就显示,**0 条语义结果时也显示**——搜不到东西正是最需要
+  // 「让 AI 帮你找」按钮(原第 2 层输入框的位置):第 1 层已经算过(auto,或点过「找更多相似」)就显示,**0 条语义结果时也显示**——搜不到东西正是最需要
   // "描述一下你要的"的时候(2026-09-18 产品决定,偏离 spec 10C 原文"有第 1 层才显示")。
   // trigger=button 且未点击、语义层被限流时仍不显示。
-  const showChat = !!chat && state.chatEnabled && state.requested && !state.loading && !state.limited;
+  const showChat = !!onAsk && state.chatEnabled && state.requested && !state.loading && !state.limited;
 
   if (!state.loading && !showButton && !showCards && !state.limited && !showChat) return null; // 零计数隐藏
 
@@ -110,7 +107,19 @@ export function SemanticResults<T extends { id: string }>({
         <div className="text-center text-xs text-stone-500 py-2">{t('search.aiNone')}</div>
       )}
 
-      {showChat && chat && <SearchChat key={chat.chatKey} filters={chat.filters} cardProps={chat.cardProps} />}
+      {showChat && (
+        <div className="text-center pt-3">
+          <button
+            type="button"
+            onClick={onAsk}
+            data-testid="ask-hint"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-chip border border-stone-300 bg-white text-sm text-stone-700 hover:border-violet-300 hover:text-violet-700 transition-colors"
+          >
+            <Sparkles size={14} className="text-violet-500" />
+            {t('search.askHint')}
+          </button>
+        </div>
+      )}
     </section>
   );
 }

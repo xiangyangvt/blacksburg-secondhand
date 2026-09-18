@@ -9,6 +9,8 @@ import { usageSummary, dayKey } from '@/lib/llmUsage';
 export type Digest = {
   generatedAt: string;
   reportsPending: number;
+  /** Sprint 11E:未处理的用户反馈 / 问站长条数 */
+  feedbackOpen: number;
   hidden: { items: number; listings: number; inquiries: number };
   scraper: { failedInLast15: number; lastRunAt: string | null; lastSuccessAt: string | null; failingSources: string[] };
   lastBackupAt: string | null;
@@ -23,6 +25,7 @@ export type Digest = {
 /** 阈值:0 = 该项关闭 */
 export type Thresholds = {
   reports: number;      // 举报队列条数 ≥ 即报
+  feedback: number;     // 未处理的用户反馈条数 ≥ 即报
   hidden: number;       // 隐藏队列总数 ≥ 即报(默认关:隐藏是持久状态,天天报会疲劳)
   scraperFails: number; // 最近 15 次里失败次数 ≥ 即报
   backupDays: number;   // 距上次备份天数 ≥ 即报
@@ -30,7 +33,7 @@ export type Thresholds = {
   aiCost: number;       // 昨日 AI 费用(美元)> 即报;触发过预算熔断也报。与其他项一致:0 = 关闭
 };
 
-export const DEFAULT_THRESHOLDS: Thresholds = { reports: 1, hidden: 0, scraperFails: 3, backupDays: 8, rejects: 50, aiCost: 1 };
+export const DEFAULT_THRESHOLDS: Thresholds = { reports: 1, feedback: 1, hidden: 0, scraperFails: 3, backupDays: 8, rejects: 50, aiCost: 1 };
 
 /** 与注意力账本 needs-you 对齐:kind + ref + note */
 export type Alert = { kind: 'review' | 'decision'; ref: string; task: string; note: string };
@@ -42,7 +45,7 @@ export function parseThresholds(sp: URLSearchParams): Thresholds {
     const n = Number(v);
     return Number.isFinite(n) && n >= 0 ? n : DEFAULT_THRESHOLDS[k];
   };
-  return { reports: num('reports'), hidden: num('hidden'), scraperFails: num('scraperFails'), backupDays: num('backupDays'), rejects: num('rejects'), aiCost: num('aiCost') };
+  return { reports: num('reports'), feedback: num('feedback'), hidden: num('hidden'), scraperFails: num('scraperFails'), backupDays: num('backupDays'), rejects: num('rejects'), aiCost: num('aiCost') };
 }
 
 export function evaluateThresholds(d: Digest, t: Thresholds, siteUrl: string): Alert[] {
@@ -50,6 +53,9 @@ export function evaluateThresholds(d: Digest, t: Thresholds, siteUrl: string): A
   const out: Alert[] = [];
   if (t.reports > 0 && d.reportsPending >= t.reports) {
     out.push({ kind: 'review', ref: admin, task: '举报队列待处理', note: `${d.reportsPending} 条举报等待判定` });
+  }
+  if (t.feedback > 0 && d.feedbackOpen >= t.feedback) {
+    out.push({ kind: 'review', ref: admin, task: '用户反馈待回复', note: `${d.feedbackOpen} 条用户反馈 / 提问等待处理` });
   }
   const hiddenTotal = d.hidden.items + d.hidden.listings + d.hidden.inquiries;
   if (t.hidden > 0 && hiddenTotal >= t.hidden) {
@@ -77,7 +83,7 @@ export function renderDigestEmail(d: Digest, alerts: Alert[], siteUrl: string): 
   const subject = `[黑堡站] ${alerts.length} 项需要处理 · ${d.generatedAt.slice(0, 10)}`;
   const lines = alerts.map(a => `• ${a.task}:${a.note}\n  → ${a.ref}`);
   const summary = [
-    `举报 ${d.reportsPending} · 隐藏 ${d.hidden.items}/${d.hidden.listings}/${d.hidden.inquiries} · scraper 近 15 次失败 ${d.scraper.failedInLast15}`,
+    `举报 ${d.reportsPending} · 反馈 ${d.feedbackOpen} · 隐藏 ${d.hidden.items}/${d.hidden.listings}/${d.hidden.inquiries} · scraper 近 15 次失败 ${d.scraper.failedInLast15}`,
     `备份 ${d.lastBackupAt ?? '无'}(${d.backupAgeDays ?? '?'} 天前) · 24h 披露被拒 ${d.revealRejects24h}`,
     `AI ${d.ai.day} $${d.aiCostUsd.toFixed(4)} / ${d.ai.calls} 次调用 · 429 ${d.ai.rejected429} · 503 ${d.ai.rejected503}`,
   ];
@@ -93,13 +99,15 @@ export function renderDigestEmail(d: Digest, alerts: Alert[], siteUrl: string): 
 
 export async function computeDigest(now: Date = new Date()): Promise<Digest> {
   const dayAgo = new Date(now.getTime() - 24 * 3600e3);
-  const [reportsPending, hiddenItems, hiddenListings, hiddenInquiries, runs, rejects] = await Promise.all([
+  const [reportsPending, hiddenItems, hiddenListings, hiddenInquiries, runs, rejects, feedbackOpen] = await Promise.all([
     prisma.report.count(),
     prisma.item.count({ where: { status: 'hidden' } }),
     prisma.listing.count({ where: { status: 'hidden' } }),
     prisma.inquiry.count({ where: { status: 'hidden' } }),
     prisma.scrapeRun.findMany({ orderBy: { startedAt: 'desc' }, take: 15, select: { source: true, status: true, startedAt: true } }),
     prisma.rateLimitHit.count({ where: { key: { startsWith: 'reveal:' }, admitted: false, createdAt: { gt: dayAgo } } }),
+    // 反馈表读不到不该让整个摘要失败(新表,生产 db push 之前可能还不存在)
+    prisma.feedback.count({ where: { status: 'open' } }).catch(() => 0),
   ]);
   // 10D:昨日(UTC)AI 用量。计费表读不到不该让整个摘要失败——摘要本身就是故障出口
   const yesterday = dayKey(new Date(now.getTime() - 24 * 3600e3));
@@ -123,6 +131,7 @@ export async function computeDigest(now: Date = new Date()): Promise<Digest> {
   return {
     generatedAt: now.toISOString(),
     reportsPending,
+    feedbackOpen,
     hidden: { items: hiddenItems, listings: hiddenListings, inquiries: hiddenInquiries },
     scraper: {
       failedInLast15: failed.length,

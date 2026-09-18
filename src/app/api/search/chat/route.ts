@@ -2,6 +2,7 @@
 //
 // POST /api/search/chat   body { site: 'items', message, history: [{role, content}](≤ 6 轮,客户端持有), filters }
 // 响应:SSE(text/event-stream)
+//   event: intent    data: {"intent": "ask_ops"}   —— Sprint 11E:仅当用户在问站务 / 反馈问题时下发(在 summary 之前);前端显示「转给站长」卡片
 //   event: summary   data: {"text": "<片段>"}      —— 一句话解释,分片下发
 //   event: items     data: {"itemIds": [...], "items": [<与 /api/items 同款脱敏卡片>], "fallback": false | "json" | "contact"}
 //   event: done      data: {}
@@ -141,7 +142,7 @@ export async function POST(req: NextRequest) {
 
   const parsed = parseChatOutput(raw, candidates.map(c => c.id), locale);
   if (parsed.fallback === 'contact') console.warn('[search/chat] summary 命中联系方式检测,已替换为兜底文案');
-  if (candidates.length === 0) {
+  if (candidates.length === 0 && parsed.intent === 'find') {
     parsed.summary = locale === 'zh' ? '暂时没找到合适的,换个说法试试?' : 'Nothing suitable yet. Try describing it differently.';
     parsed.itemIds = [];
   }
@@ -163,6 +164,7 @@ export async function POST(req: NextRequest) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
+        if (parsed.intent === 'ask_ops' && !signal.aborted) controller.enqueue(enc.encode(sse('intent', { intent: 'ask_ops' })));
         for (const piece of chunks(parsed.summary || FALLBACK_SUMMARY[locale])) {
           if (signal.aborted) break;
           controller.enqueue(enc.encode(sse('summary', { text: piece })));
