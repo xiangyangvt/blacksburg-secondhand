@@ -33,8 +33,8 @@
 | `SCRAPER_SECRET` | ✓ | GitHub Action 触发 scraper 鉴权；用 `openssl rand -hex 32` 生成 |
 | `LLM_BASE_URL` | ✓ | 默认 `https://api.deepseek.com/v1` |
 | `LLM_API_KEY` | ✓ | DeepSeek API key |
-| `LLM_CHAT_MODEL` | ✓ | 默认 `deepseek-chat` |
-| `LLM_UTILITY_MODEL` | ✓ | 默认 `deepseek-chat`（HTML 抽取 + 翻译） |
+| `LLM_CHAT_MODEL` | ✓ | 默认 `deepseek-v4-pro`（高峰 $1.32 / $3.96 每百万 token，非高峰减半） |
+| `LLM_UTILITY_MODEL` | ✓ | 默认 `deepseek-flash`（HTML 抽取 + 翻译；旧名 `deepseek-v4-flash` 仍接受）。`deepseek-chat` 已不在 [DeepSeek 定价页](https://api-docs.deepseek.com/quick_start/pricing/)上（2026-09-18 核对），Railway 上若还是它请改掉 |
 | `LLM_EMBED_API_KEY` | 可选 | OpenAI key（Sprint 10 语义搜索的 embedding）；不配则发帖不算向量、搜索只有关键词层 |
 | `LLM_EMBED_MODEL` | 可选 | 默认 `text-embedding-3-small`（1536 维，与 pgvector 列绑定，别随手换） |
 | `SEARCH_AI_ENABLED` | 可选 | 默认 `false`。语义搜索 / AI 助手总开关（10B 起生效）；开之前先跑完 embedding 回填 |

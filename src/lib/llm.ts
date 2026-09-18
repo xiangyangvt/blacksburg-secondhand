@@ -5,8 +5,10 @@
 // env:
 //   LLM_BASE_URL          chat/utility 走的 endpoint(默认 deepseek)
 //   LLM_API_KEY
-//   LLM_CHAT_MODEL        给 RAG chatbot 用(deepseek-v4-pro,promo $0.435/$0.87 per M)
-//   LLM_UTILITY_MODEL     给批量 extract/translate 用(deepseek-v4-flash,$0.14/$0.28 per M)
+//   LLM_CHAT_MODEL        给 RAG chatbot 用(deepseek-v4-pro,高峰 $1.32/$3.96 per M,非高峰减半)
+//   LLM_UTILITY_MODEL     给批量 extract/translate 用(代码默认 deepseek-v4-flash = 现名 deepseek-flash 的旧名,
+//                         仍接受并按 Flash 计费:高峰 $0.30/$1.20 per M,非高峰减半)
+//   价格与模型名以 https://api-docs.deepseek.com/quick_start/pricing/ 为准(2026-09-18 核对)
 //   LLM_EMBED_BASE_URL    embedding 独立(默认 OpenAI;DeepSeek 暂无 embed 模型)
 //   LLM_EMBED_API_KEY
 //   LLM_EMBED_MODEL       默认 text-embedding-3-small($0.02 per M, 1536 维)
@@ -45,16 +47,38 @@ type ChatOpts = {
   temperature?: number;
   max_tokens?: number;
   response_format?: { type: 'json_object' } | { type: 'text' };
+  /**
+   * 默认 false = 关闭 DeepSeek 的 thinking 模式。抽取 / 翻译不需要推理,开着只会:多付推理 token、
+   * temperature 失效、推理吃掉 max_tokens 把 JSON 截断。确实要推理的调用显式传 true。
+   */
+  thinking?: boolean;
 };
 
-export async function llmCall(opts: ChatOpts): Promise<string> {
-  const res = await chatClient.chat.completions.create({
-    model: opts.model ?? UTILITY_MODEL,
+/** DeepSeek 的 thinking 模式默认开启(官方文档 2026-09-18 核对):该模式下 temperature 无效,推理 token 计入输出且会吃掉 max_tokens */
+export function isDeepSeek(model: string, baseURL: string = process.env.LLM_BASE_URL ?? 'https://api.deepseek.com'): boolean {
+  return /deepseek/i.test(model) || /deepseek/i.test(baseURL);
+}
+
+/** 发给 SDK 的请求体(抽出来是为了单测断言 thinking 参数) */
+export function buildChatRequestBody(opts: Omit<ChatOpts, 'model' | 'thinking'> & { model: string; disableThinking?: boolean }, baseURL?: string): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: opts.model,
     messages: opts.messages,
     temperature: opts.temperature ?? 0.2,
     max_tokens: opts.max_tokens,
     response_format: opts.response_format,
-  });
+  };
+  // 只对 DeepSeek 附带该字段:其他 OpenAI 兼容 provider 见到未知字段可能 400
+  if (opts.disableThinking && isDeepSeek(opts.model, baseURL)) body.thinking = { type: 'disabled' };
+  return body;
+}
+
+export async function llmCall(opts: ChatOpts): Promise<string> {
+  const { thinking, ...rest } = opts;
+  const res = await chatClient.chat.completions.create(
+    // thinking 不在 SDK 的类型里(Node SDK 会把未知的顶层字段原样发出去),所以过一道 unknown
+    buildChatRequestBody({ ...rest, model: opts.model ?? UTILITY_MODEL, disableThinking: !thinking }) as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+  );
   return res.choices[0]?.message?.content ?? '';
 }
 
