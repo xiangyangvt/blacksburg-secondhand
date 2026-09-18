@@ -14,6 +14,7 @@
 //   LLM_EMBED_MODEL       默认 text-embedding-3-small($0.02 per M, 1536 维)
 
 import OpenAI from 'openai';
+import { recordUsage } from '@/lib/llmUsage';
 
 // ---------- clients ----------
 
@@ -81,6 +82,34 @@ export async function llmCall(opts: ChatOpts): Promise<string> {
   return res.choices[0]?.message?.content ?? '';
 }
 
+export class LlmTruncatedError extends Error {
+  constructor() { super('LLM 输出被 max_tokens 截断'); this.name = 'LlmTruncatedError'; }
+}
+
+/**
+ * Sprint 10C:带用量的 chat 调用,对话接口用。
+ *   - 显式关闭 thinking(找物是检索 + 挑选,不需要推理;否则 300 token 可能全耗在推理上,付费得到空正文)
+ *   - finish_reason=length → 抛 LlmTruncatedError(用量照常返回给调用方结算),不把半截 JSON 当结果
+ *   - 单独的超时、不重试、可取消(用户离开对话就别再花钱)
+ * 记账由调用方做(预留 → 结算,见 llmUsage.ts),这里只如实返回用量。
+ */
+export async function chatWithUsage(opts: Omit<ChatOpts, 'model'> & { model?: string; timeoutMs?: number; signal?: AbortSignal }): Promise<{ content: string; promptTokens: number; completionTokens: number; model: string; truncated: boolean }> {
+  const model = opts.model ?? CHAT_MODEL;
+  const res = await chatClient.chat.completions.create(
+    buildChatRequestBody({ ...opts, model, disableThinking: true }) as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+    { timeout: opts.timeoutMs ?? 20_000, maxRetries: 0, signal: opts.signal },
+  );
+  return {
+    content: res.choices[0]?.message?.content ?? '',
+    promptTokens: res.usage?.prompt_tokens ?? 0,
+    completionTokens: res.usage?.completion_tokens ?? 0,
+    model,
+    truncated: res.choices[0]?.finish_reason === 'length',
+  };
+}
+
+export const CHAT_MODEL_NAME = CHAT_MODEL;
+
 /** Chatbot 用,RAG 回答(Phase 3) */
 export function chat(opts: Omit<ChatOpts, 'model'> & { model?: string }) {
   return llmCall({ ...opts, model: opts.model ?? CHAT_MODEL });
@@ -112,6 +141,8 @@ export async function embedMany(texts: string[], opts: { timeoutMs?: number } = 
     // 回填带整体截止时间时,把剩余预算传进来;不传用客户端默认(30s)。超时后 SDK 不再重试(maxRetries 由剩余预算决定)
     opts.timeoutMs !== undefined ? { timeout: Math.max(1_000, opts.timeoutMs), maxRetries: 0 } : undefined,
   );
+  // 10C / 10D:embedding 也记账(fire-and-forget,记不上不影响调用)
+  void recordUsage({ endpoint: 'embed', model: EMBED_MODEL, promptTokens: res.usage?.prompt_tokens ?? 0, completionTokens: 0 });
   const out: number[][] = new Array(texts.length);
   for (const d of res.data) out[d.index] = d.embedding;
   for (let i = 0; i < texts.length; i++) {

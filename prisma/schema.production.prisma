@@ -428,3 +428,19 @@ model RateLimitHit {
   @@index([key, createdAt])
   @@index([createdAt])
 }
+
+// Sprint 10C / 10D:LLM 调用计费流水。每次 embedding / chat 调用一行,用于当日预算熔断与 admin 费用面板。
+// 不含任何用户内容或标识,只有端点、模型、token 数与估算费用。
+model LlmUsage {
+  id               String   @id @default(cuid())
+  endpoint         String
+  model            String
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  estCostUsd       Float    @default(0)
+  day              String
+  createdAt        DateTime @default(now())
+
+  @@index([day])
+  @@index([createdAt])
+}

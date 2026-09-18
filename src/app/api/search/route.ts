@@ -1,7 +1,7 @@
 // Sprint 10B:混合检索接口
 //
 // GET /api/search?site=items&q=...&(筛选参数同 /api/items)&semantic=1
-// 响应 { keyword: [...], semantic: [...], aiEnabled, trigger: 'auto' | 'button', limited }
+// 响应 { keyword: [...], semantic: [...], aiEnabled, trigger: 'auto' | 'button', limited, chatEnabled }
 //   keyword  与 GET /api/items 同一套 where / orderBy / 序列化(共用 lib/itemsQuery.ts),顺序逐条一致
 //   semantic 仅 aiEnabled 时算:查询词 embed(10 分钟缓存)→ 在"同样过滤条件但不带关键词"的候选内取最近邻
 //            → 去掉 keyword 已有的 id → 低于阈值丢弃 → 最多 10 条,不含关键词层已有的 id
@@ -24,6 +24,7 @@ import { getVectorStore } from '@/lib/search/vectorStore';
 import {
   isSearchAiEnabled, semanticMinSim, getQueryEmbeddingCache, pickSemantic, semanticTrigger, gateSemanticSearch,
 } from '@/lib/search/hybrid';
+import { isBudgetExceeded } from '@/lib/llmUsage';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +45,7 @@ export async function GET(req: NextRequest) {
   const sellerContact = await resolveSellerContact(qy.sameSellerAs, prisma);
   const aiEnabled = isSearchAiEnabled();
   if (sellerContact === null) {
-    return NextResponse.json({ keyword: [], semantic: [], aiEnabled, trigger: 'auto', limited: false });
+    return NextResponse.json({ keyword: [], semantic: [], aiEnabled, trigger: 'auto', limited: false, chatEnabled: false });
   }
   const whereOpts = sellerContact !== undefined ? { sellerContact } : {};
   const keywordRows = await prisma.item.findMany({
@@ -103,7 +104,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const res = NextResponse.json({ keyword, semantic, aiEnabled, trigger, limited }, { status });
+  // 10C:第 2 层是否可用 = AI 开 且 当日预算未熔断(熔断时 UI 直接不出输入框;第 1 层不受影响)
+  const chatEnabled = aiEnabled && !(await isBudgetExceeded());
+
+  const res = NextResponse.json({ keyword, semantic, aiEnabled, trigger, limited, chatEnabled }, { status });
   if (cookie) setVisitorCookie(res, cookie.visitorId);
   return res;
 }

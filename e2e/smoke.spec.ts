@@ -110,8 +110,14 @@ test.describe('API smoke', () => {
     expect(Array.isArray(data.keyword)).toBe(true);
     expect(data.semantic).toEqual([]);
     expect(data.aiEnabled).toBe(false);
+    expect(data.chatEnabled).toBe(false);
     expect(['auto', 'button']).toContain(data.trigger);
     expect(JSON.stringify(data)).not.toMatch(/contactValue":"[^"]|ipAddress|editCodeHash|embeddingJson/);
+  });
+
+  test('POST /api/search/chat:AI 关闭(CI 无 key)→ 404,不泄露任何内容(10C)', async ({ request }) => {
+    const res = await request.post('/api/search/chat', { data: { site: 'items', message: '找个书桌', history: [] } });
+    expect(res.status()).toBe(404);
   });
 
   test('GET /api/search 无 q → 400;site 非 items → 400', async ({ request }) => {

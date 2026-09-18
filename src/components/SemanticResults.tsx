@@ -11,6 +11,7 @@
 
 import { Sparkles } from 'lucide-react';
 import { ItemCard, type Item } from '@/components/ItemCard';
+import { SearchChat } from '@/components/SearchChat';
 import { useT } from '@/i18n/I18nProvider';
 
 export interface SemanticState {
@@ -21,17 +22,24 @@ export interface SemanticState {
   /** 用户已点过「找更多相似」(或 trigger=auto 已算过) */
   requested: boolean;
   limited: boolean;
+  /** 10C:第 2 层可用(AI 开且当日预算未熔断) */
+  chatEnabled: boolean;
 }
 
-export const EMPTY_SEMANTIC: SemanticState = { aiEnabled: false, trigger: null, list: [], loading: false, requested: false, limited: false };
+export const EMPTY_SEMANTIC: SemanticState = { aiEnabled: false, trigger: null, list: [], loading: false, requested: false, limited: false, chatEnabled: false };
 
 export function SemanticResults({
   state,
   onRequestMore,
   cardProps,
+  chatFilters,
+  chatKey,
 }: {
   state: SemanticState;
   onRequestMore: () => void;
+  /** 10C:对话检索沿用的筛选条件,与换搜索词时重置对话用的 key */
+  chatFilters: Record<string, string>;
+  chatKey: string;
   /** 透传给 ItemCard 的回调(与第 0 层同一套) */
   cardProps: Omit<Parameters<typeof ItemCard>[0], 'item' | 'badge' | 'autoExpand'>;
 }) {
@@ -40,8 +48,10 @@ export function SemanticResults({
 
   const showButton = state.trigger === 'button' && !state.requested && !state.loading && !state.limited;
   const showCards = state.list.length > 0;
+  // 第 2 层:有第 1 层(语义卡片真的渲染出来了)才显示;trigger=button 且未点击、语义层被限流、0 条结果时都不显示(spec 10C + 零计数隐藏)
+  const showChat = state.chatEnabled && state.requested && !state.loading && !state.limited && showCards;
 
-  if (!state.loading && !showButton && !showCards && !state.limited) return null; // 零计数隐藏
+  if (!state.loading && !showButton && !showCards && !state.limited && !showChat) return null; // 零计数隐藏
 
   return (
     <section className="mt-6" data-testid="semantic-results">
@@ -92,6 +102,8 @@ export function SemanticResults({
           ))}
         </div>
       )}
+
+      {showChat && <SearchChat key={chatKey} filters={chatFilters} cardProps={cardProps} />}
     </section>
   );
 }
