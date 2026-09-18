@@ -124,7 +124,11 @@ export type SearchGate =
  * 语义路的门:bot UA 直接不给;同 visitor 60 次 / 小时(含按钮触发)。
  * 只砍语义路,关键词层不经过这里。
  */
-export async function gateSemanticSearch(req: NextRequest, db: QuotaDb = prisma as unknown as QuotaDb): Promise<SearchGate> {
+export async function gateSemanticSearch(
+  req: NextRequest,
+  db: QuotaDb = prisma as unknown as QuotaDb,
+  now: () => number = Date.now,
+): Promise<SearchGate> {
   if (isBotUA(req, 'full')) return { ok: false, reason: 'bot', retryAfterSec: 0 };
   const { visitorId, isNew } = getVisitorId(req);
   const ip = getClientIp(req);
@@ -135,10 +139,21 @@ export async function gateSemanticSearch(req: NextRequest, db: QuotaDb = prisma 
   ];
   let retryAfterSec = 0;
   let limited = false;
+  const fullButAdmitted: typeof checks = [];
   for (const c of checks) {
-    const r = await checkQuota(c, db);
+    const r = await checkQuota(c, db, now);
     if (!r.ok) { limited = true; retryAfterSec = Math.max(retryAfterSec, r.retryAfterSec); }
+    else if (r.remaining === 0) fullButAdmitted.push(c);
   }
-  if (limited) return { ok: false, reason: 'limited', retryAfterSec, visitorId, isNew };
-  return { ok: true, visitorId, isNew };
+  if (!limited) return { ok: true, visitorId, isNew };
+  // 整体被拒时,本次刚好占满的另一桶下次也会拒:retryAfter 取两桶里最晚的(二轮 #4)。只读,不再写计数
+  for (const c of fullButAdmitted) {
+    const t = now();
+    const [oldest] = await db.rateLimitHit.findMany({
+      where: { key: c.key, createdAt: { gt: new Date(t - c.windowMs) } },
+      orderBy: { createdAt: 'asc' }, skip: 0, take: 1, select: { createdAt: true },
+    });
+    if (oldest) retryAfterSec = Math.max(retryAfterSec, Math.max(1, Math.ceil((oldest.createdAt.getTime() + c.windowMs - t) / 1000)));
+  }
+  return { ok: false, reason: 'limited', retryAfterSec, visitorId, isNew };
 }

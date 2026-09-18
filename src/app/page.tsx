@@ -82,7 +82,10 @@ function HomePageInner() {
   // Sprint 10B:第 1 层语义结果;无 q 时始终 EMPTY(整块不渲染)
   const [semantic, setSemantic] = useState<SemanticState>(EMPTY_SEMANTIC);
   // 请求版本:每次 fetchItems +1;晚到的旧响应(关键词或语义)一律丢弃,防止旧按钮请求覆盖新搜索(Codex 互审 #3)
+  // 每个 await 之后、每次 setState 之前都要比对(二轮 #1)
   const reqSeq = useRef(0);
+  // 当前版本实际展示的关键词 id:语义结果回来时再按它过滤一次(两段请求之间数据可能变了,二轮 #3)
+  const keywordIdsRef = useRef<Set<string>>(new Set());
   const [origin, setOrigin] = useState('');
   useEffect(() => {
     setOrigin(clientOrigin());
@@ -198,6 +201,7 @@ function HomePageInner() {
   // Sprint 10B:语义层单独一段请求(semantic=1)。trigger=auto 时关键词层渲染后自动发;trigger=button 时用户点按钮才发。
   // 关键词层永远不等 embedding;失败时 requested 复位,按钮回来可以重试(互审 #4 #7)
   const requestSemantic = useCallback(async (seq: number) => {
+    if (seq !== reqSeq.current) return; // 旧闭包续跑过来的调用,直接忽略
     const { sp, q } = buildListParams();
     if (!q) return;
     sp.set('site', 'items');
@@ -207,7 +211,9 @@ function HomePageInner() {
       const res = await fetch(`/api/search?${sp}`);
       const data = await res.json();
       if (seq !== reqSeq.current) return; // 查询已变,丢弃
-      setSemantic(s => ({ ...s, loading: false, list: data.semantic ?? [], limited: res.status === 429 || !!data.limited }));
+      const shown = keywordIdsRef.current;
+      const list: Item[] = (data.semantic ?? []).filter((it: Item) => !shown.has(it.id));
+      setSemantic(s => ({ ...s, loading: false, list, limited: res.status === 429 || !!data.limited }));
     } catch {
       if (seq !== reqSeq.current) return;
       setSemantic(s => ({ ...s, loading: false, list: [], requested: false }));
@@ -219,6 +225,9 @@ function HomePageInner() {
   const fetchItems = useCallback(async () => {
     setLoading(true);
     const seq = ++reqSeq.current;
+    // 新查询开始就清掉旧的语义卡片 / 按钮,等第一段响应给出本次 trigger 再开放(二轮 #2)
+    setSemantic(EMPTY_SEMANTIC);
+    keywordIdsRef.current = new Set();
     const { sp, q } = buildListParams();
     let autoSemantic = false;
 
@@ -232,6 +241,7 @@ function HomePageInner() {
         const data = await res.json();
         if (seq !== reqSeq.current) return;
         fetched = data.keyword ?? [];
+        keywordIdsRef.current = new Set(fetched.map(it => it.id));
         setSemantic({ aiEnabled: !!data.aiEnabled, trigger: data.trigger ?? null, list: [], loading: false, requested: false, limited: false });
         autoSemantic = !!data.aiEnabled && data.trigger === 'auto';
       } else {
@@ -245,13 +255,14 @@ function HomePageInner() {
       // 跟购物清单同步：找不到 id 的 cart item 静默移除；找到的更新 snapshot
       try {
         const { syncCart } = await import('@/lib/shoppingCart');
-        syncCart(fetched);
+        if (seq === reqSeq.current) syncCart(fetched);
       } catch {}
     } finally {
-      setLoading(false);
+      // 旧请求的 finally 不能关掉新请求的加载态
+      if (seq === reqSeq.current) setLoading(false);
     }
-    // 第 0 层已渲染,再去要语义层(骨架在这段时间显示)
-    if (autoSemantic) void requestSemantic(seq);
+    // 第 0 层已渲染,再去要语义层(骨架在这段时间显示);版本再核对一次
+    if (autoSemantic && seq === reqSeq.current) void requestSemantic(seq);
   }, [buildListParams, requestSemantic]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);

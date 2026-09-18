@@ -90,16 +90,17 @@ describe('semanticTrigger', () => {
   });
 });
 
-function memDb(): QuotaDb {
+function memDb(clock: () => number = Date.now): QuotaDb & { seed: (key: string, n: number, at: number) => void } {
   type Row = { id: string; key: string; tag: string | null; bucket: number | null; admitted: boolean; createdAt: Date };
   const rows: Row[] = []; let seq = 0;
+  const seed = (key: string, n: number, at: number) => { for (let i = 0; i < n; i++) rows.push({ id: `s${++seq}`, key, tag: null, bucket: null, admitted: true, createdAt: new Date(at) }); };
   const inWin = (w: { key: string; createdAt: { gt: Date }; tag?: string }) =>
     rows.filter(r => r.key === w.key && r.createdAt > w.createdAt.gt && (w.tag === undefined || r.tag === w.tag));
-  return { rateLimitHit: {
+  return { seed, rateLimitHit: {
     async count({ where }) { return inWin(where).length; },
     async findFirst({ where }) { const h = inWin(where)[0]; return h ? { id: h.id, admitted: h.admitted, createdAt: h.createdAt } : null; },
     async findMany({ where, skip, take }) { return inWin(where).sort((a, b) => +a.createdAt - +b.createdAt).slice(skip, skip + take).map(r => ({ createdAt: r.createdAt })); },
-    async create({ data }) { const row = { id: `r${++seq}`, ...data, admitted: false, createdAt: new Date() }; rows.push(row); return { id: row.id }; },
+    async create({ data }) { const row = { id: `r${++seq}`, ...data, admitted: false, createdAt: new Date(clock()) }; rows.push(row); return { id: row.id }; },
     async update({ where, data }) { const r = rows.find(r => r.id === where.id); if (r) r.admitted = data.admitted; },
     async deleteMany() {},
   } };
@@ -129,6 +130,17 @@ describe('gateSemanticSearch', () => {
     const fresh = await gateSemanticSearch(req(), db);
     expect(fresh).toMatchObject({ ok: true, isNew: true });
   });
+  it('双桶 retryAfter:IP 桶 10s 后释放但 visitor 桶本次刚占满 → 取 visitor 的 3590s,不是 10s', async () => {
+    const T = 1_800_000_000_000; const HOUR = 3600e3;
+    const db = memDb(() => T);
+    const vid = '0f1e2d3c-4b5a-6978-8a9b-c0d1e2f3a4b5';
+    db.seed(`search:vid:${vid}:h`, SEARCH_LIMITS.visitorPerHour - 1, T - 10_000);      // 59 条,10 秒前 → 3590s 后释放
+    db.seed('search:ip:1.2.3.4:h', SEARCH_LIMITS.ipPerHour, T - HOUR + 10_000);          // 300 条,10 秒后释放
+    const g = await gateSemanticSearch(req({ vid, ip: '1.2.3.4' }), db, () => T);
+    expect(g).toMatchObject({ ok: false, reason: 'limited' });
+    if (!g.ok) expect(g.retryAfterSec).toBe(3590);
+  });
+
   it('轮换 cookie 绕不过:同 IP 不带 cookie 第 301 次被 IP 配额拦下', async () => {
     const db = memDb();
     for (let i = 0; i < SEARCH_LIMITS.ipPerHour; i++) expect((await gateSemanticSearch(req({ ip: '1.2.3.4' }), db)).ok).toBe(true);
