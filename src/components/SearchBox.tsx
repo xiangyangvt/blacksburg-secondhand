@@ -8,13 +8,17 @@
 //   - 回车 / 点右侧按钮 → onAsk(把当前输入当一句话交给对话)
 // 视觉(Sean 2026-09-18:借「AI 助手」的炫彩识别,但要轻量、静态,不带走注意力):
 //   - 未聚焦:和原来一样朴素,只有图标是静态渐变星芒
-//   - 聚焦:边框变 1px 渐变细线 —— 颜色只在用户注意力已经落到这里时才出现
-//   - 全程无动效:一条 CSS 渐变,零 JS
+//   - 聚焦:边框变一圈多色渐变环 + 一层很淡的柔光 —— 颜色只在用户注意力已经落到这里时才出现
+//   - 没有持续动效:颜色不流动不呼吸,只有 200ms 的淡入淡出;纯 CSS,零 JS
 // 不传 `ask` 的站点与改动前像素级一致。
 
 import { Search, Sparkles, ArrowUp } from 'lucide-react';
 
 const GRAD_ID = 'hb-ask-grad';
+// 一条首尾相接的多色环:靛 → 蓝 → 青 → 绿 → 琥珀 → 玫红 → 紫 → 靛。用 conic 让颜色沿着胶囊一圈走,
+// 任何位置相邻两色都接得上,没有线性渐变在两端突然断掉的接缝——这是「线条平滑」的主要来源
+const RING = 'conic-gradient(from 200deg at 50% 50%, #6366f1, #3b82f6, #06b6d4, #10b981, #f59e0b, #f43f5e, #d946ef, #6366f1)';
+const BUTTON = 'linear-gradient(135deg, #6366f1 0%, #06b6d4 45%, #f59e0b 80%, #ec4899 100%)';
 
 export function SearchBox({
   value,
@@ -48,23 +52,29 @@ export function SearchBox({
 
   const canAsk = ask.showButton && value.trim().length > 0;
   return (
-    // 外层 1px padding 充当边框:未聚焦透明,聚焦时露出渐变底色 = 渐变细线。尺寸与无 ask 版本一致(原来是 1px 透明 border)
+    // 渐变环的做法(Sean 2026-09-18 二轮:线条更平滑舒服、边框色彩更多):
+    //   - 外层 1.5px padding 是「边框槽」;槽里垫两层同一条多色渐变——一层清晰的环,一层模糊的柔光(静态,不流动)
+    //   - 两层用 opacity 过渡(背景渐变本身不能过渡):未聚焦 0,悬停露一点,聚焦全显。200ms 淡入淡出,没有持续动效
+    //   - 输入框自己不透明,盖住中间,只露出一圈。尺寸与无 ask 版本只差 0.5px
     // 手机上一句话在 160px 里打不下:聚焦时临时铺满顶栏(绝对定位盖住两侧),失焦还原
     <form
       onSubmit={(e) => { e.preventDefault(); if (value.trim()) ask.onAsk(); }}
-      className="group flex-1 min-w-0 max-w-[160px] sm:max-w-none sm:flex-none sm:w-[260px] relative rounded-chip p-px bg-transparent focus-within:bg-gradient-to-r focus-within:from-violet-500 focus-within:via-fuchsia-500 focus-within:to-amber-400 max-sm:focus-within:absolute max-sm:focus-within:inset-x-3 max-sm:focus-within:max-w-none max-sm:focus-within:z-10"
+      className="group flex-1 min-w-0 max-w-[160px] sm:max-w-none sm:flex-none sm:w-[260px] relative rounded-full p-[1.5px] max-sm:focus-within:absolute max-sm:focus-within:inset-x-3 max-sm:focus-within:max-w-none max-sm:focus-within:z-10"
       role="search"
     >
+      <span aria-hidden className="pointer-events-none absolute -inset-0.5 rounded-full blur-md opacity-0 group-focus-within:opacity-40 transition-opacity duration-200 ease-out" style={{ background: RING }} />
+      <span aria-hidden className="pointer-events-none absolute inset-0 rounded-full opacity-0 group-hover:opacity-50 group-focus-within:opacity-100 transition-opacity duration-200 ease-out" style={{ background: RING }} />
       <svg width="0" height="0" className="absolute" aria-hidden>
         <defs>
           <linearGradient id={GRAD_ID} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#8b5cf6" />
-            <stop offset="55%" stopColor="#d946ef" />
-            <stop offset="100%" stopColor="#fbbf24" />
+            <stop offset="0%" stopColor="#6366f1" />
+            <stop offset="35%" stopColor="#06b6d4" />
+            <stop offset="65%" stopColor="#f59e0b" />
+            <stop offset="100%" stopColor="#ec4899" />
           </linearGradient>
         </defs>
       </svg>
-      <Sparkles size={15} stroke={`url(#${GRAD_ID})`} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+      <Sparkles size={15} stroke={`url(#${GRAD_ID})`} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-[1]" />
       <input
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -78,7 +88,7 @@ export function SearchBox({
         }}
         maxLength={300}
         // 聚焦时 16px:iOS 小于 16px 的输入框聚焦会自动放大页面
-        className={`w-full bg-stone-100 rounded-chip pl-9 ${canAsk ? 'pr-10' : 'pr-3'} py-2 text-sm max-sm:focus:text-base focus:outline-none focus:bg-white transition-colors`}
+        className={`relative block w-full bg-stone-100 rounded-full pl-9 ${canAsk ? 'pr-10' : 'pr-3'} py-2 text-sm max-sm:focus:text-base focus:outline-none focus:bg-white transition-colors duration-200`}
       />
       {canAsk && (
         <button
@@ -88,7 +98,8 @@ export function SearchBox({
           aria-label={ask.buttonLabel}
           title={ask.buttonLabel}
           data-testid="ask-button"
-          className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-7 h-7 rounded-full text-white bg-gradient-to-br from-violet-500 via-fuchsia-500 to-amber-400"
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 z-[1] inline-flex items-center justify-center w-7 h-7 rounded-full text-white shadow-sm"
+          style={{ background: BUTTON }}
         >
           <ArrowUp size={15} strokeWidth={2.5} />
         </button>
