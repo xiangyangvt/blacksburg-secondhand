@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { NextRequest } from 'next/server';
 import {
   gateChat, CHAT_LIMITS, sanitizeHistory, sanitizeMessage, retrievalQuery, candidateLine, buildChatMessages,
-  parseChatOutput, containsContact, detectLocale, FALLBACK_SUMMARY, SUMMARY_MAX_CHARS, CHAT_CANDIDATE_SELECT, SYSTEM_PROMPT,
+  parseChatOutput, containsContact, detectLocale, FALLBACK_SUMMARY, SUMMARY_MAX_CHARS, SUMMARY_MAX_CHARS_EN, CHAT_CANDIDATE_SELECT, SYSTEM_PROMPT,
   candidateData, estimatePromptTokens, type ChatCandidate,
 } from './chat';
 import { buildChatRequestBody, isDeepSeek } from '@/lib/llm';
@@ -149,6 +149,11 @@ describe('parseChatOutput', () => {
   it('超长 summary 截到 60 字', () => {
     const r = parseChatOutput(JSON.stringify({ summary: '好'.repeat(100), itemIds: [] }), ids);
     expect([...r.summary].length).toBe(SUMMARY_MAX_CHARS);
+  });
+  it('英文 summary 上限 140:上线实测的那句不再被截断;更长的仍截', () => {
+    const real = 'There are cheaper options like the kettle and the small electric pot, both under your budget.';
+    expect(parseChatOutput(JSON.stringify({ summary: real, itemIds: [] }), ids, 'en').summary).toBe(real);
+    expect([...parseChatOutput(JSON.stringify({ summary: 'a'.repeat(300), itemIds: [] }), ids, 'en').summary].length).toBe(SUMMARY_MAX_CHARS_EN);
   });
 });
 

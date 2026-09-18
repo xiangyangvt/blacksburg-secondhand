@@ -134,7 +134,7 @@ export const SYSTEM_PROMPT = [
   '你是黑堡(Blacksburg, VA)本地二手交易站的找物助手。用户描述想要的东西,你从下面给定的候选帖子里挑出最合适的。',
   '规则:',
   '1. 只能从候选列表里挑,itemIds 里的每个 id 必须原样来自候选;没有合适的就返回空数组,并在 summary 里如实说没找到。',
-  '2. 输出严格 JSON,不要 markdown 代码块,不要解释:{"summary": "<一句话,不超过 60 个字>", "itemIds": ["..."]}',
+  '2. 输出严格 JSON,不要 markdown 代码块,不要解释:{"summary": "<一句话;中文不超过 60 个字,英文不超过 25 个词>", "itemIds": ["..."]}',
   '3. itemIds 最多 4 个,按合适程度排序。',
   '4. 禁止输出任何联系方式(微信号、手机号、邮箱、QQ、Discord 等)。用户问卖家联系方式时,告诉他在卡片上点开查看。',
   '5. 禁止编造或复述价格、成色等事实;这些以卡片为准。summary 只说为什么推荐这几件。',
@@ -171,7 +171,9 @@ export function estimatePromptTokens(msgs: readonly LlmMessage[]): number {
 // ---------- 输出校验 ----------
 
 export const FALLBACK_SUMMARY = { zh: '我挑了几件可能合适的,价格与详情以卡片为准。', en: 'Here are a few that might fit. See each card for price and details.' };
+/** 一句话上限:中文 60 字(spec);英文同样 60 个字符会截断半句话(上线实测 "…and $10 electr…"),放到 140 */
 export const SUMMARY_MAX_CHARS = 60;
+export const SUMMARY_MAX_CHARS_EN = 140;
 const FALLBACK_TOP_N = 3;
 const MAX_ITEM_IDS = 4;
 
@@ -250,7 +252,9 @@ export function parseChatOutput(raw: string, candidateIds: readonly string[], lo
   const summary = obj.summary.replace(/\s+/g, ' ').trim();
   if (!summary) return { summary: FALLBACK_SUMMARY[locale], itemIds: itemIds.length ? itemIds : fallbackIds, fallback: 'json' };
   if (containsContact(summary)) return { summary: FALLBACK_SUMMARY[locale], itemIds, fallback: 'contact' };
-  return { summary: summary.length > SUMMARY_MAX_CHARS ? `${summary.slice(0, SUMMARY_MAX_CHARS - 1)}…` : summary, itemIds, fallback: false };
+  const cap = locale === 'en' ? SUMMARY_MAX_CHARS_EN : SUMMARY_MAX_CHARS;
+  const cp = [...summary];
+  return { summary: cp.length > cap ? `${cp.slice(0, cap - 1).join('')}…` : summary, itemIds, fallback: false };
 }
 
 /** 粗判用户语言:含 CJK 字符当中文 */
