@@ -2,6 +2,7 @@
 // 不变量(ARCHITECTURE.md §8.10):每一种需要人处理的状态都必须有一条出站路径。
 // 纯函数部分(evaluateThresholds / renderDigestEmail)可单测;computeDigest 读数据库与文件。
 
+import { wideVisitors24h } from './abuseWatch';
 import { readFile } from 'node:fs/promises';
 import { prisma } from '@/lib/prisma';
 import { usageSummary, dayKey } from '@/lib/llmUsage';
@@ -16,6 +17,8 @@ export type Digest = {
   lastBackupAt: string | null;
   backupAgeDays: number | null;
   revealRejects24h: number;
+  /** Sprint 11D:24h 内查看不同联系方式目标数过「轻」线的访客数(放行的也算——压在配额内的慢速抓取靠这个看见) */
+  revealWideVisitors24h: number;
   /** Sprint 10D:昨日(UTC)AI 估算费用(美元)与是否触发过预算熔断;今日至今的数也带上,方便手动查看 */
   aiCostUsd: number;
   aiBudgetTripped: boolean;
@@ -30,10 +33,11 @@ export type Thresholds = {
   scraperFails: number; // 最近 15 次里失败次数 ≥ 即报
   backupDays: number;   // 距上次备份天数 ≥ 即报
   rejects: number;      // 24h 内联系方式披露被拒次数 ≥ 即报(疑似批量抓取)
+  wideReveal: number;   // 24h 内大范围查看联系方式的访客数 ≥ 即报
   aiCost: number;       // 昨日 AI 费用(美元)> 即报;触发过预算熔断也报。与其他项一致:0 = 关闭
 };
 
-export const DEFAULT_THRESHOLDS: Thresholds = { reports: 1, feedback: 1, hidden: 0, scraperFails: 3, backupDays: 8, rejects: 50, aiCost: 1 };
+export const DEFAULT_THRESHOLDS: Thresholds = { reports: 1, feedback: 1, hidden: 0, scraperFails: 3, backupDays: 8, rejects: 50, wideReveal: 1, aiCost: 1 };
 
 /** 与注意力账本 needs-you 对齐:kind + ref + note */
 export type Alert = { kind: 'review' | 'decision'; ref: string; task: string; note: string };
@@ -45,7 +49,7 @@ export function parseThresholds(sp: URLSearchParams): Thresholds {
     const n = Number(v);
     return Number.isFinite(n) && n >= 0 ? n : DEFAULT_THRESHOLDS[k];
   };
-  return { reports: num('reports'), feedback: num('feedback'), hidden: num('hidden'), scraperFails: num('scraperFails'), backupDays: num('backupDays'), rejects: num('rejects'), aiCost: num('aiCost') };
+  return { reports: num('reports'), feedback: num('feedback'), hidden: num('hidden'), scraperFails: num('scraperFails'), backupDays: num('backupDays'), rejects: num('rejects'), wideReveal: num('wideReveal'), aiCost: num('aiCost') };
 }
 
 export function evaluateThresholds(d: Digest, t: Thresholds, siteUrl: string): Alert[] {
@@ -70,6 +74,9 @@ export function evaluateThresholds(d: Digest, t: Thresholds, siteUrl: string): A
   if (t.rejects > 0 && d.revealRejects24h >= t.rejects) {
     out.push({ kind: 'review', ref: admin, task: '联系方式披露被拒次数异常', note: `24h 内 ${d.revealRejects24h} 次 429,疑似批量抓取` });
   }
+  if (t.wideReveal > 0 && d.revealWideVisitors24h >= t.wideReveal) {
+    out.push({ kind: 'review', ref: admin, task: '有访客大范围查看联系方式', note: `24h 内 ${d.revealWideVisitors24h} 位访客查看的不同目标数过线;后台「异常访问」小节看明细` });
+  }
   if (t.aiCost > 0 && (d.aiCostUsd > t.aiCost || d.aiBudgetTripped)) {
     out.push({
       kind: 'decision', ref: admin, task: d.aiBudgetTripped ? 'AI 预算熔断' : 'AI 费用偏高',
@@ -84,7 +91,7 @@ export function renderDigestEmail(d: Digest, alerts: Alert[], siteUrl: string): 
   const lines = alerts.map(a => `• ${a.task}:${a.note}\n  → ${a.ref}`);
   const summary = [
     `举报 ${d.reportsPending} · 反馈 ${d.feedbackOpen} · 隐藏 ${d.hidden.items}/${d.hidden.listings}/${d.hidden.inquiries} · scraper 近 15 次失败 ${d.scraper.failedInLast15}`,
-    `备份 ${d.lastBackupAt ?? '无'}(${d.backupAgeDays ?? '?'} 天前) · 24h 披露被拒 ${d.revealRejects24h}`,
+    `备份 ${d.lastBackupAt ?? '无'}(${d.backupAgeDays ?? '?'} 天前) · 24h 披露被拒 ${d.revealRejects24h} · 大范围查看 ${d.revealWideVisitors24h} 位`,
     `AI ${d.ai.day} $${d.aiCostUsd.toFixed(4)} / ${d.ai.calls} 次调用 · 429 ${d.ai.rejected429} · 503 ${d.ai.rejected503}`,
   ];
   const text = [`需要处理(${alerts.length}):`, ...lines, '', '总览:', ...summary, '', `后台:${siteUrl}/admin`].join('\n');
@@ -117,6 +124,8 @@ export async function computeDigest(now: Date = new Date()): Promise<Digest> {
     usageSummary(dayKey(now)).catch(() => empty),
   ]);
 
+  const wide = await wideVisitors24h().catch(() => []);
+
   const failed = runs.filter(r => r.status === 'failed');
   const lastSuccess = runs.find(r => r.status === 'success');
 
@@ -142,6 +151,7 @@ export async function computeDigest(now: Date = new Date()): Promise<Digest> {
     lastBackupAt,
     backupAgeDays,
     revealRejects24h: rejects,
+    revealWideVisitors24h: wide.length,
     aiCostUsd: aiY.costUsd,
     aiBudgetTripped: aiY.rejected503 > 0,
     ai: { day: yesterday, costUsd: aiY.costUsd, calls: aiY.calls, rejected429: aiY.rejected429, rejected503: aiY.rejected503, todayCostUsd: aiT.costUsd },

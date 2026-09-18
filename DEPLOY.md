@@ -139,6 +139,7 @@ Railway 变量里新增 `ADMIN_SESSION_SECRET`（随机 ≥16 字符，`openssl 
 ## 每日维护摘要（Sprint 9D）
 
 - Railway 变量：`DIGEST_SECRET`（随机 ≥16 字符）、`DIGEST_EMAIL_TO`（收件邮箱）。`RESEND_API_KEY` 已有。
+- （11D）可选 `ALERT_EMAIL_TO`：异常访问「重」级告警的收件邮箱（立即发，同一件事 1 小时一封）；不配则用 `DIGEST_EMAIL_TO`。过线的访客会被自动暂停查看联系方式 24 小时（后台「异常访问」可解除；`ABUSE_AUTO_BLOCK=false` 关掉）。阈值 `ABUSE_*` 见 `.env.example`。
 - GitHub：Settings → Secrets 加同一个 `DIGEST_SECRET`；可选 Variables `DIGEST_THRESHOLDS`（如 `reports=1&scraperFails=3&backupDays=8&rejects=50&aiCost=1`，0 = 关闭该项）。`aiCost`（Sprint 10D，默认 1）：昨日（UTC）AI 估算费用超过这个美元数，或当日触发过预算熔断，就进告警邮件。
 - 验证：Actions → Daily Maintenance Digest → Run workflow，inputs 填 `backupDays=1` 强制触发一封；正常阈值下应"告警数 0、不发邮件"。
 - 登录后台后也可直接打开 `/api/admin/digest` 看摘要 JSON（不带 `notify=1` 不发邮件）。

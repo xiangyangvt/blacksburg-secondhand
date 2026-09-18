@@ -3,6 +3,7 @@
 // 认证：签名会话 cookie（密码 = ADMIN_PASSWORD env var;9E 起 cookie 不含密码,登录同 IP 10 次尝试 / 15 分钟）
 // robots.txt 已禁止抓取此路径
 
+import { wideVisitors24h, activeBlocks, unblock } from '@/lib/abuseWatch';
 import { isAdmin, setAdminCookie, clearAdminCookie, attemptAdminLogin, getAdminPassword } from '@/lib/adminAuth';
 import { headers } from 'next/headers';
 import { getClientIpFromHeaders } from '@/lib/utils';
@@ -62,6 +63,14 @@ async function dismissReportAction(formData: FormData) {
   if (!isAdmin()) return;
   const id = String(formData.get('id'));
   await prisma.report.delete({ where: { id } });
+  revalidatePath('/admin');
+}
+
+// Sprint 11D:解除对某位访客的自动暂停(误伤时用)
+async function unblockVisitorAction(formData: FormData) {
+  'use server';
+  if (!isAdmin()) return;
+  await unblock(String(formData.get('key'))).catch(() => {});
   revalidatePath('/admin');
 }
 
@@ -299,6 +308,10 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
 
   // Sprint 11E:未处理的用户反馈。新表在生产 db push 之前可能不存在——读不到当空,不拖垮整个后台
   const feedbacks = await prisma.feedback.findMany({ where: { status: 'open' }, orderBy: { createdAt: 'desc' }, take: 100 }).catch(() => []);
+
+  // Sprint 11D:24h 内大范围查看联系方式的访客(轻级提醒;重级另发邮件)。读不到当空
+  const wideVisitors = await wideVisitors24h().catch(() => []);
+  const blocks = await activeBlocks().catch(() => []);
 
   // 来源渠道分布：近 30 天 item 按 utmSource 聚合（单独一次查询，方便类型 cast）
   const channelBreakdown = (await (prisma.item as any).groupBy({
@@ -712,6 +725,40 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
                     <button className="px-3 py-1.5 text-sm rounded border border-stone-300 text-stone-600 hover:border-stone-400">删除</button>
                   </form>
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Sprint 11D:异常访问。1 小时内过「重」线的访客会被自动暂停查看联系方式 24 小时并发邮件;误伤在这里解除。
+          阈值与开关见 lib/abuseWatch.ts(env 可调,ABUSE_AUTO_BLOCK=false 退回只通知) */}
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-1">🕵️ 异常访问 · 24h 内大范围查看联系方式 ({wideVisitors.length})</h2>
+        <p className="text-xs text-stone-500 mb-3">同一访客查看的不同目标数过线才列出(放行的也算)。1 小时内过「重」线:自动暂停该访客查看联系方式 24 小时,并发邮件。</p>
+        {blocks.length > 0 && (
+          <div className="mb-3 bg-amber-50 rounded-lg border border-amber-200 divide-y divide-amber-100 text-sm" data-testid="active-blocks">
+            {blocks.map(b => (
+              <div key={b.key} className="flex items-center justify-between gap-3 px-4 py-2">
+                <span className="font-mono text-stone-700">{b.visitor}…</span>
+                <span className="text-xs text-stone-600">已暂停 · 到 {b.until.toLocaleString('zh-CN', { timeZone: 'America/New_York' })} 自动恢复</span>
+                <form action={unblockVisitorAction}>
+                  <input type="hidden" name="key" value={b.key} />
+                  <button className="px-3 py-1 text-xs rounded border border-amber-300 bg-white text-amber-800 hover:border-amber-400">解除</button>
+                </form>
+              </div>
+            ))}
+          </div>
+        )}
+        {wideVisitors.length === 0 ? (
+          <EmptyBox text="✨ 没有异常" />
+        ) : (
+          <div className="bg-white rounded-lg border border-stone-200 divide-y divide-stone-100 text-sm">
+            {wideVisitors.map(v => (
+              <div key={v.visitor} className="flex items-center justify-between px-4 py-2">
+                <span className="font-mono text-stone-700">{v.visitor}…</span>
+                <span className="text-stone-900 font-medium">{v.targets} 个目标</span>
+                <span className="text-xs text-stone-500">{v.lastAt.toLocaleString('zh-CN', { timeZone: 'America/New_York' })}</span>
               </div>
             ))}
           </div>
