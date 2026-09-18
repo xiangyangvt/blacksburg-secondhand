@@ -87,6 +87,16 @@ describe('gateReveal', () => {
     }
   });
 
+  it('被自动暂停的访客直接 429(11D),不再写配额行;别的访客不受影响', async () => {
+    const db = memDb(); const vid = '0f1e2d3c-4b5a-6978-8a9b-c0d1e2f3a4b5';
+    await db.rateLimitHit.create({ data: { key: `block:vid:${vid}`, tag: null, bucket: null }, select: { id: true } });
+    const before = await db.rateLimitHit.count({ where: { key: `reveal:vid:${vid}:h`, createdAt: { gt: new Date(0) } } });
+    const g = await gateReveal(req({ vid }), 'item:1', db);
+    expect(g.ok).toBe(false);
+    if (!g.ok) { expect(g.res.status).toBe(429); expect(Number(g.res.headers.get('Retry-After'))).toBeGreaterThan(23 * 3600); }
+    expect(await db.rateLimitHit.count({ where: { key: `reveal:vid:${vid}:h`, createdAt: { gt: new Date(0) } } })).toBe(before);
+    expect((await gateReveal(req({ vid: '11111111-2222-4333-8444-555555555555' }), 'item:1', db)).ok).toBe(true);
+  });
   it('新访客的响应带 hb_vid cookie', async () => {
     const g = await gateReveal(req(), 'item:1', memDb());
     expect(g.ok).toBe(true);

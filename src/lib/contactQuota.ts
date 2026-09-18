@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getClientIp } from '@/lib/utils';
 import { checkQuota, getVisitorId, isBotUA, setVisitorCookie, type QuotaDb } from '@/lib/rateLimit';
 import { prisma } from '@/lib/prisma';
-import { observeReveal } from '@/lib/abuseWatch';
+import { observeReveal, blockedForSec } from '@/lib/abuseWatch';
 
 export const REVEAL_LIMITS = {
   visitorPerHour: 30,
@@ -48,6 +48,17 @@ export async function gateReveal(
     if (isNew) setVisitorCookie(res, visitorId);
     return res;
   };
+
+  // Sprint 11D:被自动暂停的访客(1 小时内大范围查看联系方式,见 abuseWatch.ts)直接 429,不再消耗、也不再写配额行。
+  // 查不了(表不可用)就当没暂停:这是兜底处置,不能因为它坏了把正常人挡在外面
+  const pausedSec = await blockedForSec(visitorId, db).catch(() => 0);
+  if (pausedSec > 0) {
+    const res = NextResponse.json(
+      { error: REVEAL_LIMIT_MESSAGE.zh, errorEn: REVEAL_LIMIT_MESSAGE.en, retryAfterSec: pausedSec },
+      { status: 429, headers: { 'Retry-After': String(pausedSec) } },
+    );
+    return { ok: false, res: withCookie(res) };
+  }
 
   // 顺序:先严后宽。被拒的尝试也计入(见 rateLimit.ts 语义),所以三条都记是有意的
   const checks = [

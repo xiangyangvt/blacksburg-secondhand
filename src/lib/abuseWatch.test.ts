@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { evaluateReveal, raiseAlert, wideVisitors24h, watchThresholds, type WatchDb, type WideDb } from './abuseWatch';
+import {
+  evaluateReveal, raiseAlert, wideVisitors24h, watchThresholds, blockVisitor, blockedForSec, activeBlocks, unblock, autoBlockEnabled, BLOCK_MS,
+  type WatchDb, type WideDb, type BlockDb, type BlockAdminDb,
+} from './abuseWatch';
 import type { QuotaDb } from './rateLimit';
 
 const T = { lightTargetsPerDay: 10, heavyTargetsPerHour: 30, heavyVisitorsPerIp: 8 };
@@ -67,6 +70,57 @@ describe('raiseAlert(重级出口)', () => {
   it('发信失败 → failed(不抛)', async () => {
     const send = vi.fn(async (_m: { to: string; subject: string; text: string; html: string }) => ({ ok: false as const, error: 'x' }));
     expect(await raiseAlert(alert, { quotaDb: quotaDb(), send, env: { ALERT_EMAIL_TO: 'a@b.test' } as unknown as NodeJS.ProcessEnv })).toBe('failed');
+  });
+});
+
+describe('自动处置:暂停访客查看联系方式 24 小时', () => {
+  function blockDb() {
+    const rows: { id: string; key: string; createdAt: Date }[] = []; let seq = 0; let clock = Date.parse('2026-09-18T12:00:00Z');
+    const db: BlockDb & BlockAdminDb = { rateLimitHit: {
+      async findFirst({ where }: any) { const r = rows.find(x => x.key === where.key && x.createdAt > where.createdAt.gt); return r ? { id: r.id, admitted: false, createdAt: r.createdAt } : null; },
+      async create({ data }: any) { const row = { id: `b${++seq}`, key: data.key, createdAt: new Date(clock) }; rows.push(row); return { id: row.id }; },
+      async findMany({ where }: any) { return rows.filter(x => x.key.startsWith(where.key.startsWith) && x.createdAt > where.createdAt.gt).map(x => ({ key: x.key, createdAt: x.createdAt })); },
+      async deleteMany({ where }: any) { for (let i = rows.length - 1; i >= 0; i--) if (rows[i]!.key === where.key) rows.splice(i, 1); },
+    } as any };
+    return { db, rows, now: () => clock, advance: (ms: number) => { clock += ms; } };
+  }
+  it('暂停后 blockedForSec > 0,24 小时后自动恢复;已暂停不重复写、不延长', async () => {
+    const { db, rows, now, advance } = blockDb();
+    expect(await blockedForSec(VID, db, now)).toBe(0);
+    expect(await blockVisitor(VID, db, now)).toBe(true);
+    expect(await blockedForSec(VID, db, now)).toBe(BLOCK_MS / 1000);
+    advance(3600e3);
+    expect(await blockVisitor(VID, db, now)).toBe(false);
+    expect(rows).toHaveLength(1);
+    expect(await blockedForSec(VID, db, now)).toBe(BLOCK_MS / 1000 - 3600);
+    advance(BLOCK_MS);
+    expect(await blockedForSec(VID, db, now)).toBe(0);
+  });
+  it('后台列表只给 visitor 前 8 位;解除后立即恢复;unblock 只认 block:vid:<uuid>,删不了别的配额行', async () => {
+    const { db, rows, now } = blockDb();
+    await blockVisitor(VID, db, now);
+    rows.push({ id: 'x', key: `reveal:vid:${VID}:h`, createdAt: new Date(now()) });
+    const list = await activeBlocks(db, now);
+    expect(list.map(b => b.visitor)).toEqual(['0f1e2d3c']);
+    await unblock(`reveal:vid:${VID}:h`, db);
+    await unblock('block:vid:%', db);
+    expect(rows).toHaveLength(2);
+    await unblock(list[0]!.key, db);
+    expect(await blockedForSec(VID, db, now)).toBe(0);
+    expect(rows.map(r => r.key)).toEqual([`reveal:vid:${VID}:h`]);
+  });
+  it('开关:默认开,ABUSE_AUTO_BLOCK=false 关', () => {
+    expect(autoBlockEnabled({} as NodeJS.ProcessEnv)).toBe(true);
+    expect(autoBlockEnabled({ ABUSE_AUTO_BLOCK: 'false' } as unknown as NodeJS.ProcessEnv)).toBe(false);
+  });
+  it('邮件如实写处置结果:已暂停 / 只通知', async () => {
+    const send = vi.fn(async (_m: { to: string; subject: string; text: string; html: string }) => ({ ok: true as const }));
+    const env = { ALERT_EMAIL_TO: 'ops@example.test' } as unknown as NodeJS.ProcessEnv;
+    await raiseAlert({ kind: 'reveal-wide', subject: VID, count: 30, blocked: true }, { quotaDb: quotaDb(), send, env });
+    await raiseAlert({ kind: 'reveal-ip-rotation', subject: '9.9.9.9', count: 8 }, { quotaDb: quotaDb(), send, env });
+    expect(send.mock.calls[0]![0].text).toContain('已自动暂停该访客查看联系方式 24 小时');
+    expect(send.mock.calls[1]![0].text).toContain('只通知、不自动处置');
+    expect(send.mock.calls[1]![0].text).not.toContain('9.9.9.9');
   });
 });
 
