@@ -11,13 +11,14 @@
 
 **Sprint 11「从网站到微信群」代码已全部合入 main（2026-09-18），尚未部署验证。** 规格与偏差见 `SPRINT_11_SHARE.md`，取舍见 `docs/decisions/0001-smooth-first-detect-abuse.md`。
 - 合入：#25 统一问询栏 + 用户反馈 · #26 卖家摊位 `/s/<slug>` + 相似延伸 · #30 一键长图（复制图片 / 下载）· #31 搜索栏渐变环与放大镜图标 · #32 「已复制」圆章钉在屏幕正中 · #27 异常侦测（重级发邮件并自动暂停该访客查看联系方式 24 小时）。
-- 上线待办（Sprint 11）：
+- 上线待办（Sprint 11，1 / 3 / 5 已验证，见下）：
   1. 部署时 `db push` 会新建 `Feedback`、`Shelf` 两张表；无必配 env。可选 `ALERT_EMAIL_TO`（不配则用 `DIGEST_EMAIL_TO`）、`ABUSE_AUTO_BLOCK=false`（退回只通知）、`ABUSE_*` 阈值。
   2. 在「我的 → 在售」点「一键生成长图」：确认能出图（Railway 出站取 Google Fonts；取不到会 503 而不是出乱码图）。
   3. 打开任一 `/api/items/similar?shelf=<slug>`，看 `mode` 是不是 `vector`（`PgVectorStore.nearestToRows` 的 SQL 没在真 Postgres 上跑过；`category` = 走了同类目兜底）。
   4. 真机、微信内置浏览器里试：「复制图片」「下载图片」是否可用；一张 10 件的长图发到群里是否被压糊（调 `lib/poster.ts` 的 `POSTER_PAGE_SIZE`）。
   5. 搜索栏里问一句站务问题（如「怎么删帖」），确认出的是「转给站长」卡片而不是 AI 自己作答；提交一条，到 `/admin`「用户反馈」能看到。
-- 没做、待拍板：搜索框按联系方式**精确**搜某卖家（9A 有意去掉过子串匹配，见 `itemsQuery.ts` 注释；精确匹配与线上 `by-contact` 等价）。
+- 上线验证（2026-09-18，对生产只读探测 + 一次问答 + 一条标注为测试的反馈）：新路由都在；`/api/items/similar` 的 `mode=vector`（`nearestToRows` 的 SQL 在真 pgvector 上可用）；站务问题 → `intent=ask_ops` 固定文案无卡片，找物问题正常出卡片；`POST /api/feedback` 入库成功（`Feedback` 表已建）。**还没验证**：长图在生产出图（要卖家本人的编辑码才能建摊位）、微信真机里的复制 / 下载与压缩效果。
+- 追加：搜索框按联系方式**精确**搜某卖家（11F）。只认整串相等，走披露配额与异常侦测；9A 去掉的子串匹配仍然不做。
 
 上线记录（2026-09-18）：
 - 探针：`backend=pgvector`，vector 扩展 0.8.6，三张表的 HNSW 索引都在（`CREATE INDEX CONCURRENTLY` 经 Prisma 可执行）。

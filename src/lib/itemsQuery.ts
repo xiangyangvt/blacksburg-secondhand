@@ -66,7 +66,8 @@ export function buildItemsWhere(qy: ItemsQuery, opts: WhereOpts = {}): any {
   if (opts.sellerContact !== undefined) where.contactValue = opts.sellerContact;
   if (qy.q && opts.includeKeyword !== false) {
     // 搜索匹配标题、描述、自定义标签
-    // 不再匹配 contactValue —— 联系方式现在隐藏,搜索它会反推泄露
+    // 不再**子串**匹配 contactValue —— 联系方式现在隐藏,子串搜索能逐字反推出别人的联系方式。
+    // 整串相等的精确搜(11F)不走这里,见 lib/search/contactSearch.ts 与 api/search
     where.OR = [
       { title:        { contains: qy.q } },
       { description:  { contains: qy.q } },

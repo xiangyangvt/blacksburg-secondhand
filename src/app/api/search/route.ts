@@ -29,6 +29,8 @@ import {
 import { buildEventsWhere, isRetiredCategory, serializePublicEvent } from '@/lib/eventsQuery';
 import { expireStaleEvents } from '@/lib/eventArchive';
 import { getVectorStore } from '@/lib/search/vectorStore';
+import { contactCandidate, findSellerAnchor, type ContactSearchDb } from '@/lib/search/contactSearch';
+import { gateReveal } from '@/lib/contactQuota';
 import type { EmbedKind } from '@/lib/search/embedText';
 import {
   isSearchAiEnabled, semanticMinSim, getQueryEmbeddingCache, pickSemantic, semanticTrigger, gateSemanticSearch,
@@ -157,6 +159,35 @@ export async function GET(req: NextRequest) {
   if ('error' in h) return NextResponse.json({ error: h.error }, { status: 400 });
 
   const aiEnabled = isSearchAiEnabled();
+
+  // ===== Sprint 11F:q 与某位卖家的联系方式整串相等 → 直接给这位卖家的在售(见 lib/search/contactSearch.ts) =====
+  // 只在二手站、且没有已经带着卖家筛选时做。任何一步失败都退回普通关键词搜索
+  if (h.kind === 'item' && !sp.get('shelf') && !sp.get('sameSellerAs')) {
+    try {
+      const cand = contactCandidate(h.q);
+      const anchorId = cand ? await findSellerAnchor(cand, prisma as unknown as ContactSearchDb) : null;
+      if (cand && anchorId) {
+        const gate = await gateReveal(req, `by:${cand}`);
+        if (gate.ok) {
+          const sellerSp = new URLSearchParams(sp);
+          sellerSp.delete('q');
+          const sqy = parseItemsQuery(sellerSp);
+          const rows = await prisma.item.findMany({
+            where: buildItemsWhere(sqy, { sellerContact: cand, includeKeyword: false }),
+            orderBy: itemsOrderBy(sqy.sort), take: 200, include: ITEM_LIST_INCLUDE,
+          });
+          const chatOn = h.chat && aiEnabled && !(await isBudgetExceeded());
+          // trigger=null:不出语义层;sellerMatch 让前端显示卖家横幅并接「相似的」
+          return gate.withCookie(NextResponse.json({
+            keyword: rows.map(serializePublicItem), semantic: [], aiEnabled, trigger: null, limited: false, chatEnabled: chatOn,
+            sellerMatch: { anchorId },
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('[search] 按联系方式精确搜失败,退回关键词:', (e as Error)?.message ?? e);
+    }
+  }
 
   // ===== 第 0 层:关键词,与各站列表接口完全一致 =====
   const keyword = await h.keyword();
