@@ -58,27 +58,52 @@ export async function llmCall(opts: ChatOpts): Promise<string> {
   return res.choices[0]?.message?.content ?? '';
 }
 
+/** DeepSeek 的 thinking 模式默认开启(官方文档 2026-09-18 核对):该模式下 temperature 无效,推理 token 计入输出且会吃掉 max_tokens */
+export function isDeepSeek(model: string, baseURL: string = process.env.LLM_BASE_URL ?? 'https://api.deepseek.com'): boolean {
+  return /deepseek/i.test(model) || /deepseek/i.test(baseURL);
+}
+
+/** 发给 SDK 的请求体(抽出来是为了单测断言 thinking 参数) */
+export function buildChatRequestBody(opts: Omit<ChatOpts, 'model'> & { model: string; disableThinking?: boolean }, baseURL?: string): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: opts.model,
+    messages: opts.messages,
+    temperature: opts.temperature ?? 0.2,
+    max_tokens: opts.max_tokens,
+    response_format: opts.response_format,
+  };
+  // 只对 DeepSeek 附带该字段:其他 OpenAI 兼容 provider 见到未知字段可能 400
+  if (opts.disableThinking && isDeepSeek(opts.model, baseURL)) body.thinking = { type: 'disabled' };
+  return body;
+}
+
+export class LlmTruncatedError extends Error {
+  constructor() { super('LLM 输出被 max_tokens 截断'); this.name = 'LlmTruncatedError'; }
+}
+
 /**
- * Sprint 10C:带用量的 chat 调用。对话接口用——记一行 LlmUsage(费用护栏与 admin 面板的数据源),
- * 单独的超时且不重试(用户在等;失败由调用方降级为兜底文案)。
+ * Sprint 10C:带用量的 chat 调用,对话接口用。
+ *   - 显式关闭 thinking(找物是检索 + 挑选,不需要推理;否则 300 token 可能全耗在推理上,付费得到空正文)
+ *   - finish_reason=length → 抛 LlmTruncatedError(用量照常返回给调用方结算),不把半截 JSON 当结果
+ *   - 单独的超时、不重试、可取消(用户离开对话就别再花钱)
+ * 记账由调用方做(预留 → 结算,见 llmUsage.ts),这里只如实返回用量。
  */
-export async function chatWithUsage(opts: Omit<ChatOpts, 'model'> & { model?: string; endpoint: string; timeoutMs?: number }): Promise<{ content: string; promptTokens: number; completionTokens: number; model: string; estCostUsd: number }> {
+export async function chatWithUsage(opts: Omit<ChatOpts, 'model'> & { model?: string; timeoutMs?: number; signal?: AbortSignal }): Promise<{ content: string; promptTokens: number; completionTokens: number; model: string; truncated: boolean }> {
   const model = opts.model ?? CHAT_MODEL;
   const res = await chatClient.chat.completions.create(
-    {
-      model,
-      messages: opts.messages,
-      temperature: opts.temperature ?? 0.2,
-      max_tokens: opts.max_tokens,
-      response_format: opts.response_format,
-    },
-    { timeout: opts.timeoutMs ?? 20_000, maxRetries: 0 },
+    buildChatRequestBody({ ...opts, model, disableThinking: true }) as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+    { timeout: opts.timeoutMs ?? 20_000, maxRetries: 0, signal: opts.signal },
   );
-  const promptTokens = res.usage?.prompt_tokens ?? 0;
-  const completionTokens = res.usage?.completion_tokens ?? 0;
-  const estCostUsd = await recordUsage({ endpoint: opts.endpoint, model, promptTokens, completionTokens });
-  return { content: res.choices[0]?.message?.content ?? '', promptTokens, completionTokens, model, estCostUsd };
+  return {
+    content: res.choices[0]?.message?.content ?? '',
+    promptTokens: res.usage?.prompt_tokens ?? 0,
+    completionTokens: res.usage?.completion_tokens ?? 0,
+    model,
+    truncated: res.choices[0]?.finish_reason === 'length',
+  };
 }
+
+export const CHAT_MODEL_NAME = CHAT_MODEL;
 
 /** Chatbot 用,RAG 回答(Phase 3) */
 export function chat(opts: Omit<ChatOpts, 'model'> & { model?: string }) {

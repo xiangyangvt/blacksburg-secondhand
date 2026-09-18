@@ -98,7 +98,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 
 ## 6. 反滥用现状
 
-- （10C）对话 `POST /api/search/chat`：bot UA 403；同 visitor 20 条 / 小时、100 条 / 天，同 IP 60 条 / 小时（`chat:vid:<id>:h|d` `chat:ip:<ip>:h`）；超限 429 带中英提示与 `Retry-After`。费用护栏：`LlmUsage` 当日合计 ≥ `SEARCH_AI_DAILY_BUDGET_USD`（默认 2 美元）→ 503，UI 隐藏第 2 层，第 1 层不受影响。
+- （10C）对话 `POST /api/search/chat`：bot UA 403；同 visitor 20 条 / 小时、100 条 / 天，同 IP 60 条 / 小时（`chat:vid:<id>:h|d` `chat:ip:<ip>:h`）；超限 429 带中英提示与 `Retry-After`。费用护栏：`LlmUsage` 当日合计 ≥ `SEARCH_AI_DAILY_BUDGET_USD`（默认 2 美元）→ 503，UI 隐藏第 2 层，第 1 层不受影响。预算是**先预留后结算**（`reserveBudget` 先写一行按保守上限估的预留再读合计，超了撤回并拒绝；并发请求互相看得见对方的预留，不会同时放行），单价取 DeepSeek **高峰、缓存未命中**价（宁可高估）；配额表或计费表读写失败一律 **fail closed**（503，只关第 2 层）。客户端断开会经 `req.signal` 取消在途的 LLM 调用并撤回预留。
 - （10B）语义搜索：同 visitor 60 次 / 小时（`search:vid:<id>:h`，含按钮触发）+ 同 IP 300 次 / 小时（`search:ip:<ip>:h`，防轮换 cookie），bot UA 只给关键词层；限流只砍语义路，关键词层永不受影响（配额表读写失败也只是没有语义层）。自动触发被限 → 200 + `limited`，按钮触发被限 → 429（body 仍含 keyword）。客户端两段式：先 `semantic=0` 拿关键词层，再 `semantic=1` 要语义层，关键词层永远不等 embedding。
 
 访客标识与 bot 判断已统一进 `lib/rateLimit.ts`；通用配额 `checkQuota` 由 `contactQuota.ts`（披露）与三处 `verify-code`（失败限流）使用。各业务域的窗口计数仍是内联查各自的表：IP 发布限流（items / listings 1h 10 条，applications 1h 5 条，inquiries 1h N 条）；visitor 限流（用户活动每日 3 条，评论 60s 一条 + 1h 20 条）；magic-link 同邮箱 60s；recovery 同 IP 24h 3 次、3 个不同 IP 自动标 abuse；举报 3 个不同 IP 自动隐藏；view / click / cart 靠 throttle 表去重；bot UA 过滤 6 处（click / view×2 / pageview 用 full 档，events POST / comments 用 basic 档，沿用各自原有词表）。**无限流的面**：各列表 GET（已不含联系方式）、`listings/by-contact` GET（已脱敏）。进程内存态：`eventArchive.ts` 的 5 分钟节流、`uploader.ts` 的配置缓存，多实例即失效。
@@ -109,7 +109,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 |---|---|---|
 | Cloudinary | `CLOUDINARY_*` | 未配回落 `public/uploads/`（容器重启即丢）；宕机上传 500，发帖卡在图片步 |
 | Resend | `RESEND_API_KEY` `EMAIL_FROM_ADDRESS` | dev 打 console；prod 未配 magic-link 不可用，编辑码主路径不受影响 |
-| DeepSeek | `LLM_*` | scraper 该源标 failed 继续下一源；前台不受影响，只是不入新活动 |
+| DeepSeek | `LLM_*` | scraper 该源标 failed 继续下一源；前台不受影响，只是不入新活动。**thinking 模式默认开启**（该模式下 `temperature` 无效、推理 token 计入输出并吃 `max_tokens`）：10C 的 `chatWithUsage` 显式传 `thinking: {type:'disabled'}`（仅对 DeepSeek 附带该字段）；scraper 的调用尚未处理 |
 | Embedding（OpenAI） | `LLM_EMBED_API_KEY` `LLM_EMBED_MODEL` | 未配：发帖照常成功，`embeddedAt` 留空，一行 warn；宕机：单条 embed 失败只记日志，等回填。任何 AI 侧错误都不影响发布与关键词搜索 |
 | pgvector | `DATABASE_URL`（Railway `postgres-ssl:18` 镜像自带） | 扩展缺失时 preDeploy `db push` 会失败（`extensions = [vector]`）；HNSW 索引缺失只是退化为顺序扫描 |
 | 源站 | — | 改版是最可能的静默失效点，只在 `ScrapeRun.errorMsg` 里可见 |
@@ -128,7 +128,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 8. `schema.production.prisma` 与 dev schema 手工同步；`db:push:prod --accept-data-loss` 在 preDeploy 跑，**漏同步 = 生产直接掉列**。9F 起 CI 用 `scripts/check-schema-sync.mjs` 归一化后逐行比对，不一致即红。
 9. 改 OG 卡片必须 bump `shareText.ts` 的 `OG_VERSION` 和 event 页的 `OG_IMG_VERSION`（微信缓存）。
 10. （Sprint 9 起）任何公开列表接口不得携带联系方式；联系方式只能经 `gateReveal` 配额的逐条接口或双向同意流程下发；序列化一律白名单；每一种需要人处理的状态必须有一条出站路径。前端「展开即见」只在展开态取数，桌面端折叠态不再直显。
-12. （Sprint 10C 起）**LLM 的输出不直接给用户**：对话接口先在服务端完整校验——JSON 解析失败走兜底文案 + 前 3 个候选；`itemIds` 与检索候选集合求交集，集合外的 id 丢弃；`summary` 过联系方式正则（邮箱 / 手机号 / 带关键词的微信号等），命中整句换兜底并记日志——通过后才以 SSE 分片下发。卡片的价格 / 图片 / 联系方式一律由数据库渲染（与 `/api/items` 同款脱敏），联系卖家只能走 9A 的披露流程。客户端传来的 `history` 只认 `user` / `assistant` 两种角色。LLM 没有任何写操作能力（无 tools）。
+12. （Sprint 10C 起）**LLM 的输出不直接给用户**：对话接口先在服务端完整校验——JSON 解析失败走兜底文案 + 前 3 个候选；`itemIds` 与检索候选集合求交集，集合外的 id 丢弃；`summary` 过联系方式检测（先 NFKC 归一化；邮箱 / 手机号 / 长数字硬模式 + "渠道关键词与像账号的串同时出现"的组合判定，宁可误杀），命中整句换兜底并记日志；候选帖子（陌生人发布的低信任数据）以转义过的 JSON 放在 user 消息的 `<candidates>` 里，**不进 system 角色**——通过后才以 SSE 分片下发。卡片的价格 / 图片 / 联系方式一律由数据库渲染（与 `/api/items` 同款脱敏），联系卖家只能走 9A 的披露流程。客户端传来的 `history` 只认 `user` / `assistant` 两种角色。LLM 没有任何写操作能力（无 tools）。
 11. （Sprint 10 起）**送入 embedding 与 LLM 的文本永远不含** `contactValue`、`customContactLabel`、`posterContact`、`ipAddress`、`email`、任何 hash / token / visitorId。只允许标题、描述、价格、类目、自定义标签、区域 / 地点、时间、图片 URL、帖子 id。实现上只经 `lib/search/embedText.ts` 的白名单 `*_EMBED_SELECT` 读库、显式取字段构造文本，**不 spread**；单测用含微信号 / 手机号 / 邮箱的 fixture 断言输出不含它们。AI 侧任何失败（key 缺、API 挂、维度不对）都降级为"没有向量 / 没有补充结果"，不能让发布或关键词搜索失败。
 
 ## 9. 雷区与技术债

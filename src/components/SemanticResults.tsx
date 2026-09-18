@@ -48,8 +48,8 @@ export function SemanticResults({
 
   const showButton = state.trigger === 'button' && !state.requested && !state.loading && !state.limited;
   const showCards = state.list.length > 0;
-  // 第 2 层:第 1 层已经算过(auto 或点过按钮)才出现;trigger=button 且未点击时不显示(spec 10C)
-  const showChat = state.chatEnabled && state.requested && !state.loading;
+  // 第 2 层:有第 1 层(语义卡片真的渲染出来了)才显示;trigger=button 且未点击、语义层被限流、0 条结果时都不显示(spec 10C + 零计数隐藏)
+  const showChat = state.chatEnabled && state.requested && !state.loading && !state.limited && showCards;
 
   if (!state.loading && !showButton && !showCards && !state.limited && !showChat) return null; // 零计数隐藏
 

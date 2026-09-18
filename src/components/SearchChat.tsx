@@ -7,7 +7,7 @@
 // 对话状态只在内存:刷新即清,不落库、不关联身份;换搜索词时父组件用 key 重置本组件。
 // 达到配额:输入框禁用并显示接口返回的提示。当日预算熔断(503):整个第 2 层隐藏,第 1 层不受影响。
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SendHorizontal, Sparkles } from 'lucide-react';
 import { ItemCard, type Item } from '@/components/ItemCard';
 import { useT, useLocale } from '@/i18n/I18nProvider';
@@ -58,10 +58,17 @@ export function SearchChat({
   const [disabledMsg, setDisabledMsg] = useState<string | null>(null);
   const [hidden, setHidden] = useState(false);
   const seq = useRef(0);
+  // 卸载(换搜索词 / 离开页面)时取消在途请求:不再消耗配额与模型费用,也不对已卸载组件 setState(Codex 互审 #9)
+  const abortRef = useRef<AbortController | null>(null);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; abortRef.current?.abort(); };
+  }, []);
 
   if (hidden) return null;
 
-  const patch = (id: number, p: Partial<Turn>) => setTurns(ts => ts.map(x => (x.id === id ? { ...x, ...p } : x)));
+  const patch = (id: number, p: Partial<Turn>) => { if (alive.current) setTurns(ts => ts.map(x => (x.id === id ? { ...x, ...p } : x))); };
 
   const send = async () => {
     const message = input.trim();
@@ -73,12 +80,16 @@ export function SearchChat({
     setTurns(ts => [...ts, { id, user: message, summary: '', items: [], pending: true }]);
     setInput('');
     setBusy(true);
+    const ac = new AbortController();
+    abortRef.current = ac;
     try {
       const res = await fetch('/api/search/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ site: 'items', message, history, filters }),
+        signal: ac.signal,
       });
+      if (!alive.current) return;
       if (res.status === 429) {
         const data = await res.json().catch(() => ({}));
         setDisabledMsg(data?.message?.[locale] ?? data?.error ?? t('search.chatLimited'));
@@ -105,9 +116,9 @@ export function SearchChat({
       }
       patch(id, { pending: false });
     } catch {
-      patch(id, { pending: false, error: true, summary: t('search.chatError') });
+      if (!ac.signal.aborted) patch(id, { pending: false, error: true, summary: t('search.chatError') });
     } finally {
-      setBusy(false);
+      if (alive.current) setBusy(false);
     }
   };
 
