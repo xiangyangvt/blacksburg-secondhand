@@ -11,12 +11,21 @@ describe('parseItemsQuery(与旧 /api/items 逐项一致)', () => {
     });
   });
   it('非法值退回默认;housing 类目不接受;q 去空白', () => {
-    const q = parseItemsQuery(sp('type=x&category=housing&since=2y&sort=weird&q=%20sofa%20'));
+    const q = parseItemsQuery(sp('type=x&category=housing&sort=weird&q=%20sofa%20'));
     expect(q.type).toBeUndefined();
     expect(q.category).toBeUndefined();
-    expect(q.since).toBeUndefined();
     expect(q.sort).toBe('newest');
     expect(q.q).toBe('sofa');
+  });
+  it('since:与旧 route 一致 —— all / 空 = 不过滤;1d / 1w 各自;其余任何值都按 30 天(旧行为原样保留)', () => {
+    const now = () => 1_000_000_000_000;
+    const day = 86400e3;
+    expect(buildItemsWhere(parseItemsQuery(sp('since=all')), { now }).createdAt).toBeUndefined();
+    expect(buildItemsWhere(parseItemsQuery(sp('')), { now }).createdAt).toBeUndefined();
+    expect(buildItemsWhere(parseItemsQuery(sp('since=1d')), { now }).createdAt).toEqual({ gte: new Date(now() - day) });
+    expect(buildItemsWhere(parseItemsQuery(sp('since=1w')), { now }).createdAt).toEqual({ gte: new Date(now() - 7 * day) });
+    expect(buildItemsWhere(parseItemsQuery(sp('since=1m')), { now }).createdAt).toEqual({ gte: new Date(now() - 30 * day) });
+    expect(buildItemsWhere(parseItemsQuery(sp('since=2y')), { now }).createdAt).toEqual({ gte: new Date(now() - 30 * day) });
   });
   it('合法值原样', () => {
     const q = parseItemsQuery(sp('type=buy&category=books&minPrice=10&maxPrice=50&since=1w&sort=priceAsc&sameSellerAs=abc'));

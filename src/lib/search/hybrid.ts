@@ -6,6 +6,7 @@
 import type { NextRequest } from 'next/server';
 import { embed, isEmbedConfigured } from '@/lib/llm';
 import { checkQuota, getVisitorId, isBotUA, type QuotaDb } from '@/lib/rateLimit';
+import { getClientIp } from '@/lib/utils';
 import { prisma } from '@/lib/prisma';
 import type { NearestHit } from './vectorStore';
 
@@ -26,13 +27,18 @@ const QUERY_CACHE_MAX = 500;
 
 interface CacheEntry { vector: number[]; at: number }
 
+/** 查询词 embedding 的请求超时:搜索是同步等待的,不能像回填那样等 30s × 重试 */
+export const QUERY_EMBED_TIMEOUT_MS = 8_000;
+
 export class QueryEmbeddingCache {
   private map = new Map<string, CacheEntry>();
+  /** 进行中的请求按 key 合并:同词并发只付一次费(Codex 互审 #6) */
+  private inflight = new Map<string, Promise<number[]>>();
   hits = 0;
   misses = 0;
 
   constructor(
-    private embedFn: (text: string) => Promise<number[]> = embed,
+    private embedFn: (text: string) => Promise<number[]> = (t) => embed(t, { timeoutMs: QUERY_EMBED_TIMEOUT_MS }),
     private now: () => number = Date.now,
     private ttlMs = QUERY_CACHE_TTL_MS,
   ) {}
@@ -51,14 +57,21 @@ export class QueryEmbeddingCache {
       this.map.delete(key); this.map.set(key, hit);
       return hit.vector;
     }
+    const pending = this.inflight.get(key);
+    if (pending) { this.hits++; return pending; }
     this.misses++;
-    const vector = await this.embedFn(key);
-    this.map.set(key, { vector, at: t });
-    if (this.map.size > QUERY_CACHE_MAX) {
-      const oldest = this.map.keys().next().value;
-      if (oldest !== undefined) this.map.delete(oldest);
-    }
-    return vector;
+    const p = this.embedFn(key).then(vector => {
+      // 过期条目刷新时先删再写,LRU 位置才会更新(互审 #8)
+      this.map.delete(key);
+      this.map.set(key, { vector, at: this.now() });
+      if (this.map.size > QUERY_CACHE_MAX) {
+        const oldest = this.map.keys().next().value;
+        if (oldest !== undefined) this.map.delete(oldest);
+      }
+      return vector;
+    }).finally(() => { this.inflight.delete(key); });
+    this.inflight.set(key, p);
+    return p;
   }
 }
 
@@ -96,7 +109,11 @@ export function semanticTrigger(keywordCount: number): 'auto' | 'button' {
 
 // ---------- 搜索配额(走 9C) ----------
 
-export const SEARCH_LIMITS = { visitorPerHour: 60 } as const;
+export const SEARCH_LIMITS = {
+  visitorPerHour: 60,
+  /** 轮换 cookie 就能绕过 visitor 配额,叠一层 IP 配额(校园 NAT 给余量;互审 #2) */
+  ipPerHour: 300,
+} as const;
 const HOUR = 3600e3;
 
 export type SearchGate =
@@ -110,7 +127,18 @@ export type SearchGate =
 export async function gateSemanticSearch(req: NextRequest, db: QuotaDb = prisma as unknown as QuotaDb): Promise<SearchGate> {
   if (isBotUA(req, 'full')) return { ok: false, reason: 'bot', retryAfterSec: 0 };
   const { visitorId, isNew } = getVisitorId(req);
-  const r = await checkQuota({ key: `search:vid:${visitorId}:h`, windowMs: HOUR, max: SEARCH_LIMITS.visitorPerHour }, db);
-  if (!r.ok) return { ok: false, reason: 'limited', retryAfterSec: r.retryAfterSec, visitorId, isNew };
+  const ip = getClientIp(req);
+  // 先严后宽;被拒的尝试也计入(rateLimit.ts 语义)
+  const checks = [
+    { key: `search:vid:${visitorId}:h`, windowMs: HOUR, max: SEARCH_LIMITS.visitorPerHour },
+    { key: `search:ip:${ip}:h`, windowMs: HOUR, max: SEARCH_LIMITS.ipPerHour },
+  ];
+  let retryAfterSec = 0;
+  let limited = false;
+  for (const c of checks) {
+    const r = await checkQuota(c, db);
+    if (!r.ok) { limited = true; retryAfterSec = Math.max(retryAfterSec, r.retryAfterSec); }
+  }
+  if (limited) return { ok: false, reason: 'limited', retryAfterSec, visitorId, isNew };
   return { ok: true, visitorId, isNew };
 }

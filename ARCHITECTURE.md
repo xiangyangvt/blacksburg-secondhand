@@ -98,7 +98,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 
 ## 6. 反滥用现状
 
-- （10B）语义搜索：同 visitor 60 次 / 小时（`search:vid:<id>:h`，含按钮触发），bot UA 只给关键词层；限流只砍语义路，关键词层永不受影响。自动触发被限 → 200 + `limited`，按钮触发被限 → 429（body 仍含 keyword）。
+- （10B）语义搜索：同 visitor 60 次 / 小时（`search:vid:<id>:h`，含按钮触发）+ 同 IP 300 次 / 小时（`search:ip:<ip>:h`，防轮换 cookie），bot UA 只给关键词层；限流只砍语义路，关键词层永不受影响（配额表读写失败也只是没有语义层）。自动触发被限 → 200 + `limited`，按钮触发被限 → 429（body 仍含 keyword）。客户端两段式：先 `semantic=0` 拿关键词层，再 `semantic=1` 要语义层，关键词层永远不等 embedding。
 
 访客标识与 bot 判断已统一进 `lib/rateLimit.ts`；通用配额 `checkQuota` 由 `contactQuota.ts`（披露）与三处 `verify-code`（失败限流）使用。各业务域的窗口计数仍是内联查各自的表：IP 发布限流（items / listings 1h 10 条，applications 1h 5 条，inquiries 1h N 条）；visitor 限流（用户活动每日 3 条，评论 60s 一条 + 1h 20 条）；magic-link 同邮箱 60s；recovery 同 IP 24h 3 次、3 个不同 IP 自动标 abuse；举报 3 个不同 IP 自动隐藏；view / click / cart 靠 throttle 表去重；bot UA 过滤 6 处（click / view×2 / pageview 用 full 档，events POST / comments 用 basic 档，沿用各自原有词表）。**无限流的面**：各列表 GET（已不含联系方式）、`listings/by-contact` GET（已脱敏）。进程内存态：`eventArchive.ts` 的 5 分钟节流、`uploader.ts` 的配置缓存，多实例即失效。
 

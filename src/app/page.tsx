@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
+import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams, type ReadonlyURLSearchParams } from 'next/navigation';
 import { ItemCard, type Item } from '@/components/ItemCard';
@@ -81,6 +81,8 @@ function HomePageInner() {
   const [loading, setLoading] = useState(true);
   // Sprint 10B:第 1 层语义结果;无 q 时始终 EMPTY(整块不渲染)
   const [semantic, setSemantic] = useState<SemanticState>(EMPTY_SEMANTIC);
+  // 请求版本:每次 fetchItems +1;晚到的旧响应(关键词或语义)一律丢弃,防止旧按钮请求覆盖新搜索(Codex 互审 #3)
+  const reqSeq = useRef(0);
   const [origin, setOrigin] = useState('');
   useEffect(() => {
     setOrigin(clientOrigin());
@@ -193,8 +195,9 @@ function HomePageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.type, filters.category, debouncedQ, filters.minPrice, filters.maxPrice, filters.since, filters.sort, filters.sameSellerAs]);
 
-  // Sprint 10B:「找更多相似」—— trigger=button 时用户点按钮才算语义层(带 semantic=1 再请求一次)
-  const fetchMoreSimilar = useCallback(async () => {
+  // Sprint 10B:语义层单独一段请求(semantic=1)。trigger=auto 时关键词层渲染后自动发;trigger=button 时用户点按钮才发。
+  // 关键词层永远不等 embedding;失败时 requested 复位,按钮回来可以重试(互审 #4 #7)
+  const requestSemantic = useCallback(async (seq: number) => {
     const { sp, q } = buildListParams();
     if (!q) return;
     sp.set('site', 'items');
@@ -203,36 +206,38 @@ function HomePageInner() {
     try {
       const res = await fetch(`/api/search?${sp}`);
       const data = await res.json();
+      if (seq !== reqSeq.current) return; // 查询已变,丢弃
       setSemantic(s => ({ ...s, loading: false, list: data.semantic ?? [], limited: res.status === 429 || !!data.limited }));
     } catch {
-      setSemantic(s => ({ ...s, loading: false, list: [] }));
+      if (seq !== reqSeq.current) return;
+      setSemantic(s => ({ ...s, loading: false, list: [], requested: false }));
     }
   }, [buildListParams]);
 
+  const fetchMoreSimilar = useCallback(() => requestSemantic(reqSeq.current), [requestSemantic]);
+
   const fetchItems = useCallback(async () => {
     setLoading(true);
+    const seq = ++reqSeq.current;
     const { sp, q } = buildListParams();
+    let autoSemantic = false;
 
     try {
-      // Sprint 10B:有关键词走 /api/search(第 0 层 + 第 1 层);无关键词仍走列表 GET,首屏不多一次调用
+      // Sprint 10B:有关键词走 /api/search(semantic=0:只要第 0 层与 trigger);无关键词仍走列表 GET,首屏不多一次调用
       let fetched: Item[];
       if (q) {
         sp.set('site', 'items');
-        setSemantic(s => ({ ...EMPTY_SEMANTIC, aiEnabled: s.aiEnabled, loading: true }));
+        sp.set('semantic', '0');
         const res = await fetch(`/api/search?${sp}`);
         const data = await res.json();
+        if (seq !== reqSeq.current) return;
         fetched = data.keyword ?? [];
-        setSemantic({
-          aiEnabled: !!data.aiEnabled,
-          trigger: data.trigger ?? null,
-          list: data.semantic ?? [],
-          loading: false,
-          requested: data.trigger === 'auto',
-          limited: !!data.limited,
-        });
+        setSemantic({ aiEnabled: !!data.aiEnabled, trigger: data.trigger ?? null, list: [], loading: false, requested: false, limited: false });
+        autoSemantic = !!data.aiEnabled && data.trigger === 'auto';
       } else {
         const res = await fetch(`/api/items?${sp}`);
         const data = await res.json();
+        if (seq !== reqSeq.current) return;
         fetched = data.items ?? [];
         setSemantic(EMPTY_SEMANTIC);
       }
@@ -245,7 +250,9 @@ function HomePageInner() {
     } finally {
       setLoading(false);
     }
-  }, [buildListParams]);
+    // 第 0 层已渲染,再去要语义层(骨架在这段时间显示)
+    if (autoSemantic) void requestSemantic(seq);
+  }, [buildListParams, requestSemantic]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
@@ -469,7 +476,7 @@ function HomePageInner() {
           )}
 
           {/* Sprint 10B:第 1 层「相关结果 · AI 语义匹配」。只看最近浏览时不显示(那是本地过滤视图) */}
-          {debouncedQ.trim() && !filters.onlyRecent && !loading && (
+          {debouncedQ.trim() && !filters.onlyRecent && (
             <SemanticResults
               state={semantic}
               onRequestMore={fetchMoreSimilar}

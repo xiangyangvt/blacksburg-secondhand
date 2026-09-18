@@ -17,7 +17,8 @@ export interface ItemsQuery {
   sameSellerAs?: string;
   minPrice?: number;
   maxPrice?: number;
-  since?: '1d' | '1w' | '1m';
+  /** 原样保留:旧 route 对任何非 'all' 的值都按 30 天过滤(1d / 1w 例外),抽出时不改这个行为 */
+  since?: string;
   sort: ItemsSort;
 }
 
@@ -38,7 +39,7 @@ export function parseItemsQuery(sp: URLSearchParams): ItemsQuery {
     sameSellerAs: sameSellerAs || undefined,
     minPrice,
     maxPrice,
-    since: since === '1d' || since === '1w' || since === '1m' ? since : undefined,
+    since: since && since !== 'all' ? since : undefined,
     sort: sort === 'oldest' || sort === 'priceAsc' || sort === 'priceDesc' ? sort : 'newest',
   };
 }

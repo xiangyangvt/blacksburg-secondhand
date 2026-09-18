@@ -41,6 +41,29 @@ describe('QueryEmbeddingCache', () => {
     await c.get('a'); await c.get('b');
     expect(calls).toBe(2);
   });
+  it('同词并发 5 个请求只付 1 次费;失败后不缓存、可重试', async () => {
+    let calls = 0; let fail = true;
+    const c = new QueryEmbeddingCache(async () => { calls++; await new Promise(r => setTimeout(r, 5)); if (fail) throw new Error('x'); return [1]; }, () => 0);
+    await expect(Promise.all([c.get('a'), c.get('a'), c.get('a'), c.get('a'), c.get('a')])).rejects.toThrow('x');
+    expect(calls).toBe(1);
+    fail = false;
+    await expect(Promise.all([c.get('a'), c.get('a')])).resolves.toEqual([[1], [1]]);
+    expect(calls).toBe(2);
+  });
+  it('过期刷新会更新 LRU 位置:满容量时被淘汰的是真正最久未用的', async () => {
+    let t = 0; let calls = 0;
+    const c = new QueryEmbeddingCache(async () => { calls++; return [calls]; }, () => t, 100);
+    // 填到上限 500
+    for (let i = 0; i < 500; i++) await c.get(`k${i}`);
+    t = 101; // 全部过期
+    await c.get('k0');                  // k0 刷新 → 应移到最新位置
+    await c.get('brand-new');           // 触发淘汰:应淘汰 k1(最旧),不是刚刷新的 k0
+    const before = calls;
+    await c.get('k0');                  // 仍在缓存(未过期,t 没变)
+    expect(calls).toBe(before);
+    await c.get('k1');                  // 已被淘汰 → 再付费
+    expect(calls).toBe(before + 1);
+  });
 });
 
 describe('pickSemantic', () => {
@@ -82,9 +105,13 @@ function memDb(): QuotaDb {
   } };
 }
 
-const req = (opts: { ua?: string; vid?: string } = {}) =>
+const req = (opts: { ua?: string; vid?: string; ip?: string } = {}) =>
   new NextRequest('http://x/api/search?site=items&q=a', {
-    headers: { 'user-agent': opts.ua ?? 'Mozilla/5.0 (iPhone) Safari', ...(opts.vid ? { cookie: `hb_vid=${opts.vid}` } : {}) },
+    headers: {
+      'user-agent': opts.ua ?? 'Mozilla/5.0 (iPhone) Safari',
+      'x-forwarded-for': opts.ip ?? '10.0.0.1',
+      ...(opts.vid ? { cookie: `hb_vid=${opts.vid}` } : {}),
+    },
   });
 
 describe('gateSemanticSearch', () => {
@@ -101,5 +128,11 @@ describe('gateSemanticSearch', () => {
     if (!g.ok) expect(g.retryAfterSec).toBeGreaterThan(0);
     const fresh = await gateSemanticSearch(req(), db);
     expect(fresh).toMatchObject({ ok: true, isNew: true });
+  });
+  it('轮换 cookie 绕不过:同 IP 不带 cookie 第 301 次被 IP 配额拦下', async () => {
+    const db = memDb();
+    for (let i = 0; i < SEARCH_LIMITS.ipPerHour; i++) expect((await gateSemanticSearch(req({ ip: '1.2.3.4' }), db)).ok).toBe(true);
+    expect(await gateSemanticSearch(req({ ip: '1.2.3.4' }), db)).toMatchObject({ ok: false, reason: 'limited' });
+    expect((await gateSemanticSearch(req({ ip: '5.6.7.8' }), db)).ok).toBe(true);
   });
 });

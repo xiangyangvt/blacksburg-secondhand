@@ -98,8 +98,8 @@ export async function embedMany(texts: string[], opts: { timeoutMs?: number } = 
   return out;
 }
 
-export async function embed(text: string): Promise<number[]> {
-  const [v] = await embedMany([text]);
+export async function embed(text: string, opts: { timeoutMs?: number } = {}): Promise<number[]> {
+  const [v] = await embedMany([text], opts);
   return v!;
 }
 
