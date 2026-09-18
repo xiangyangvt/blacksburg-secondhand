@@ -3,7 +3,9 @@
 // Phase 4: 部署 Railway 时切换到 PostgreSQL
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Sprint 10A:全局 omit embeddingJson(见 src/lib/prisma.ts),否则 SQLite 下每条列表响应都带 30KB 向量
+  previewFeatures = ["omitApi"]
 }
 
 datasource db {
@@ -34,6 +36,11 @@ model Item {
   utmSource           String?  // 用户首次访问时的 ?utm_source=xxx 或 ?from=xxx；用于渠道分析
   // contactRevealCount 字段已废弃 —— cartCount (CartEntry 表 visitor 去重计数) 完全取代
   // 之前的注释保留：联系方式被点击展示累计次数。Schema 字段已通过 migration 删除
+  // Sprint 10A:语义搜索向量。dev/SQLite 存 JSON 数组;生产是 pgvector 列 `embedding vector(1536)`
+  // (两份 schema 唯一允许的字段差异,白名单在 scripts/check-schema-sync.mjs)
+  embeddingJson       String?
+  embeddedAt          DateTime?
+  embedVersion        Int       @default(0) // 实质性编辑 +1;向量写回时校验版本,防乱序覆盖(Codex 互审)
 
   inquiries   Inquiry[]
   reports     Report[]     @relation("ItemReports")
@@ -184,6 +191,11 @@ model Listing {
   ipAddress           String?
   utmSource           String?
   migratedFromItem    Boolean  @default(false)  // 旧 housing item 迁移标识
+  // Sprint 10A:语义搜索向量。dev/SQLite 存 JSON 数组;生产是 pgvector 列 `embedding vector(1536)`
+  // (两份 schema 唯一允许的字段差异,白名单在 scripts/check-schema-sync.mjs)
+  embeddingJson       String?
+  embeddedAt          DateTime?
+  embedVersion        Int       @default(0) // 实质性编辑 +1;向量写回时校验版本,防乱序覆盖(Codex 互审)
 
   applications        Application[]
   attachedTo          Application[] @relation("AttachedListing")
@@ -299,8 +311,11 @@ model Event {
   customCategory      String?  // category='other' 时用户自填的类目名
   photoUrls           String?  // JSON 序列化 URL 数组,跟 Item.photoUrls 同款
 
-  // Phase 3 chat 用,Phase 1 留空。pgvector 类型在 SQLite 不支持,先省略字段
-  // Postgres 上来时通过 raw SQL migrate 加 embedding 列
+  // Sprint 10A:语义搜索向量。dev/SQLite 存 JSON 数组;生产是 pgvector 列 `embedding vector(1536)`
+  // (两份 schema 唯一允许的字段差异,白名单在 scripts/check-schema-sync.mjs)
+  embeddingJson       String?
+  embeddedAt          DateTime?
+  embedVersion        Int       @default(0) // 实质性编辑 +1;向量写回时校验版本,防乱序覆盖(Codex 互审)
 
   status          String    @default("active")  // active | fulfilled | canceled | expired | hidden | deleted
 

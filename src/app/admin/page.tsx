@@ -7,6 +7,7 @@ import { isAdmin, setAdminCookie, clearAdminCookie, attemptAdminLogin, getAdminP
 import { headers } from 'next/headers';
 import { getClientIpFromHeaders } from '@/lib/utils';
 import { prisma } from '@/lib/prisma';
+import { scheduleEmbed, scheduleRemove } from '@/lib/search/indexer';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formatPrice, timeAgo, categoryLabel, parsePhotoUrls } from '@/lib/utils';
@@ -70,6 +71,7 @@ async function unhideItemAction(formData: FormData) {
   // 顺便清掉所有举报，重置自动隐藏触发器
   await prisma.report.deleteMany({ where: { itemId: id } });
   await prisma.item.update({ where: { id }, data: { status: 'active' } });
+  scheduleEmbed('item', id); // Sprint 10A:隐藏时清了向量,恢复补回
   revalidatePath('/admin');
 }
 
@@ -89,6 +91,7 @@ async function deleteListingAction(formData: FormData) {
   const id = String(formData.get('id'));
   const listing = await prisma.listing.findUnique({ where: { id }, select: { photoUrls: true } });
   await prisma.listing.update({ where: { id }, data: { status: 'deleted' } });
+  scheduleRemove('listing', id); // Sprint 10A
   if (listing) {
     schedulePendingCloudinaryDeletion(parsePhotoUrls(listing.photoUrls)).catch(() => {});
   }
@@ -101,6 +104,7 @@ async function unhideListingAction(formData: FormData) {
   const id = String(formData.get('id'));
   await prisma.report.deleteMany({ where: { listingId: id } });
   await prisma.listing.update({ where: { id }, data: { status: 'active' } });
+  scheduleEmbed('listing', id); // Sprint 10A
   revalidatePath('/admin');
 }
 

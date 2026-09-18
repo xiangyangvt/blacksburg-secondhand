@@ -39,14 +39,15 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 | 身份与鉴权 | `lib/auth.ts`（magic-link session）· `lib/adminAuth.ts` · `lib/identity.ts`（客户端三键身份 facade）· `api/auth/**` · 组件 `SessionTopBar` `EditCodePrompt` | prisma · email | 所有需要编辑 / 删除 / 「我的」的路径 |
 | 邮件 / 出站通知 | `lib/email.ts`（Resend 包装）· `lib/digest.ts` + `api/admin/digest`（9D：摘要 + 阈值 + 告警邮件，`daily-digest.yml` 每日调） | `RESEND_API_KEY` `DIGEST_SECRET` `DIGEST_EMAIL_TO` | magic-link；维护告警（举报 / 隐藏 / scraper / 备份 / 披露被拒） |
 | 图床 | `lib/uploader.ts` · `api/upload` · `lib/cloudinary.ts` · `PendingCloudinaryDeletion` 延迟删除队列（由 items / listings 列表 GET 机会式触发） | Cloudinary env | 三个发布表单 |
-| LLM | `lib/llm.ts`：`llmCall` / `chat`（DeepSeek）· `embed`（OpenAI 兼容端点，**无调用方，为搜索预埋**） | env | scraper |
+| LLM | `lib/llm.ts`：`llmCall` / `chat`（DeepSeek）· `embed` / `embedMany`（OpenAI 兼容端点）· `isEmbedConfigured` | env | scraper · 搜索 |
+| 搜索（10A 起） | `lib/search/embedText.ts`（白名单取字段 → 文本，纯函数）· `vectorStore.ts`（`pgvector` raw SQL / `json` SQLite 两实现，按 `DATABASE_URL` 选；HNSW 索引运行时幂等建）· `indexer.ts`（写入时异步 embed / remove，`needsReembed` 判实质性变更）· `backfill.ts` + `scripts/backfill-embeddings.ts` + `api/admin/backfill-embeddings` | prisma · llm | items / listings / events 的 POST / PATCH / DELETE / publish、reports 自动隐藏、scraper runner |
 | admin | `app/admin/page.tsx`（1329 行，server actions 内联）· `admin/recovery` · `api/recovery/**` | `adminAuth.isAdmin()` · `attemptAdminLogin()`（走 rateLimit） | — |
 | 反滥用 | `src/lib/rateLimit.ts`（**唯一入口**）：`getVisitorId` / `readVisitorId` / `setVisitorCookie`（`hb_vid`）、`isBotUA`（basic / full 两档）、`checkQuota`（`RateLimitHit` 表计数的滑动窗口；行只增不减、被拒尝试也计入；tag 去重靠 `(key, tag, bucket)` 唯一约束 + `admitted` 标记，Codex 互审六轮定稿）。12 个 route 的 visitor cookie 与 6 处 bot 判断已迁入；各业务域自己的窗口计数（发布 / 评论 / 申请等）仍读各自的表，见 §6 | prisma | 所有需要访客标识或配额的 route；9A / 9E / 10B / 10C 的配额 |
 | 数据与运维 | `prisma/schema.prisma`（dev）· `schema.production.prisma`（prod，手工同步）· `scripts/{backup,restore-local}.sh` · `.github/workflows/{ci,backup,scrape-events}.yml` · `railway.json` | — | — |
 
 ## 2. 数据模型与个人数据
 
-19 个 model（Sprint 9C 加 `RateLimitHit`）。两份 schema 目前字段一致，差异仅 provider、`binaryTargets`、注释；**没有 CI 保证它们一致**（雷区 8）。
+19 个 model（Sprint 9C 加 `RateLimitHit`；10A 给 `Item` / `Listing` / `Event` 加 `embeddedAt` `embedVersion` 与向量列）。两份 schema 字段一致，差异仅 provider、`binaryTargets`、`extensions`、注释，CI 用 `scripts/check-schema-sync.mjs` 逐行比对（9F）。**唯一的字段级豁免**（10A）：`Item` / `Listing` / `Event` 的向量列，dev 是 `embeddingJson String?`，prod 是 `embedding Unsupported("vector(1536)")?`，白名单写死在检查脚本里；`embeddedAt DateTime?` 两边相同。向量列不含个人数据（输入文本见 §8.11），Prisma 客户端看不见 prod 的 `embedding`，只能经 `vectorStore.ts` 的 raw SQL 读写。
 
 关系：`Item 1-N Inquiry / CartEntry / ItemViewThrottle / Report`；`Listing 1-N Inquiry / Application / ListingViewThrottle / Report`；`Application.attachedListingId → Listing`。`Event` 与 `EventComment` / `EventContactSend` / `EventClickThrottle` **无外键**，仅 `eventId` 字符串软关联，删除必须手工级联。
 
@@ -106,7 +107,8 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 | Cloudinary | `CLOUDINARY_*` | 未配回落 `public/uploads/`（容器重启即丢）；宕机上传 500，发帖卡在图片步 |
 | Resend | `RESEND_API_KEY` `EMAIL_FROM_ADDRESS` | dev 打 console；prod 未配 magic-link 不可用，编辑码主路径不受影响 |
 | DeepSeek | `LLM_*` | scraper 该源标 failed 继续下一源；前台不受影响，只是不入新活动 |
-| Embedding | `LLM_EMBED_*` | 无调用方 |
+| Embedding（OpenAI） | `LLM_EMBED_API_KEY` `LLM_EMBED_MODEL` | 未配：发帖照常成功，`embeddedAt` 留空，一行 warn；宕机：单条 embed 失败只记日志，等回填。任何 AI 侧错误都不影响发布与关键词搜索 |
+| pgvector | `DATABASE_URL`（Railway `postgres-ssl:18` 镜像自带） | 扩展缺失时 preDeploy `db push` 会失败（`extensions = [vector]`）；HNSW 索引缺失只是退化为顺序扫描 |
 | 源站 | — | 改版是最可能的静默失效点，只在 `ScrapeRun.errorMsg` 里可见 |
 | Railway | `DATABASE_URL` `NEXT_PUBLIC_SITE_URL` | 后者未设则硬编码回落到 railway 域名；`sleepApplication` 带来冷启动 |
 | Actions cron | secrets `DATABASE_URL` `SCRAPER_SECRET` `DIGEST_SECRET`，vars `SCRAPER_ENDPOINT` `DIGEST_ENDPOINT` `DIGEST_THRESHOLDS` | backup 写死 pg 18 全路径；artifact 90 天；60 天无 commit 即被禁用（靠 keepalive commit）；digest 每日 13 UTC，越阈值才发邮件 |
@@ -123,13 +125,17 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 8. `schema.production.prisma` 与 dev schema 手工同步；`db:push:prod --accept-data-loss` 在 preDeploy 跑，**漏同步 = 生产直接掉列**。9F 起 CI 用 `scripts/check-schema-sync.mjs` 归一化后逐行比对，不一致即红。
 9. 改 OG 卡片必须 bump `shareText.ts` 的 `OG_VERSION` 和 event 页的 `OG_IMG_VERSION`（微信缓存）。
 10. （Sprint 9 起）任何公开列表接口不得携带联系方式；联系方式只能经 `gateReveal` 配额的逐条接口或双向同意流程下发；序列化一律白名单；每一种需要人处理的状态必须有一条出站路径。前端「展开即见」只在展开态取数，桌面端折叠态不再直显。
+11. （Sprint 10 起）**送入 embedding 与 LLM 的文本永远不含** `contactValue`、`customContactLabel`、`posterContact`、`ipAddress`、`email`、任何 hash / token / visitorId。只允许标题、描述、价格、类目、自定义标签、区域 / 地点、时间、图片 URL、帖子 id。实现上只经 `lib/search/embedText.ts` 的白名单 `*_EMBED_SELECT` 读库、显式取字段构造文本，**不 spread**；单测用含微信号 / 手机号 / 邮箱的 fixture 断言输出不含它们。AI 侧任何失败（key 缺、API 挂、维度不对）都降级为"没有向量 / 没有补充结果"，不能让发布或关键词搜索失败。
 
 ## 9. 雷区与技术债
 
 - 超 400 行文件 17 个，最大：`MyPostsPanel.tsx` 1511 · `admin/page.tsx` 1329 · `MyEventsPanel.tsx` 1136 · `ListingPostModal.tsx` 856 · `EventCard.tsx` 792。AI 在这些文件里出错率最高，改动前先读整段上下文。
 - 死代码：`components/PlatformSwitcher.tsx`（文件头 TODO 标删）、`scripts/migrate-housing-to-listings.ts`（废弃占位）。
 - 权宜实现：event 举报用 `reason` 前缀 `[event:<id>]` 匹配（无外键）；`listingMatch.ts` v1 仅 2 维。
-- `schema.prisma` 里 embedding 列注释"Postgres 上来时通过 raw SQL 加"，从未加。
+- HNSW 索引不在 Prisma schema 里（索引类型不支持），由 `vectorStore.ensureIndex` 用 `CREATE INDEX CONCURRENTLY IF NOT EXISTS` 幂等建，**只在回填脚本与 admin 探针路径调用，发布请求路径不跑 DDL**；preDeploy 的 `db push` 是否会把它当 drift 删掉未实测，删了下次回填重建。当前 `nearest` 用 `OFFSET 0` 栅栏强制"先过滤后精确排序"，不走 HNSW 近似（候选集小时 HNSW 会漏结果），索引留给以后的全局查询。
+- `vectorStore.nearest` 的过滤是"调用方先用 Prisma where 查出候选 id 再传入"，不是 spec 里的 `filterSql`；两个后端共用一份过滤逻辑，代价是候选 id 列表随数据量线性增长（几百行无感，上万行再改）。
+- 向量生命周期规则：只为 `active` / `draft` 行维护（`upsert` 自带 status 守卫）；删除与举报隐藏清向量，admin 恢复补向量；`fulfilled` / `canceled` / `expired` 不清，靠查询侧 status 过滤。实质性编辑在同一条 update 里 `embeddedAt = null, embedVersion += 1`（`INVALIDATE_EMBEDDING`），embed 失败由回填捞回；embed 是异步的，`upsert` 在同一条 UPDATE 里校验 `embedVersion = 读取时版本 AND status 可检索`，不匹配返回 false 丢弃结果（乱序 / 删后写回防线，indexer 与回填共用）。
+- dev / SQLite 的 `embeddingJson` 靠 `lib/prisma.ts` 的全局 `omit`（`omitApi` preview）挡在默认 select 之外，否则任何 `...row` spread 的响应都会带出 30KB 向量；omit 按 `DATABASE_URL` 分支（Postgres 没这列，omit 不存在的字段会报错）。显式 `select` 可越过 omit，这是 `JsonVectorStore` 读向量的方式。
 
 ## 10. 测试与门禁现状
 

@@ -20,7 +20,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "check:schema": "node scripts/check-schema-sync.mjs"
+    "check:schema": "node scripts/check-schema-sync.mjs",
+    "backfill:embeddings": "tsx scripts/backfill-embeddings.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

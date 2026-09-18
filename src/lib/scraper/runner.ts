@@ -4,6 +4,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { translateToChineseSummary } from '@/lib/llm';
+import { scheduleEmbed, substantiveChanged, INVALIDATE_EMBEDDING } from '@/lib/search/indexer';
 import type { SourceDefinition, RawEvent, ScrapeResult } from './types';
 
 export async function runScraper(def: SourceDefinition): Promise<ScrapeResult> {
@@ -86,14 +87,18 @@ export async function runScraper(def: SourceDefinition): Promise<ScrapeResult> {
       };
 
       if (existing) {
+        // Sprint 10A:每天都 update 一遍,只有文本字段真变了(或从没算过)才重算向量;变了就把 embeddedAt 置空让回填兜底
+        const textChanged = substantiveChanged('event', existing, data);
         await prisma.event.update({
           where: { id: existing.id },
-          data: { ...data, scrapedAt: new Date() }, // bump scrapedAt 标识最近一次更新
+          data: { ...data, scrapedAt: new Date(), ...(textChanged ? INVALIDATE_EMBEDDING : {}) }, // bump scrapedAt 标识最近一次更新
         });
         itemsUpdated++;
+        if (textChanged || !existing.embeddedAt) scheduleEmbed('event', existing.id);
       } else {
-        await prisma.event.create({ data });
+        const created = await prisma.event.create({ data, select: { id: true } });
         itemsNew++;
+        scheduleEmbed('event', created.id);
       }
     } catch {
       // 单条出错(数据格式不对等),静默跳过

@@ -8,6 +8,7 @@ import {
   parsePhotoUrls,
 } from '@/lib/utils';
 import { schedulePendingCloudinaryDeletion } from '@/lib/uploader';
+import { scheduleEmbed, scheduleRemove, substantiveChanged, INVALIDATE_EMBEDDING } from '@/lib/search/indexer';
 
 const VALID_CATEGORIES = CATEGORIES.map(c => c.id);
 const VALID_CONTACT_TYPES = CONTACT_TYPES.map(c => c.id);
@@ -76,7 +77,14 @@ export async function PATCH(req: NextRequest, ctx: { params: { id: string } }) {
     data.bumpedAt = new Date();
   }
 
+  // Sprint 10A:标题 / 描述 / 类目 / 标签 / 类型**真的变了**才重算向量(表单提交完整字段,只看有没有传会每次都算);
+  // 同一条 update 里把 embeddedAt 置空,embed 失败时回填能捞回
+  const reembed = substantiveChanged('item', item, data);
+  if (reembed) Object.assign(data, INVALIDATE_EMBEDDING);
+
   await prisma.item.update({ where: { id }, data });
+
+  if (reembed) scheduleEmbed('item', id);
 
   // 编辑时如果替换了图，把被丢弃的 Cloudinary 图清掉（节省额度）
   if (updates.photoUrls !== undefined) {
@@ -107,6 +115,7 @@ export async function DELETE(req: NextRequest, ctx: { params: { id: string } }) 
 
   // 软删
   await prisma.item.update({ where: { id }, data: { status: 'deleted' } });
+  scheduleRemove('item', id);
 
   // 延迟 24h 清掉 Cloudinary 图床上的图（防止卖家手滑误删后图也丢了）；本地 /uploads/ 的图保留
   // 真正 destroy 由 processOverduePendingDeletions 在后续 GET 时机会式触发

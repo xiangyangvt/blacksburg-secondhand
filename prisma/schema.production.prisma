@@ -3,14 +3,17 @@
 // 本地开发请用 prisma/schema.prisma（SQLite，零摩擦）。两个 schema 互不污染。
 
 generator client {
-  provider      = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Sprint 10A:让 db push 自动 CREATE EXTENSION vector
+  previewFeatures = ["postgresqlExtensions", "omitApi"]
   // Railway / 大多数 Linux 容器需要 musl 引擎，否则运行时报 "Could not load engine"
   binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
 }
 
 model Item {
@@ -34,6 +37,11 @@ model Item {
   ipAddress           String?
   utmSource           String?
   // contactRevealCount 字段已废弃，由 cartCount (CartEntry 表) 取代
+  // Sprint 10A:语义搜索向量(pgvector)。dev/SQLite 对应 embeddingJson String?,差异白名单在 scripts/check-schema-sync.mjs
+  // HNSW 索引 Prisma 不能声明,由 src/lib/search/vectorStore.ts 首次使用时 CREATE INDEX IF NOT EXISTS
+  embedding           Unsupported("vector(1536)")?
+  embeddedAt          DateTime?
+  embedVersion        Int       @default(0) // 实质性编辑 +1;向量写回时校验版本,防乱序覆盖(Codex 互审)
 
   inquiries   Inquiry[]
   reports     Report[]     @relation("ItemReports")
@@ -164,6 +172,11 @@ model Listing {
   ipAddress           String?
   utmSource           String?
   migratedFromItem    Boolean  @default(false)
+  // Sprint 10A:语义搜索向量(pgvector)。dev/SQLite 对应 embeddingJson String?,差异白名单在 scripts/check-schema-sync.mjs
+  // HNSW 索引 Prisma 不能声明,由 src/lib/search/vectorStore.ts 首次使用时 CREATE INDEX IF NOT EXISTS
+  embedding           Unsupported("vector(1536)")?
+  embeddedAt          DateTime?
+  embedVersion        Int       @default(0) // 实质性编辑 +1;向量写回时校验版本,防乱序覆盖(Codex 互审)
 
   applications        Application[]
   attachedTo          Application[] @relation("AttachedListing")
@@ -273,6 +286,12 @@ model Event {
   posterContactPublic Boolean? @default(false)
   customCategory      String?
   photoUrls           String?
+
+  // Sprint 10A:语义搜索向量(pgvector)。dev/SQLite 对应 embeddingJson String?,差异白名单在 scripts/check-schema-sync.mjs
+  // HNSW 索引 Prisma 不能声明,由 src/lib/search/vectorStore.ts 首次使用时 CREATE INDEX IF NOT EXISTS
+  embedding           Unsupported("vector(1536)")?
+  embeddedAt          DateTime?
+  embedVersion        Int       @default(0) // 实质性编辑 +1;向量写回时校验版本,防乱序覆盖(Codex 互审)
 
   status          String    @default("active")  // active | fulfilled | canceled | expired | hidden | deleted
 

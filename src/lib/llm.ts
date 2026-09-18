@@ -23,6 +23,10 @@ const chatClient = new OpenAI({
 const embedClient = new OpenAI({
   baseURL: process.env.LLM_EMBED_BASE_URL ?? 'https://api.openai.com/v1',
   apiKey: process.env.LLM_EMBED_API_KEY ?? '',
+  // SDK 默认 10 分钟超时 + 2 次重试,一批 embedding 最坏能等半小时;发帖路径是 fire-and-forget 无所谓,
+  // 但 admin 回填接口会撞 Railway 的无数据传输超时(Codex 互审 #6)。单批 ≤ 50 条,30s 足够。
+  timeout: 30_000,
+  maxRetries: 1,
 });
 
 const CHAT_MODEL    = process.env.LLM_CHAT_MODEL    ?? 'deepseek-v4-pro';
@@ -65,12 +69,38 @@ export function utility(opts: Omit<ChatOpts, 'model'> & { model?: string }) {
 
 // ---------- embedding ----------
 
+/** text-embedding-3-small 的维度;生产 pgvector 列是 vector(1536),换模型必须同步改列 */
+export const EMBED_DIM = 1536;
+
+/** 没配 key 时所有 embedding 路径静默降级(发布照常成功,embeddedAt 留空等回填) */
+export function isEmbedConfigured(): boolean {
+  return Boolean(process.env.LLM_EMBED_API_KEY);
+}
+
+/**
+ * 批量 embedding:一次 API 调用,按输入顺序返回(OpenAI 返回带 index,不保证顺序)。
+ * 调用方负责每批 ≤ 50 条(回填脚本);单条用 embed()。
+ */
+export async function embedMany(texts: string[], opts: { timeoutMs?: number } = {}): Promise<number[][]> {
+  if (texts.length === 0) return [];
+  const res = await embedClient.embeddings.create(
+    { model: EMBED_MODEL, input: texts },
+    // 回填带整体截止时间时,把剩余预算传进来;不传用客户端默认(30s)。超时后 SDK 不再重试(maxRetries 由剩余预算决定)
+    opts.timeoutMs !== undefined ? { timeout: Math.max(1_000, opts.timeoutMs), maxRetries: 0 } : undefined,
+  );
+  const out: number[][] = new Array(texts.length);
+  for (const d of res.data) out[d.index] = d.embedding;
+  for (let i = 0; i < texts.length; i++) {
+    if (!out[i] || out[i].length !== EMBED_DIM) {
+      throw new Error(`embedding #${i} 缺失或维度不对(got ${out[i]?.length ?? 0}, want ${EMBED_DIM})`);
+    }
+  }
+  return out;
+}
+
 export async function embed(text: string): Promise<number[]> {
-  const res = await embedClient.embeddings.create({
-    model: EMBED_MODEL,
-    input: text,
-  });
-  return res.data[0]!.embedding;
+  const [v] = await embedMany([text]);
+  return v!;
 }
 
 // ---------- 高阶 helper:HTML → 结构化 JSON ----------
