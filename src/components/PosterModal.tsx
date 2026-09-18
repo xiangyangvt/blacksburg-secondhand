@@ -4,7 +4,7 @@
 //
 // 主操作是**「复制图片」**(Sean 2026-09-18:长按保存不舒服,桌面端也没法长按)——点一下,图进剪贴板,去微信直接粘贴。
 //   - 走异步剪贴板 API:ClipboardItem 的值传 Promise<Blob>(Safari 要求 ClipboardItem 在点击的同步调用栈里创建)
-//   - 复制成功:图上浮出一枚磨砂圆章、对勾一笔画出,按钮变成绿色「已复制 · 去微信粘贴」,约 2 秒后还原
+//   - 复制成功:**屏幕正中**浮出一枚磨砂圆章(fixed,不随长图滚走)、对勾一笔画出,按钮变成绿色「已复制 · 去微信粘贴」,约 2 秒后还原
 //   - 浏览器不支持(部分内置浏览器)或被拒:按钮不出现 / 提示改用长按保存
 // 「下载图片」是并排的次要按钮,手机、桌面都显示。图本身仍是服务端出的真实 PNG(<img src="/api/poster/<slug>?page=N">),长按保存也还能用。
 // 物品多时分成几张(每张都带二维码),一张一张往下排,每张各有自己的复制按钮。
@@ -25,6 +25,7 @@ export function PosterModal({ slug, pages, onClose }: { slug: string; pages: num
     setCanCopy(typeof window !== 'undefined' && typeof window.ClipboardItem !== 'undefined' && !!navigator.clipboard?.write);
   }, []);
   const [copied, setCopied] = useState<number | null>(null);
+  const [copiedAt, setCopiedAt] = useState(0);
   const [copyFailed, setCopyFailed] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -36,6 +37,7 @@ export function PosterModal({ slug, pages, onClose }: { slug: string; pages: num
       const blob = fetch(src).then(r => { if (!r.ok) throw new Error(String(r.status)); return r.blob(); });
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
       setCopied(page);
+      setCopiedAt(Date.now());
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(null), 2200);
     } catch {
@@ -46,6 +48,22 @@ export function PosterModal({ slug, pages, onClose }: { slug: string; pages: num
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/60 flex items-start justify-center overflow-y-auto p-3 sm:p-6" onClick={onClose} data-testid="poster-modal">
+      {/* 「已复制」圆章:钉在**屏幕**正中(fixed),不跟图走——长图很长,用户多半已经滚到下面,
+          挂在图上的话圆章会留在屏幕外的顶部看不见(Sean 2026-09-18 真机反馈)。key 带时间戳:连点两次也重播 */}
+      {copied !== null && (
+        <div
+          key={`badge-${copied}-${copiedAt}`}
+          className="hb-copied-badge pointer-events-none fixed left-1/2 top-1/2 z-[70] flex flex-col items-center justify-center w-36 h-36 rounded-full bg-white/85 backdrop-blur-md shadow-xl ring-1 ring-emerald-200"
+          data-testid="copied-badge"
+        >
+          <span className="hb-copied-ring absolute inset-0 rounded-full ring-2 ring-emerald-400" />
+          <svg width="52" height="52" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <circle cx="12" cy="12" r="11" fill="#10b981" />
+            <path className="hb-copied-check" d="M6.5 12.5l3.6 3.6 7.4-7.8" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="mt-2 text-sm font-semibold text-emerald-800">{t('poster.copied')}</span>
+        </div>
+      )}
       <div className="w-full max-w-md bg-white rounded-xl shadow-xl my-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200">
           <div>
@@ -78,21 +96,6 @@ export function PosterModal({ slug, pages, onClose }: { slug: string; pages: num
                         onLoad={() => setLoaded(s => ({ ...s, [page]: true }))}
                         onError={() => setFailed(s => ({ ...s, [page]: true }))}
                       />
-                      {/* 「已复制」圆章:固定在图的可视区上方 1/4 处(长图很长,放正中会在屏幕外) */}
-                      {copied === page && (
-                        <div
-                          key={`badge-${page}-${copied}`}
-                          className="hb-copied-badge pointer-events-none absolute left-1/2 top-[min(25%,220px)] flex flex-col items-center justify-center w-36 h-36 rounded-full bg-white/80 backdrop-blur-md shadow-xl ring-1 ring-emerald-200"
-                          data-testid="copied-badge"
-                        >
-                          <span className="hb-copied-ring absolute inset-0 rounded-full ring-2 ring-emerald-400" />
-                          <svg width="52" height="52" viewBox="0 0 24 24" fill="none" aria-hidden>
-                            <circle cx="12" cy="12" r="11" fill="#10b981" />
-                            <path className="hb-copied-check" d="M6.5 12.5l3.6 3.6 7.4-7.8" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                          <span className="mt-2 text-sm font-semibold text-emerald-800">{t('poster.copied')}</span>
-                        </div>
-                      )}
                     </div>
                   </>
                 )}
