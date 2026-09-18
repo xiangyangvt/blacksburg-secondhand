@@ -50,8 +50,10 @@ export function SemanticResults<T extends { id: string }>({
 
   const showButton = state.trigger === 'button' && !state.requested && !state.loading && !state.limited;
   const showCards = state.list.length > 0;
-  // 第 2 层:有第 1 层(语义卡片真的渲染出来了)才显示;trigger=button 且未点击、语义层被限流、0 条结果时都不显示(spec 10C + 零计数隐藏)
-  const showChat = !!chat && state.chatEnabled && state.requested && !state.loading && !state.limited && showCards;
+  // 第 2 层:第 1 层已经算过(auto,或点过「找更多相似」)就显示,**0 条语义结果时也显示**——搜不到东西正是最需要
+  // "描述一下你要的"的时候(2026-09-18 产品决定,偏离 spec 10C 原文"有第 1 层才显示")。
+  // trigger=button 且未点击、语义层被限流时仍不显示。
+  const showChat = !!chat && state.chatEnabled && state.requested && !state.loading && !state.limited;
 
   if (!state.loading && !showButton && !showCards && !state.limited && !showChat) return null; // 零计数隐藏
 
@@ -101,6 +103,11 @@ export function SemanticResults<T extends { id: string }>({
         <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-4 items-start">
           {state.list.map(item => renderCard(item, t('search.aiSimilar')))}
         </div>
+      )}
+
+      {/* 0 条语义结果但第 2 层在:说明一句,别让标题下面空着 */}
+      {showChat && !showCards && (
+        <div className="text-center text-xs text-stone-500 py-2">{t('search.aiNone')}</div>
       )}
 
       {showChat && chat && <SearchChat key={chat.chatKey} filters={chat.filters} cardProps={chat.cardProps} />}
