@@ -7,14 +7,32 @@
 //   - 打字 → 关键词搜索照常(免费,不调模型)
 //   - 回车 / 点右侧按钮 → onAsk(把当前输入当一句话交给对话)
 // 视觉(Sean 2026-09-18:借「AI 助手」的炫彩识别,但要轻量、静态,不带走注意力):
-//   - 未聚焦:和原来一样朴素,只有图标是静态渐变星芒
-//   - 聚焦:边框变 1px 渐变细线 —— 颜色只在用户注意力已经落到这里时才出现
-//   - 全程无动效:一条 CSS 渐变,零 JS
+//   - 未聚焦:和原来一样朴素——灰色放大镜(右上角带一颗小星,提示「也能问」),没有任何颜色
+//   - 聚焦:边框变一圈 1px 的柔和渐变环,图标同步染上同一组颜色 —— 颜色只在用户注意力已经落到这里时才出现
+//   - 没有持续动效:颜色不流动不呼吸,只有 200ms 的淡入淡出;纯 CSS,零 JS
 // 不传 `ask` 的站点与改动前像素级一致。
 
-import { Search, Sparkles, ArrowUp } from 'lucide-react';
+import { Search, ArrowUp } from 'lucide-react';
 
 const GRAD_ID = 'hb-ask-grad';
+// 一条首尾相接的柔和色环(三轮,Sean:七色 + 柔光「有点过了」):收到四个相邻色相、用 400 档的浅色,
+// 靛 → 天蓝 → 紫 → 粉 → 靛。conic 沿胶囊一圈走,相邻两色处处接得上,没有线性渐变两端断开的接缝
+const RING = 'conic-gradient(from 200deg at 50% 50%, #818cf8, #38bdf8, #a78bfa, #f472b6, #818cf8)';
+const BUTTON = 'linear-gradient(135deg, #818cf8 0%, #a78bfa 55%, #f472b6 100%)';
+
+/**
+ * 搜索图标:放大镜(这首先是个搜索框),右上角一颗小四角星提示「也能问」。
+ * 自己画而不是用 lucide 的 Search:要把星放进同一个 24 格里,线宽与圆角也要和星对上。
+ */
+function AskSearchIcon({ stroke, className }: { stroke: string; className?: string }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <circle cx="10" cy="11" r="6.5" />
+      <path d="M15 16l5 5" />
+      <path d="M19.5 1.8l.9 2.3 2.3.9-2.3.9-.9 2.3-.9-2.3-2.3-.9 2.3-.9z" fill={stroke} strokeWidth="1" />
+    </svg>
+  );
+}
 
 export function SearchBox({
   value,
@@ -48,23 +66,29 @@ export function SearchBox({
 
   const canAsk = ask.showButton && value.trim().length > 0;
   return (
-    // 外层 1px padding 充当边框:未聚焦透明,聚焦时露出渐变底色 = 渐变细线。尺寸与无 ask 版本一致(原来是 1px 透明 border)
+    // 渐变环的做法(Sean 2026-09-18 二轮:线条更平滑舒服、边框色彩更多):
+    //   - 外层 1px padding 是「边框槽」;槽里垫两层同一条渐变——一层清晰的环,一层几乎看不出的柔边(静态,只为让线条不生硬)
+    //   - 两层用 opacity 过渡(背景渐变本身不能过渡):未聚焦 0,聚焦全显。200ms 淡入淡出,没有持续动效
+    //   - 输入框自己不透明,盖住中间,只露出一圈。尺寸与无 ask 版本一致
     // 手机上一句话在 160px 里打不下:聚焦时临时铺满顶栏(绝对定位盖住两侧),失焦还原
     <form
       onSubmit={(e) => { e.preventDefault(); if (value.trim()) ask.onAsk(); }}
-      className="group flex-1 min-w-0 max-w-[160px] sm:max-w-none sm:flex-none sm:w-[260px] relative rounded-chip p-px bg-transparent focus-within:bg-gradient-to-r focus-within:from-violet-500 focus-within:via-fuchsia-500 focus-within:to-amber-400 max-sm:focus-within:absolute max-sm:focus-within:inset-x-3 max-sm:focus-within:max-w-none max-sm:focus-within:z-10"
+      className="group flex-1 min-w-0 max-w-[160px] sm:max-w-none sm:flex-none sm:w-[260px] relative rounded-full p-px max-sm:focus-within:absolute max-sm:focus-within:inset-x-3 max-sm:focus-within:max-w-none max-sm:focus-within:z-10"
       role="search"
     >
+      <span aria-hidden className="pointer-events-none absolute inset-0 rounded-full blur-[3px] opacity-0 group-focus-within:opacity-25 transition-opacity duration-200 ease-out" style={{ background: RING }} />
+      <span aria-hidden className="pointer-events-none absolute inset-0 rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity duration-200 ease-out" style={{ background: RING }} />
       <svg width="0" height="0" className="absolute" aria-hidden>
         <defs>
           <linearGradient id={GRAD_ID} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#8b5cf6" />
-            <stop offset="55%" stopColor="#d946ef" />
-            <stop offset="100%" stopColor="#fbbf24" />
+            <stop offset="0%" stopColor="#818cf8" />
+            <stop offset="55%" stopColor="#a78bfa" />
+            <stop offset="100%" stopColor="#f472b6" />
           </linearGradient>
         </defs>
       </svg>
-      <Sparkles size={15} stroke={`url(#${GRAD_ID})`} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+      <AskSearchIcon stroke="#a8a29e" className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-[1] opacity-100 group-focus-within:opacity-0 transition-opacity duration-200" />
+      <AskSearchIcon stroke={`url(#${GRAD_ID})`} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-[1] opacity-0 group-focus-within:opacity-100 transition-opacity duration-200" />
       <input
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -78,7 +102,7 @@ export function SearchBox({
         }}
         maxLength={300}
         // 聚焦时 16px:iOS 小于 16px 的输入框聚焦会自动放大页面
-        className={`w-full bg-stone-100 rounded-chip pl-9 ${canAsk ? 'pr-10' : 'pr-3'} py-2 text-sm max-sm:focus:text-base focus:outline-none focus:bg-white transition-colors`}
+        className={`relative block w-full bg-stone-100 rounded-full pl-9 ${canAsk ? 'pr-10' : 'pr-3'} py-2 text-sm max-sm:focus:text-base focus:outline-none focus:bg-white transition-colors duration-200`}
       />
       {canAsk && (
         <button
@@ -88,7 +112,8 @@ export function SearchBox({
           aria-label={ask.buttonLabel}
           title={ask.buttonLabel}
           data-testid="ask-button"
-          className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-7 h-7 rounded-full text-white bg-gradient-to-br from-violet-500 via-fuchsia-500 to-amber-400"
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 z-[1] inline-flex items-center justify-center w-7 h-7 rounded-full text-white shadow-sm"
+          style={{ background: BUTTON }}
         >
           <ArrowUp size={15} strokeWidth={2.5} />
         </button>
