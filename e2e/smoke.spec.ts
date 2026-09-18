@@ -177,3 +177,12 @@ test.describe('API smoke', () => {
     expect(res.status()).toBe(401);
   });
 });
+
+test.describe('链接末尾粘了标点', () => {
+  test("/' 与 /roommates。 重定向到干净路径", async ({ page }) => {
+    await page.goto("/'");
+    expect(new URL(page.url()).pathname).toBe('/');
+    await page.goto('/roommates%E3%80%82');
+    expect(new URL(page.url()).pathname).toBe('/roommates');
+  });
+});
