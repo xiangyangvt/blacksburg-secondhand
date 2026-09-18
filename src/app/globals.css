@@ -61,3 +61,22 @@ button { transition: all 0.15s ease; }
   100% { transform: scale(1); }
 }
 .copied-pop { animation: pop 0.3s ease; }
+
+/* Sprint 11C:长图「已复制」反馈 —— 图上浮出一枚磨砂圆章,对勾一笔画出,约 1.6 秒后淡出 */
+@keyframes hb-badge-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  18%  { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+  28%  { transform: translate(-50%, -50%) scale(1); }
+  80%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.98); }
+}
+@keyframes hb-check-draw { from { stroke-dashoffset: 30; } to { stroke-dashoffset: 0; } }
+@keyframes hb-ring { from { opacity: 0.55; transform: scale(0.8); } to { opacity: 0; transform: scale(1.7); } }
+.hb-copied-badge { animation: hb-badge-in 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+.hb-copied-check { stroke-dasharray: 30; stroke-dashoffset: 30; animation: hb-check-draw 0.35s 0.15s ease-out forwards; }
+.hb-copied-ring  { animation: hb-ring 0.7s 0.1s ease-out forwards; opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .hb-copied-badge { animation: none; opacity: 1; transform: translate(-50%, -50%); }
+  .hb-copied-check { animation: none; stroke-dashoffset: 0; }
+  .hb-copied-ring  { animation: none; }
+}
