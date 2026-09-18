@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   cosineSimilarity, isPostgresUrl, toVectorLiteral, createVectorStore,
-  PgVectorStore, JsonVectorStore, type JsonVectorDb, type RawDb,
+  PgVectorStore, JsonVectorStore, MAX_SOURCE_ROWS, type JsonVectorDb, type RawDb,
 } from './vectorStore';
 import { EMBED_DIM } from '@/lib/llm';
 
@@ -112,6 +112,44 @@ describe('JsonVectorStore', () => {
   it('维度不对直接抛(防止把错模型的向量写进库)', async () => {
     const s = new JsonVectorStore(memJsonDb().db);
     await expect(s.upsert('item', 'a', [1, 2, 3], 0)).rejects.toThrow(/维度/);
+  });
+});
+
+describe('nearestToRows(11B:以库里已有的行为引子)', () => {
+  it('json:每个引子各取候选内前 k;没有向量的引子跳过;整体按相似度降序', async () => {
+    const { db } = memJsonDb();
+    const s = new JsonVectorStore(db);
+    await s.upsert('item', 'sofa', unit(0), 0);
+    await s.upsert('item', 'monitor', unit(5), 0);
+    await s.upsert('item', 'couch', unit(0, 0.2), 0);   // 像 sofa
+    await s.upsert('item', 'screen', unit(5, 0.4), 0);  // 像 monitor
+    await s.upsert('item', 'bike', unit(9), 0);         // 谁都不像
+    const hits = await s.nearestToRows('item', ['sofa', 'monitor', 'no-vector'], { ids: ['couch', 'screen', 'bike'] }, 1);
+    expect(hits.map(h => `${h.sourceId}>${h.id}`)).toEqual(['sofa>couch', 'monitor>screen']);
+    expect(hits[0]!.similarity).toBeGreaterThan(hits[1]!.similarity);
+    expect(await s.nearestToRows('item', [], { ids: ['couch'] }, 3)).toEqual([]);
+    expect(await s.nearestToRows('item', ['sofa'], { ids: [] }, 3)).toEqual([]);
+  });
+
+  it('pgvector:自连接 + 窗口函数,精确排序,不跑 DDL;引子数量封顶', async () => {
+    const calls: { sql: string; params: unknown[] }[] = [];
+    const db: RawDb = {
+      async $executeRawUnsafe(sql, ...params) { calls.push({ sql, params }); return 1; },
+      async $queryRawUnsafe(sql, ...params) { calls.push({ sql, params }); return [{ sourceId: 's1', id: 'c1', similarity: '0.8' }] as any; },
+    };
+    const s = new PgVectorStore(db);
+    const many = Array.from({ length: MAX_SOURCE_ROWS + 5 }, (_, i) => `s${i}`);
+    const hits = await s.nearestToRows('item', many, { ids: ['c1', 'c2'] }, 6);
+    expect(hits).toEqual([{ sourceId: 's1', id: 'c1', similarity: 0.8 }]);
+    expect(calls).toHaveLength(1);
+    const q = calls[0]!;
+    expect(q.sql).toContain('row_number() OVER (PARTITION BY s.id ORDER BY c.embedding <=> s.embedding ASC)');
+    expect(q.sql).toContain('s.id = ANY($1::text[])');
+    expect(q.sql).toContain('c.id = ANY($2::text[])');
+    expect(q.sql).toContain('WHERE rn <= $3');
+    expect(q.sql).not.toContain('CREATE INDEX');
+    expect((q.params[0] as string[]).length).toBe(MAX_SOURCE_ROWS);
+    expect(q.params.slice(1)).toEqual([['c1', 'c2'], 6]);
   });
 });
 

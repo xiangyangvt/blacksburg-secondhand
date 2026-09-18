@@ -53,6 +53,7 @@ function fakeStore() {
     async upsert(kind, id, v, version) { ops.push(`upsert ${kind}:${id}:${v.length}:v${version}`); return version !== 99; },
     async remove(kind, id) { ops.push(`remove ${kind}:${id}`); },
     async nearest() { return []; },
+    async nearestToRows() { return []; },
   };
   return { store, ops };
 }

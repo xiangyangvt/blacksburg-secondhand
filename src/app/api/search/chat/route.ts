@@ -22,7 +22,7 @@ import { prisma } from '@/lib/prisma';
 import { setVisitorCookie } from '@/lib/rateLimit';
 import { chatWithUsage, CHAT_MODEL_NAME } from '@/lib/llm';
 import { isBudgetExceeded, reserveBudget, settleUsage, recordRejection } from '@/lib/llmUsage';
-import { buildItemsWhere, parseItemsQuery, resolveSellerContact, serializePublicItem, ITEM_LIST_INCLUDE } from '@/lib/itemsQuery';
+import { buildItemsWhere, parseItemsQuery, resolveSeller, serializePublicItem, ITEM_LIST_INCLUDE, ITEM_FILTER_KEYS } from '@/lib/itemsQuery';
 import { getVectorStore } from '@/lib/search/vectorStore';
 import { isSearchAiEnabled, getQueryEmbeddingCache } from '@/lib/search/hybrid';
 import {
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
   // filters 走与列表接口同一个解析器;q 不参与(语义检索用向量)
   const fsp = new URLSearchParams();
   if (body.filters && typeof body.filters === 'object') {
-    for (const k of ['type', 'category', 'minPrice', 'maxPrice', 'since', 'sameSellerAs']) {
+    for (const k of ITEM_FILTER_KEYS) {
       const v = (body.filters as Record<string, unknown>)[k];
       if (typeof v === 'string' || typeof v === 'number') fsp.set(k, String(v));
     }
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
   // ===== 检索:同 10B 的过滤(不带关键词),最近 12 条。失败 → 无候选,继续(LLM 会如实说没找到) =====
   const candidates: ChatCandidate[] = [];
   try {
-    const sellerContact = await resolveSellerContact(qy.sameSellerAs, prisma);
+    const sellerContact = await resolveSeller(qy, prisma);
     if (sellerContact !== null) {
       const vector = await getQueryEmbeddingCache().get(retrievalQuery(message, history));
       const pool = await prisma.item.findMany({

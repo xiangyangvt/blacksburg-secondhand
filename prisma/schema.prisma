@@ -497,3 +497,13 @@ model Feedback {
 
   @@index([status, createdAt])
 }
+
+// Sprint 11A:卖家摊位。长图二维码指向 /s/<slug> → 主页按这位卖家筛选。
+// 同一联系方式永远同一个 slug:卖家发出去的所有长图都指向同一个**实时**摊位(不存快照,不依赖某件物品还在售)。
+// 只在卖家本人用「联系方式 + 编辑码」生成长图时创建。contactValue 只在服务端用,永不下发、不进 URL。
+model Shelf {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  contactValue String   @unique
+  createdAt    DateTime @default(now())
+}

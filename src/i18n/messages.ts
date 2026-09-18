@@ -263,6 +263,12 @@ export const messages = {
   'site.shareSite':        { zh: '分享本站',                                  en: 'Share site' },
 
   // Sprint 10B:第 1 层「AI 语义匹配」
+  'seller.banner':         { zh: '这位卖家的 {n} 件在售',                         en: "This seller's {n} listings" },
+  'seller.bannerLoading':  { zh: '这位卖家的在售物品',                           en: "This seller's listings" },
+  'seller.seeAll':         { zh: '看看全站 →',                                 en: 'Browse everything →' },
+  'seller.similar':        { zh: '和这些相似的',                                en: 'Similar to these' },
+  'seller.sameCategory':   { zh: '同类目的其他在售',                             en: 'More in these categories' },
+  'seller.more':           { zh: '全站其他在售',                                en: 'More on the site' },
   'search.aiTitle':        { zh: '相关结果 · AI 语义匹配',                      en: 'Related · AI semantic match' },
   'search.aiNote':         { zh: '可能不完全准确',                              en: 'May not be exact' },
   'search.aiMore':         { zh: '找更多相似',                                  en: 'Find more like this' },

@@ -18,6 +18,7 @@ export type Filters = {
   onlyRecent?: boolean;
   /** Sprint 6.7g:按卖家 contactValue 过滤(同卖家曝光 toast "去看看"触发);设置后 banner 显示 + ✕ 清除 */
   sameSellerAs?: string;  // 9A:同卖家过滤用 item id,不再用联系方式
+  shelf?: string;         // 11A:卖家摊位 slug(长图二维码进站)
 };
 
 export function FilterSidebar({

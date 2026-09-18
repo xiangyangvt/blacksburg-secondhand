@@ -20,6 +20,11 @@ export interface NearestHit {
   similarity: number;
 }
 
+export interface SourcedHit extends NearestHit { sourceId: string }
+
+/** nearestToRows 的引子上限:卖家物品再多也只取前这么多件当引子,查询量有界 */
+export const MAX_SOURCE_ROWS = 20;
+
 export interface NearestFilter {
   /** 候选 id(已按 status / 类目 / 价格 / 时间过滤)。空数组直接返回 [] */
   ids: readonly string[];
@@ -34,6 +39,11 @@ export interface VectorStore {
   upsert(kind: EmbedKind, id: string, vector: number[], version: number): Promise<boolean>;
   remove(kind: EmbedKind, id: string): Promise<void>;
   nearest(kind: EmbedKind, vector: number[], filter: NearestFilter, k: number): Promise<NearestHit[]>;
+  /**
+   * Sprint 11B:以**库里已有的行**为引子找近邻(不调 embedding 接口,零费用)。对每个 sourceId 各取候选内最近的 kPerSource 条。
+   * 没有向量的 source 被跳过;候选里不应包含 source 自己(调用方排除)。
+   */
+  nearestToRows(kind: EmbedKind, sourceIds: readonly string[], filter: NearestFilter, kPerSource: number): Promise<SourcedHit[]>;
   /** 可选:建索引等一次性维护,只在回填 / admin 路径调,不在请求路径调 DDL(互审 #3) */
   ensureIndex?(kind: EmbedKind): Promise<void>;
 }
@@ -141,7 +151,30 @@ export class PgVectorStore implements VectorStore {
     );
     return rows.map(r => ({ id: r.id, similarity: Number(r.similarity) }));
   }
+
+  /**
+   * 自连接 + 窗口函数:每个引子行在候选内精确排序取前 k。不走 HNSW(同 nearest 的理由:候选是过滤后的小集合)。
+   * 规模上界:MAX_SOURCE_ROWS × 候选数次距离计算,几百行数据是毫秒级。
+   */
+  async nearestToRows(kind: EmbedKind, sourceIds: readonly string[], filter: NearestFilter, kPerSource: number): Promise<SourcedHit[]> {
+    if (sourceIds.length === 0 || filter.ids.length === 0 || kPerSource <= 0) return [];
+    const t = TABLE[kind];
+    const rows = await this.db.$queryRawUnsafe<{ sourceId: string; id: string; similarity: number | string }[]>(
+      `SELECT "sourceId", id, similarity
+         FROM (SELECT s.id AS "sourceId", c.id AS id, 1 - (c.embedding <=> s.embedding) AS similarity,
+                      row_number() OVER (PARTITION BY s.id ORDER BY c.embedding <=> s.embedding ASC) AS rn
+                 FROM "${t}" s
+                 JOIN "${t}" c ON c.embedding IS NOT NULL AND c.id = ANY($2::text[])
+                WHERE s.embedding IS NOT NULL AND s.id = ANY($1::text[])) ranked
+        WHERE rn <= $3
+        ORDER BY similarity DESC`,
+      [...sourceIds].slice(0, MAX_SOURCE_ROWS), [...filter.ids], kPerSource,
+    );
+    return rows.map(r => ({ sourceId: r.sourceId, id: r.id, similarity: Number(r.similarity) }));
+  }
 }
+
+// (PgVectorStore.nearestToRows 见类内)
 
 // ---------- json(dev / SQLite) ----------
 
@@ -194,6 +227,22 @@ export class JsonVectorStore implements VectorStore {
     }
     hits.sort((a, b) => b.similarity - a.similarity);
     return hits.slice(0, k);
+  }
+
+  async nearestToRows(kind: EmbedKind, sourceIds: readonly string[], filter: NearestFilter, kPerSource: number): Promise<SourcedHit[]> {
+    if (sourceIds.length === 0 || filter.ids.length === 0 || kPerSource <= 0) return [];
+    const sources = await this.db[kind].findMany({
+      where: { id: { in: [...sourceIds].slice(0, MAX_SOURCE_ROWS) }, embeddingJson: { not: null } },
+      select: { id: true, embeddingJson: true },
+    });
+    const out: SourcedHit[] = [];
+    for (const s of sources) {
+      let v: unknown;
+      try { v = JSON.parse(s.embeddingJson ?? ''); } catch { continue; }
+      if (!Array.isArray(v) || v.length !== EMBED_DIM) continue;
+      for (const h of await this.nearest(kind, v as number[], filter, kPerSource)) out.push({ sourceId: s.id, ...h });
+    }
+    return out.sort((a, b) => b.similarity - a.similarity);
   }
 }
 

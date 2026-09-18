@@ -6,7 +6,7 @@ import {
   serializePhotoUrls,
 } from '@/lib/utils';
 import {
-  parseItemsQuery, buildItemsWhere, itemsOrderBy, resolveSellerContact, serializePublicItem, ITEM_LIST_INCLUDE,
+  parseItemsQuery, buildItemsWhere, itemsOrderBy, resolveSeller, serializePublicItem, ITEM_LIST_INCLUDE,
 } from '@/lib/itemsQuery';
 import { validateItemFields } from '@/lib/itemValidation';
 import { processOverduePendingDeletions } from '@/lib/uploader';
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   const qy = parseItemsQuery(req.nextUrl.searchParams);
   // 9A:用 item id 反查卖家,联系方式既不出现在 URL 也不出现在响应里
-  const sellerContact = await resolveSellerContact(qy.sameSellerAs, prisma);
+  const sellerContact = await resolveSeller(qy, prisma);
   if (sellerContact === null) return NextResponse.json({ items: [] });
 
   const items = await prisma.item.findMany({

@@ -4,6 +4,7 @@
 // 这里只放纯函数 + 一个查卖家的 async helper;prisma 调用留在 route 里。
 
 import { CATEGORIES, parsePhotoUrls } from '@/lib/utils';
+import { parseShelfSlug, resolveShelfContact, type ShelfDb } from '@/lib/shelf';
 
 const VALID_CATEGORIES = CATEGORIES.map(c => c.id) as readonly string[];
 
@@ -15,6 +16,8 @@ export interface ItemsQuery {
   q?: string;
   /** 9A:按「与某 item 同卖家」过滤,传 item id */
   sameSellerAs?: string;
+  /** 11A:按卖家摊位过滤,传 slug(长图二维码进站)。与 sameSellerAs 同时出现时 shelf 优先 */
+  shelf?: string;
   minPrice?: number;
   maxPrice?: number;
   /** 原样保留:旧 route 对任何非 'all' 的值都按 30 天过滤(1d / 1w 例外),抽出时不改这个行为 */
@@ -37,6 +40,7 @@ export function parseItemsQuery(sp: URLSearchParams): ItemsQuery {
     category: category && VALID_CATEGORIES.includes(category) && category !== 'housing' ? category : undefined,
     q: q || undefined,
     sameSellerAs: sameSellerAs || undefined,
+    shelf: parseShelfSlug(sp.get('shelf')),
     minPrice,
     maxPrice,
     since: since && since !== 'all' ? since : undefined,
@@ -109,6 +113,18 @@ export async function resolveSellerContact(
   if (!anchor || anchor.status !== 'active') return null;
   return anchor.contactValue;
 }
+
+/** 11A:卖家过滤的统一入口。shelf(slug)优先,其次 sameSellerAs(item id)。返回值约定同 resolveSellerContact */
+export async function resolveSeller(
+  qy: Pick<ItemsQuery, 'shelf' | 'sameSellerAs'>,
+  db: ShelfDb & Parameters<typeof resolveSellerContact>[1],
+): Promise<string | null | undefined> {
+  if (qy.shelf) return resolveShelfContact(qy.shelf, db);
+  return resolveSellerContact(qy.sameSellerAs, db);
+}
+
+/** 对话 / 语义层从客户端原样接收、再交给 parseItemsQuery 的筛选键(白名单) */
+export const ITEM_FILTER_KEYS = ['type', 'category', 'minPrice', 'maxPrice', 'since', 'sameSellerAs', 'shelf'] as const;
 
 /**
  * 公开列表的序列化(白名单思路的"手写 undefined"版,与 9A 后行为一致):
