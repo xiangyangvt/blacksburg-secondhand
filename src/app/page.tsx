@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
+import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams, type ReadonlyURLSearchParams } from 'next/navigation';
 import { ItemCard, type Item } from '@/components/ItemCard';
@@ -17,6 +17,7 @@ import { getRecentViewIds } from '@/lib/recentViews';
 import { useUnreadCount, markSeen } from '@/lib/notifications';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
+import { SemanticResults, EMPTY_SEMANTIC, type SemanticState } from '@/components/SemanticResults';
 import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
@@ -78,6 +79,13 @@ function HomePageInner() {
   const searchParams = useSearchParams();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  // Sprint 10B:第 1 层语义结果;无 q 时始终 EMPTY(整块不渲染)
+  const [semantic, setSemantic] = useState<SemanticState>(EMPTY_SEMANTIC);
+  // 请求版本:每次 fetchItems +1;晚到的旧响应(关键词或语义)一律丢弃,防止旧按钮请求覆盖新搜索(Codex 互审 #3)
+  // 每个 await 之后、每次 setState 之前都要比对(二轮 #1)
+  const reqSeq = useRef(0);
+  // 当前版本实际展示的关键词 id:语义结果回来时再按它过滤一次(两段请求之间数据可能变了,二轮 #3)
+  const keywordIdsRef = useRef<Set<string>>(new Set());
   const [origin, setOrigin] = useState('');
   useEffect(() => {
     setOrigin(clientOrigin());
@@ -174,8 +182,7 @@ function HomePageInner() {
     }
   }, [filters, debouncedQ]);
 
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
+  const buildListParams = useCallback(() => {
     const sp = new URLSearchParams();
     if (filters.type     !== 'all') sp.set('type', filters.type);
     if (filters.category !== 'all') sp.set('category', filters.category);
@@ -187,23 +194,76 @@ function HomePageInner() {
     if (filters.sameSellerAs)       sp.set('sameSellerAs', filters.sameSellerAs);
     // Phase 3C: random 是前端 jitter 模式,API 不认识 — 映射成 newest(API 按时间倒序返回,前端再 jitter)
     sp.set('sort', filters.sort === 'random' ? 'newest' : filters.sort);
+    return { sp, q };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.type, filters.category, debouncedQ, filters.minPrice, filters.maxPrice, filters.since, filters.sort, filters.sameSellerAs]);
+
+  // Sprint 10B:语义层单独一段请求(semantic=1)。trigger=auto 时关键词层渲染后自动发;trigger=button 时用户点按钮才发。
+  // 关键词层永远不等 embedding;失败时 requested 复位,按钮回来可以重试(互审 #4 #7)
+  const requestSemantic = useCallback(async (seq: number) => {
+    if (seq !== reqSeq.current) return; // 旧闭包续跑过来的调用,直接忽略
+    const { sp, q } = buildListParams();
+    if (!q) return;
+    sp.set('site', 'items');
+    sp.set('semantic', '1');
+    setSemantic(s => ({ ...s, loading: true, requested: true }));
+    try {
+      const res = await fetch(`/api/search?${sp}`);
+      const data = await res.json();
+      if (seq !== reqSeq.current) return; // 查询已变,丢弃
+      const shown = keywordIdsRef.current;
+      const list: Item[] = (data.semantic ?? []).filter((it: Item) => !shown.has(it.id));
+      setSemantic(s => ({ ...s, loading: false, list, limited: res.status === 429 || !!data.limited }));
+    } catch {
+      if (seq !== reqSeq.current) return;
+      setSemantic(s => ({ ...s, loading: false, list: [], requested: false }));
+    }
+  }, [buildListParams]);
+
+  const fetchMoreSimilar = useCallback(() => requestSemantic(reqSeq.current), [requestSemantic]);
+
+  const fetchItems = useCallback(async () => {
+    setLoading(true);
+    const seq = ++reqSeq.current;
+    // 新查询开始就清掉旧的语义卡片 / 按钮,等第一段响应给出本次 trigger 再开放(二轮 #2)
+    setSemantic(EMPTY_SEMANTIC);
+    keywordIdsRef.current = new Set();
+    const { sp, q } = buildListParams();
+    let autoSemantic = false;
 
     try {
-      const res = await fetch(`/api/items?${sp}`);
-      const data = await res.json();
-      const fetched: Item[] = data.items ?? [];
+      // Sprint 10B:有关键词走 /api/search(semantic=0:只要第 0 层与 trigger);无关键词仍走列表 GET,首屏不多一次调用
+      let fetched: Item[];
+      if (q) {
+        sp.set('site', 'items');
+        sp.set('semantic', '0');
+        const res = await fetch(`/api/search?${sp}`);
+        const data = await res.json();
+        if (seq !== reqSeq.current) return;
+        fetched = data.keyword ?? [];
+        keywordIdsRef.current = new Set(fetched.map(it => it.id));
+        setSemantic({ aiEnabled: !!data.aiEnabled, trigger: data.trigger ?? null, list: [], loading: false, requested: false, limited: false });
+        autoSemantic = !!data.aiEnabled && data.trigger === 'auto';
+      } else {
+        const res = await fetch(`/api/items?${sp}`);
+        const data = await res.json();
+        if (seq !== reqSeq.current) return;
+        fetched = data.items ?? [];
+        setSemantic(EMPTY_SEMANTIC);
+      }
       setItems(fetched);
       // 跟购物清单同步：找不到 id 的 cart item 静默移除；找到的更新 snapshot
       try {
         const { syncCart } = await import('@/lib/shoppingCart');
-        syncCart(fetched);
+        if (seq === reqSeq.current) syncCart(fetched);
       } catch {}
     } finally {
-      setLoading(false);
+      // 旧请求的 finally 不能关掉新请求的加载态
+      if (seq === reqSeq.current) setLoading(false);
     }
-    // 故意不把 filters.q 放进依赖：q 通过 debouncedQ 才触发 fetch
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.type, filters.category, debouncedQ, filters.minPrice, filters.maxPrice, filters.since, filters.sort, filters.sameSellerAs]);
+    // 第 0 层已渲染,再去要语义层(骨架在这段时间显示);版本再核对一次
+    if (autoSemantic && seq === reqSeq.current) void requestSemantic(seq);
+  }, [buildListParams, requestSemantic]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
@@ -424,6 +484,22 @@ function HomePageInner() {
                 />
               ))}
             </div>
+          )}
+
+          {/* Sprint 10B:第 1 层「相关结果 · AI 语义匹配」。只看最近浏览时不显示(那是本地过滤视图) */}
+          {debouncedQ.trim() && !filters.onlyRecent && (
+            <SemanticResults
+              state={semantic}
+              onRequestMore={fetchMoreSimilar}
+              cardProps={{
+                onEdit: (it)        => setCodePrompt({ kind: 'edit',   item: it }),
+                onMarkSold: (it)    => setCodePrompt({ kind: 'delete', item: it }),
+                onReport: handleReport,
+                onDeleteInquiryAsSeller: (it, inqId) =>
+                  setCodePrompt({ kind: 'sellerDeleteInquiry', item: it, inquiryId: inqId }),
+                refresh: fetchItems,
+              }}
+            />
           )}
         </section>
       </div>

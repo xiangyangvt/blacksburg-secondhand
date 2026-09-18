@@ -40,7 +40,7 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 | 邮件 / 出站通知 | `lib/email.ts`（Resend 包装）· `lib/digest.ts` + `api/admin/digest`（9D：摘要 + 阈值 + 告警邮件，`daily-digest.yml` 每日调） | `RESEND_API_KEY` `DIGEST_SECRET` `DIGEST_EMAIL_TO` | magic-link；维护告警（举报 / 隐藏 / scraper / 备份 / 披露被拒） |
 | 图床 | `lib/uploader.ts` · `api/upload` · `lib/cloudinary.ts` · `PendingCloudinaryDeletion` 延迟删除队列（由 items / listings 列表 GET 机会式触发） | Cloudinary env | 三个发布表单 |
 | LLM | `lib/llm.ts`：`llmCall` / `chat`（DeepSeek）· `embed` / `embedMany`（OpenAI 兼容端点）· `isEmbedConfigured` | env | scraper · 搜索 |
-| 搜索（10A 起） | `lib/search/embedText.ts`（白名单取字段 → 文本，纯函数）· `vectorStore.ts`（`pgvector` raw SQL / `json` SQLite 两实现，按 `DATABASE_URL` 选；HNSW 索引运行时幂等建）· `indexer.ts`（写入时异步 embed / remove，`needsReembed` 判实质性变更）· `backfill.ts` + `scripts/backfill-embeddings.ts` + `api/admin/backfill-embeddings` | prisma · llm | items / listings / events 的 POST / PATCH / DELETE / publish、reports 自动隐藏、scraper runner |
+| 搜索（10A 起） | `lib/search/embedText.ts`（白名单取字段 → 文本，纯函数）· `vectorStore.ts`（`pgvector` raw SQL / `json` SQLite 两实现，按 `DATABASE_URL` 选；HNSW 索引运行时幂等建）· `indexer.ts`（写入时异步 embed / remove，`substantiveChanged` 判实质性变更）· `backfill.ts` + `scripts/backfill-embeddings.ts` + `api/admin/backfill-embeddings` · **10B**：`lib/itemsQuery.ts`（列表 where / orderBy / 序列化，`api/items` 与 `api/search` 共用）· `lib/search/hybrid.ts`（总开关 `SEARCH_AI_ENABLED`、查询词 embedding 10 分钟缓存、`pickSemantic` 去重与阈值、语义路配额 60 次 / 小时）· `api/search`（第 0 层 + 第 1 层）· 组件 `SemanticResults`（`ItemCard` 加 `badge`） | prisma · llm · rateLimit | items / listings / events 的 POST / PATCH / DELETE / publish、reports 自动隐藏、scraper runner；`app/page.tsx` 有关键词时改调 `api/search` |
 | admin | `app/admin/page.tsx`（1329 行，server actions 内联）· `admin/recovery` · `api/recovery/**` | `adminAuth.isAdmin()` · `attemptAdminLogin()`（走 rateLimit） | — |
 | 反滥用 | `src/lib/rateLimit.ts`（**唯一入口**）：`getVisitorId` / `readVisitorId` / `setVisitorCookie`（`hb_vid`）、`isBotUA`（basic / full 两档）、`checkQuota`（`RateLimitHit` 表计数的滑动窗口；行只增不减、被拒尝试也计入；tag 去重靠 `(key, tag, bucket)` 唯一约束 + `admitted` 标记，Codex 互审六轮定稿）。12 个 route 的 visitor cookie 与 6 处 bot 判断已迁入；各业务域自己的窗口计数（发布 / 评论 / 申请等）仍读各自的表，见 §6 | prisma | 所有需要访客标识或配额的 route；9A / 9E / 10B / 10C 的配额 |
 | 数据与运维 | `prisma/schema.prisma`（dev）· `schema.production.prisma`（prod，手工同步）· `scripts/{backup,restore-local}.sh` · `.github/workflows/{ci,backup,scrape-events}.yml` · `railway.json` | — | — |
@@ -97,6 +97,8 @@ GitHub Actions cron ──► 每日 scrape（POST /api/scraper/run）· 每周 
 同卖家过滤已改为 `?sameSellerAs=<itemId>`，服务端由 item 反查卖家，联系方式不进 URL、不进响应。
 
 ## 6. 反滥用现状
+
+- （10B）语义搜索：同 visitor 60 次 / 小时（`search:vid:<id>:h`，含按钮触发）+ 同 IP 300 次 / 小时（`search:ip:<ip>:h`，防轮换 cookie），bot UA 只给关键词层；限流只砍语义路，关键词层永不受影响（配额表读写失败也只是没有语义层）。自动触发被限 → 200 + `limited`，按钮触发被限 → 429（body 仍含 keyword）。客户端两段式：先 `semantic=0` 拿关键词层，再 `semantic=1` 要语义层，关键词层永远不等 embedding。
 
 访客标识与 bot 判断已统一进 `lib/rateLimit.ts`；通用配额 `checkQuota` 由 `contactQuota.ts`（披露）与三处 `verify-code`（失败限流）使用。各业务域的窗口计数仍是内联查各自的表：IP 发布限流（items / listings 1h 10 条，applications 1h 5 条，inquiries 1h N 条）；visitor 限流（用户活动每日 3 条，评论 60s 一条 + 1h 20 条）；magic-link 同邮箱 60s；recovery 同 IP 24h 3 次、3 个不同 IP 自动标 abuse；举报 3 个不同 IP 自动隐藏；view / click / cart 靠 throttle 表去重；bot UA 过滤 6 处（click / view×2 / pageview 用 full 档，events POST / comments 用 basic 档，沿用各自原有词表）。**无限流的面**：各列表 GET（已不含联系方式）、`listings/by-contact` GET（已脱敏）。进程内存态：`eventArchive.ts` 的 5 分钟节流、`uploader.ts` 的配置缓存，多实例即失效。
 

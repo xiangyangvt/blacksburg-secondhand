@@ -126,6 +126,7 @@ export function ItemCard({
   onDeleteInquiryAsSeller,
   refresh,
   autoExpand = false,
+  badge,
 }: {
   item: Item;
   onEdit: (item: Item) => void;
@@ -135,6 +136,8 @@ export function ItemCard({
   refresh: () => void;
   /** 主页用 ?focus=ID 进来时，对应卡片 mount 自动展开 + 滚到视野中央 */
   autoExpand?: boolean;
+  /** Sprint 10B:右上角小标签(语义匹配结果的「相似」),不传不渲染 */
+  badge?: string;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -454,6 +457,9 @@ export function ItemCard({
               {categoryLabel(item.category, locale)}
               {item.customTag && ` · ${item.customTag}`}
             </span>
+            {badge && (
+              <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">{badge}</span>
+            )}
             {/* UX A3:0 次查看不渲染 chip —— 冷启动期满屏「👁 0」观感=没人气 */}
             {displayViewCount > 0 && (
               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500" title="主动查看次数">

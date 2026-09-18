@@ -2,106 +2,35 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import {
-  CATEGORIES,
   getClientIp,
   serializePhotoUrls,
-  parsePhotoUrls,
 } from '@/lib/utils';
+import {
+  parseItemsQuery, buildItemsWhere, itemsOrderBy, resolveSellerContact, serializePublicItem, ITEM_LIST_INCLUDE,
+} from '@/lib/itemsQuery';
 import { validateItemFields } from '@/lib/itemValidation';
 import { processOverduePendingDeletions } from '@/lib/uploader';
 import { scheduleEmbed } from '@/lib/search/indexer';
 
-const VALID_CATEGORIES = CATEGORIES.map(c => c.id);
-
 // GET /api/items?type=&category=&q=&minPrice=&maxPrice=&since=&sort=
+// Sprint 10B:where / orderBy / 序列化抽到 lib/itemsQuery.ts,与 GET /api/search 共用;语义逐字不变
 export async function GET(req: NextRequest) {
-  // 机会式触发：每次 GET 时顺手扫一遍 Cloudinary 待删队列。fire-and-forget，不阻塞主响应
+  // 机会式触发:每次 GET 时顺手扫一遍 Cloudinary 待删队列。fire-and-forget,不阻塞主响应
   processOverduePendingDeletions().catch(() => {});
 
-  const sp = req.nextUrl.searchParams;
-  const type     = sp.get('type');     // sell | buy | null(全部)
-  const category = sp.get('category'); // home/electronics/...
-  const q        = sp.get('q')?.trim();
-  const sameSellerAs = sp.get('sameSellerAs')?.trim(); // Sprint 6.7g / 9A:按「与某 item 同卖家」过滤,联系方式不进 URL
-  const minPrice = sp.get('minPrice') ? Number(sp.get('minPrice')) : undefined;
-  const maxPrice = sp.get('maxPrice') ? Number(sp.get('maxPrice')) : undefined;
-  const since    = sp.get('since');    // 1d | 1w | 1m | all
-  const sort     = sp.get('sort') ?? 'newest'; // newest | oldest | priceAsc | priceDesc
-
-  // 排除 housing 类目 —— 已经被 Sprint 4 迁到独立的"室友&转租"平台
-  // 老用户的 housing item 行还在 Item 表里，但前端不再展示
-  const where: any = { status: 'active', NOT: { category: 'housing' } };
-  if (type === 'sell' || type === 'buy') where.type = type;
-  if (category && VALID_CATEGORIES.includes(category as any) && category !== 'housing') where.category = category;
-  if (sameSellerAs) {
-    // 9A:用 item id 反查卖家,联系方式既不出现在 URL 也不出现在响应里
-    const anchor = await prisma.item.findUnique({ where: { id: sameSellerAs }, select: { contactValue: true, status: true } });
-    if (!anchor || anchor.status !== 'active') return NextResponse.json({ items: [] });
-    where.contactValue = anchor.contactValue;
-  }
-  if (q) {
-    // 搜索匹配标题、描述、自定义标签
-    // 不再匹配 contactValue —— 联系方式现在隐藏，搜索它会反推泄露
-    where.OR = [
-      { title:        { contains: q } },
-      { description:  { contains: q } },
-      { customTag:    { contains: q } },
-    ];
-  }
-  if (minPrice !== undefined || maxPrice !== undefined) {
-    where.price = {};
-    if (minPrice !== undefined && !isNaN(minPrice)) where.price.gte = minPrice;
-    if (maxPrice !== undefined && !isNaN(maxPrice)) where.price.lte = maxPrice;
-  }
-  if (since && since !== 'all') {
-    const now = Date.now();
-    const ms = since === '1d' ? 86400e3 : since === '1w' ? 7 * 86400e3 : 30 * 86400e3;
-    where.createdAt = { gte: new Date(now - ms) };
-  }
-
-  // "最新"语义改成"最近活跃"：sort=newest 现在按 bumpedAt 排序
-  // bumpedAt 在创建时 = createdAt，在实质性编辑 / 新询价 / 卖家回复时刷新
-  const orderBy =
-    sort === 'oldest'    ? { createdAt: 'asc'  as const } :
-    sort === 'priceAsc'  ? { price:     'asc'  as const } :
-    sort === 'priceDesc' ? { price:     'desc' as const } :
-                           { bumpedAt:  'desc' as const };
+  const qy = parseItemsQuery(req.nextUrl.searchParams);
+  // 9A:用 item id 反查卖家,联系方式既不出现在 URL 也不出现在响应里
+  const sellerContact = await resolveSellerContact(qy.sameSellerAs, prisma);
+  if (sellerContact === null) return NextResponse.json({ items: [] });
 
   const items = await prisma.item.findMany({
-    where,
-    orderBy,
+    where: buildItemsWhere(qy, sellerContact !== undefined ? { sellerContact } : {}),
+    orderBy: itemsOrderBy(qy.sort),
     take: 200,
-    include: {
-      // 只暴露 active 状态的留言；hidden 的（3 个 IP 举报后自动隐藏）仅 admin 可见
-      inquiries: {
-        where: { status: 'active' },
-        orderBy: { createdAt: 'asc' },
-      },
-    },
+    include: ITEM_LIST_INCLUDE,
   });
 
-  const serialized = items.map(it => ({
-    ...it,
-    photoUrls: parsePhotoUrls(it.photoUrls),
-    editCodeHash: undefined,         // 别返回 hash
-    ipAddress: undefined,
-    utmSource: undefined,
-    // Sprint 9A:公开列表不携带联系方式(不变量 ARCHITECTURE.md §8.10)。
-    // 展开卡片时客户端调 POST /api/items/[id]/reveal-contact 逐条取,经配额。
-    // 「展开即见」的体验保留(UX C10),只是批量抓取的成本变了。contactType 不敏感,保留供占位渲染。
-    contactValue: '',
-    customContactLabel: null,
-    // 留言对象白名单:ipAddress / utmSource 不出网,留言人联系方式走 inquiries/[id]/reveal-contact
-    inquiries: it.inquiries.map(inq => ({
-      id: inq.id, itemId: inq.itemId, listingId: inq.listingId, contactType: inq.contactType,
-      message: inq.message, sellerReply: inq.sellerReply, sellerRepliedAt: inq.sellerRepliedAt,
-      status: inq.status, createdAt: inq.createdAt, updatedAt: inq.updatedAt,
-      contactValue: '',
-      customContactLabel: null,
-    })),
-  }));
-
-  return NextResponse.json({ items: serialized });
+  return NextResponse.json({ items: items.map(serializePublicItem) });
 }
 
 // POST /api/items  创建商品（可选 status: "active" | "draft"，默认 active）

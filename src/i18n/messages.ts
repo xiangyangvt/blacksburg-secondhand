@@ -261,6 +261,13 @@ export const messages = {
   'detail.notFoundHint':   { zh: '可能已被卖家删除，或者链接错误',                  en: 'It may have been removed by the seller or the link is wrong' },
   'detail.metaPrefix':     { zh: '黑堡二手买卖',                                en: 'Blacksburg Secondhand' },
   'site.shareSite':        { zh: '分享本站',                                  en: 'Share site' },
+
+  // Sprint 10B:第 1 层「AI 语义匹配」
+  'search.aiTitle':        { zh: '相关结果 · AI 语义匹配',                      en: 'Related · AI semantic match' },
+  'search.aiNote':         { zh: '可能不完全准确',                              en: 'May not be exact' },
+  'search.aiMore':         { zh: '找更多相似',                                  en: 'Find more like this' },
+  'search.aiSimilar':      { zh: '相似',                                       en: 'Similar' },
+  'search.aiLimited':      { zh: 'AI 搜索次数已达上限，稍后再试',                 en: 'AI search limit reached, try again later' },
 } as const;
 
 export type MessageKey = keyof typeof messages;

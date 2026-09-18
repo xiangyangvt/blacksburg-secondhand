@@ -37,7 +37,8 @@
 | `LLM_UTILITY_MODEL` | ✓ | 默认 `deepseek-chat`（HTML 抽取 + 翻译） |
 | `LLM_EMBED_API_KEY` | 可选 | OpenAI key（Sprint 10 语义搜索的 embedding）；不配则发帖不算向量、搜索只有关键词层 |
 | `LLM_EMBED_MODEL` | 可选 | 默认 `text-embedding-3-small`（1536 维，与 pgvector 列绑定，别随手换） |
-| `SEARCH_AI_ENABLED` | 可选 | 默认 `false`。语义搜索 / AI 助手总开关（10B 起生效） |
+| `SEARCH_AI_ENABLED` | 可选 | 默认 `false`。语义搜索 / AI 助手总开关（10B 起生效）；开之前先跑完 embedding 回填 |
+| `SEARCH_SEMANTIC_MIN_SIM` | 可选 | 默认 `0.35`。语义候选的余弦相似度阈值 |
 | `NEXT_PUBLIC_SITE_URL` | ✓ | 站点公开 URL（magic-link 邮件 + OG 卡片用），如 `https://blacksburg-secondhand-production.up.railway.app` |
 | `RESEND_API_KEY` | 可选 | 配了才启用 magic-link 邮箱登录；不配 prod 返 503 |
 | `EMAIL_FROM_ADDRESS` | 可选 | 默认 `onboarding@resend.dev`，自有域名后改 `noreply@$DOMAIN` |
