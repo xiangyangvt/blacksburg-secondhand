@@ -39,6 +39,7 @@
 | `LLM_EMBED_MODEL` | 可选 | 默认 `text-embedding-3-small`（1536 维，与 pgvector 列绑定，别随手换） |
 | `SEARCH_AI_ENABLED` | 可选 | 默认 `false`。语义搜索 / AI 助手总开关（10B 起生效）；开之前先跑完 embedding 回填 |
 | `SEARCH_SEMANTIC_MIN_SIM` | 可选 | 默认 `0.35`。语义候选的余弦相似度阈值 |
+| `SEARCH_AI_DAILY_BUDGET_USD` | 可选 | 默认 `2`。AI 单日总费用上限（embedding + 对话，按 `LlmUsage` 表估算）；超过后对话接口 503、第 2 层隐藏。设 `0` = 关掉对话 |
 | `NEXT_PUBLIC_SITE_URL` | ✓ | 站点公开 URL（magic-link 邮件 + OG 卡片用），如 `https://blacksburg-secondhand-production.up.railway.app` |
 | `RESEND_API_KEY` | 可选 | 配了才启用 magic-link 邮箱登录；不配 prod 返 503 |
 | `EMAIL_FROM_ADDRESS` | 可选 | 默认 `onboarding@resend.dev`，自有域名后改 `noreply@$DOMAIN` |

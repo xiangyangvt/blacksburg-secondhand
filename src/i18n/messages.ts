@@ -268,6 +268,15 @@ export const messages = {
   'search.aiMore':         { zh: '找更多相似',                                  en: 'Find more like this' },
   'search.aiSimilar':      { zh: '相似',                                       en: 'Similar' },
   'search.aiLimited':      { zh: 'AI 搜索次数已达上限，稍后再试',                 en: 'AI search limit reached, try again later' },
+
+  // Sprint 10C:第 2 层「继续问」
+  'search.chatPlaceholder': { zh: '没找到？描述一下你要的',                       en: "Didn't find it? Describe what you need" },
+  'search.chatSend':       { zh: '发送',                                       en: 'Send' },
+  'search.chatNote':       { zh: 'AI 可能出错，价格与详情以卡片为准',              en: 'AI can be wrong. Check the card for price and details.' },
+  'search.chatBadge':      { zh: 'AI 推荐',                                    en: 'AI pick' },
+  'search.chatThinking':   { zh: '正在找…',                                    en: 'Looking…' },
+  'search.chatError':      { zh: '出了点问题，再试一次',                          en: 'Something went wrong. Try again.' },
+  'search.chatLimited':    { zh: 'AI 提问次数已达上限，请稍后再试',                en: 'AI question limit reached. Try again later.' },
 } as const;
 
 export type MessageKey = keyof typeof messages;

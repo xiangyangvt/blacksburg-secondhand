@@ -12,6 +12,7 @@
 //   LLM_EMBED_MODEL       默认 text-embedding-3-small($0.02 per M, 1536 维)
 
 import OpenAI from 'openai';
+import { recordUsage } from '@/lib/llmUsage';
 
 // ---------- clients ----------
 
@@ -57,6 +58,28 @@ export async function llmCall(opts: ChatOpts): Promise<string> {
   return res.choices[0]?.message?.content ?? '';
 }
 
+/**
+ * Sprint 10C:带用量的 chat 调用。对话接口用——记一行 LlmUsage(费用护栏与 admin 面板的数据源),
+ * 单独的超时且不重试(用户在等;失败由调用方降级为兜底文案)。
+ */
+export async function chatWithUsage(opts: Omit<ChatOpts, 'model'> & { model?: string; endpoint: string; timeoutMs?: number }): Promise<{ content: string; promptTokens: number; completionTokens: number; model: string; estCostUsd: number }> {
+  const model = opts.model ?? CHAT_MODEL;
+  const res = await chatClient.chat.completions.create(
+    {
+      model,
+      messages: opts.messages,
+      temperature: opts.temperature ?? 0.2,
+      max_tokens: opts.max_tokens,
+      response_format: opts.response_format,
+    },
+    { timeout: opts.timeoutMs ?? 20_000, maxRetries: 0 },
+  );
+  const promptTokens = res.usage?.prompt_tokens ?? 0;
+  const completionTokens = res.usage?.completion_tokens ?? 0;
+  const estCostUsd = await recordUsage({ endpoint: opts.endpoint, model, promptTokens, completionTokens });
+  return { content: res.choices[0]?.message?.content ?? '', promptTokens, completionTokens, model, estCostUsd };
+}
+
 /** Chatbot 用,RAG 回答(Phase 3) */
 export function chat(opts: Omit<ChatOpts, 'model'> & { model?: string }) {
   return llmCall({ ...opts, model: opts.model ?? CHAT_MODEL });
@@ -88,6 +111,8 @@ export async function embedMany(texts: string[], opts: { timeoutMs?: number } = 
     // 回填带整体截止时间时,把剩余预算传进来;不传用客户端默认(30s)。超时后 SDK 不再重试(maxRetries 由剩余预算决定)
     opts.timeoutMs !== undefined ? { timeout: Math.max(1_000, opts.timeoutMs), maxRetries: 0 } : undefined,
   );
+  // 10C / 10D:embedding 也记账(fire-and-forget,记不上不影响调用)
+  void recordUsage({ endpoint: 'embed', model: EMBED_MODEL, promptTokens: res.usage?.prompt_tokens ?? 0, completionTokens: 0 });
   const out: number[][] = new Array(texts.length);
   for (const d of res.data) out[d.index] = d.embedding;
   for (let i = 0; i < texts.length; i++) {

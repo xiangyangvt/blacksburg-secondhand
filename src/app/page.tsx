@@ -242,7 +242,7 @@ function HomePageInner() {
         if (seq !== reqSeq.current) return;
         fetched = data.keyword ?? [];
         keywordIdsRef.current = new Set(fetched.map(it => it.id));
-        setSemantic({ aiEnabled: !!data.aiEnabled, trigger: data.trigger ?? null, list: [], loading: false, requested: false, limited: false });
+        setSemantic({ aiEnabled: !!data.aiEnabled, trigger: data.trigger ?? null, list: [], loading: false, requested: false, limited: false, chatEnabled: !!data.chatEnabled });
         autoSemantic = !!data.aiEnabled && data.trigger === 'auto';
       } else {
         const res = await fetch(`/api/items?${sp}`);
@@ -491,6 +491,10 @@ function HomePageInner() {
             <SemanticResults
               state={semantic}
               onRequestMore={fetchMoreSimilar}
+              chatKey={debouncedQ.trim()}
+              chatFilters={Object.fromEntries(
+                [...buildListParams().sp.entries()].filter(([k]) => ['type', 'category', 'minPrice', 'maxPrice', 'since', 'sameSellerAs'].includes(k)),
+              )}
               cardProps={{
                 onEdit: (it)        => setCodePrompt({ kind: 'edit',   item: it }),
                 onMarkSold: (it)    => setCodePrompt({ kind: 'delete', item: it }),
