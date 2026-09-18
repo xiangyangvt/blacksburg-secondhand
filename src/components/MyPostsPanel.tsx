@@ -9,13 +9,15 @@
 //   └ 我发的申请 → 我对别人 listings 发出的 application
 // - lookup 时并发拉 items + listings (with applications) + my-applications 三端
 
+import { PosterModal } from '@/components/PosterModal';
+import { pageCount } from '@/lib/poster';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import NextImage from 'next/image';
 import {
   X, FolderOpen, Pencil, Trash2, CheckCircle2, ChevronUp,
   Home, ShoppingBag, MapPin, Calendar,
   Inbox, Send, Check, XCircle, Clock, AlertTriangle,
-  Mountain, MessageSquare, Eye,
+  Mountain, MessageSquare, Eye, ImageDown,
 } from 'lucide-react';
 import { MyEventsContent } from './MyEventsPanel';
 import { useT, useLocale } from '@/i18n/I18nProvider';
@@ -176,6 +178,9 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
   const [deleteListing, setDeleteListing] = useState<ListingWithStatus | null>(null);
   const [editListing, setEditListing] = useState<ListingWithStatus | null>(null);
   const [origin, setOrigin] = useState('');
+  // Sprint 11C:一键长图。点一下 → 取或建摊位(POST /api/shelf,身份 = 当前面板里的联系方式 + 密码)→ 弹出长图
+  const [poster, setPoster] = useState<{ slug: string; pages: number } | null>(null);
+  const [posterBusy, setPosterBusy] = useState(false);
 
   useEffect(() => {
     setOrigin(clientOrigin());
@@ -186,6 +191,25 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
       if (c) setEditCode(c);
     } catch {}
   }, []);
+
+  const makePoster = async () => {
+    if (posterBusy) return;
+    setPosterBusy(true);
+    try {
+      const res = await fetch('/api/shelf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: contactValue.trim(), editCode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.slug) { showError(data?.error ?? t('poster.failed')); return; }
+      setPoster({ slug: data.slug, pages: pageCount(data.count ?? 1) });
+    } catch {
+      showError(t('poster.failed'));
+    } finally {
+      setPosterBusy(false);
+    }
+  };
 
   const lookup = useCallback(async () => {
     if (!contactValue.trim()) return;
@@ -451,6 +475,20 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
                 </TabBtn>
               </div>
 
+              {/* Sprint 11C:一键长图 —— 只在「在售」tab 且有物品时出现 */}
+              {itemTab === 'active' && itemActiveN > 0 && (
+                <button
+                  type="button"
+                  onClick={makePoster}
+                  disabled={posterBusy}
+                  data-testid="make-poster"
+                  className="w-full mb-3 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand-dark disabled:opacity-60 transition-colors"
+                >
+                  <ImageDown size={16} />
+                  {posterBusy ? t('poster.making') : t('poster.make')}
+                </button>
+              )}
+
               {itemTab === 'sentInquiries' ? (
                 (sentInquiries ?? []).length === 0 ? (
                   <div className="text-center text-stone-500 py-12 text-sm">
@@ -612,6 +650,8 @@ function MyPostsBody({ onClose, initialPlatform }: { onClose?: () => void; initi
           )}
         </>
       )}
+
+      {poster && <PosterModal slug={poster.slug} pages={poster.pages} onClose={() => setPoster(null)} />}
 
       {/* 编辑模态框（仅 item） */}
       {editItem && (
