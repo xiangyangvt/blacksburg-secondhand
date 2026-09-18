@@ -9,6 +9,7 @@ const base: Digest = {
   lastBackupAt: '2026-09-14T06:00:00.000Z',
   backupAgeDays: 3,
   revealRejects24h: 0,
+  revealWideVisitors24h: 0,
   feedbackOpen: 0,
   aiCostUsd: 0,
   aiBudgetTripped: false,
@@ -35,6 +36,11 @@ describe('evaluateThresholds', () => {
     const d = { ...base, feedbackOpen: 2 };
     expect(evaluateThresholds(d, DEFAULT_THRESHOLDS, SITE).map(x => x.task)).toEqual(['用户反馈待回复']);
     expect(evaluateThresholds(d, { ...DEFAULT_THRESHOLDS, feedback: 0 }, SITE)).toEqual([]);
+  });
+  it('大范围查看联系方式的访客 ≥1 报 review;阈值 0 关闭(11D)', () => {
+    const d = { ...base, revealWideVisitors24h: 2 };
+    expect(evaluateThresholds(d, DEFAULT_THRESHOLDS, SITE).map(x => x.task)).toEqual(['有访客大范围查看联系方式']);
+    expect(evaluateThresholds(d, { ...DEFAULT_THRESHOLDS, wideReveal: 0 }, SITE)).toEqual([]);
   });
   it('找不到备份记录 → 报', () => {
     expect(evaluateThresholds({ ...base, lastBackupAt: null, backupAgeDays: null }, DEFAULT_THRESHOLDS, SITE).map(x => x.task)).toEqual(['备份未按时运行']);

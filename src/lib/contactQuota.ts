@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getClientIp } from '@/lib/utils';
 import { checkQuota, getVisitorId, isBotUA, setVisitorCookie, type QuotaDb } from '@/lib/rateLimit';
 import { prisma } from '@/lib/prisma';
+import { observeReveal } from '@/lib/abuseWatch';
 
 export const REVEAL_LIMITS = {
   visitorPerHour: 30,
@@ -61,6 +62,8 @@ export async function gateReveal(
     const r = await checkQuota(c, db);
     if (!r.ok) { limited = true; retryAfterSec = Math.max(retryAfterSec, r.retryAfterSec); }
   }
+  // Sprint 11D:放行与被拒都过一遍侦测(fire-and-forget,失败不影响本次请求)。只在用真实数据库时跑,单测注入的内存库不触发
+  if (db === (prisma as unknown as QuotaDb)) observeReveal({ visitorId, ip });
   if (limited) {
     const res = NextResponse.json(
       { error: REVEAL_LIMIT_MESSAGE.zh, errorEn: REVEAL_LIMIT_MESSAGE.en, retryAfterSec },

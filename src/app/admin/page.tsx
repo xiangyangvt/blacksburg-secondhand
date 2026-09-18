@@ -3,6 +3,7 @@
 // 认证：签名会话 cookie（密码 = ADMIN_PASSWORD env var;9E 起 cookie 不含密码,登录同 IP 10 次尝试 / 15 分钟）
 // robots.txt 已禁止抓取此路径
 
+import { wideVisitors24h } from '@/lib/abuseWatch';
 import { isAdmin, setAdminCookie, clearAdminCookie, attemptAdminLogin, getAdminPassword } from '@/lib/adminAuth';
 import { headers } from 'next/headers';
 import { getClientIpFromHeaders } from '@/lib/utils';
@@ -299,6 +300,9 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
 
   // Sprint 11E:未处理的用户反馈。新表在生产 db push 之前可能不存在——读不到当空,不拖垮整个后台
   const feedbacks = await prisma.feedback.findMany({ where: { status: 'open' }, orderBy: { createdAt: 'desc' }, take: 100 }).catch(() => []);
+
+  // Sprint 11D:24h 内大范围查看联系方式的访客(轻级提醒;重级另发邮件)。读不到当空
+  const wideVisitors = await wideVisitors24h().catch(() => []);
 
   // 来源渠道分布：近 30 天 item 按 utmSource 聚合（单独一次查询，方便类型 cast）
   const channelBreakdown = (await (prisma.item as any).groupBy({
@@ -712,6 +716,25 @@ export default async function AdminPage({ searchParams }: { searchParams: { erro
                     <button className="px-3 py-1.5 text-sm rounded border border-stone-300 text-stone-600 hover:border-stone-400">删除</button>
                   </form>
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Sprint 11D:异常访问。只通知、不自动处置;阈值见 lib/abuseWatch.ts(env 可调) */}
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-1">🕵️ 异常访问 · 24h 内大范围查看联系方式 ({wideVisitors.length})</h2>
+        <p className="text-xs text-stone-500 mb-3">同一访客查看的不同目标数过线才列出(放行的也算)。1 小时内过「重」线会另发邮件。</p>
+        {wideVisitors.length === 0 ? (
+          <EmptyBox text="✨ 没有异常" />
+        ) : (
+          <div className="bg-white rounded-lg border border-stone-200 divide-y divide-stone-100 text-sm">
+            {wideVisitors.map(v => (
+              <div key={v.visitor} className="flex items-center justify-between px-4 py-2">
+                <span className="font-mono text-stone-700">{v.visitor}…</span>
+                <span className="text-stone-900 font-medium">{v.targets} 个目标</span>
+                <span className="text-xs text-stone-500">{v.lastAt.toLocaleString('zh-CN', { timeZone: 'America/New_York' })}</span>
               </div>
             ))}
           </div>
