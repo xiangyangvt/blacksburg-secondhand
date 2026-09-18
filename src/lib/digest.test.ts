@@ -9,6 +9,7 @@ const base: Digest = {
   lastBackupAt: '2026-09-14T06:00:00.000Z',
   backupAgeDays: 3,
   revealRejects24h: 0,
+  feedbackOpen: 0,
   aiCostUsd: 0,
   aiBudgetTripped: false,
   ai: { day: '2026-09-16', costUsd: 0, calls: 0, rejected429: 0, rejected503: 0, todayCostUsd: 0 },
@@ -29,6 +30,11 @@ describe('evaluateThresholds', () => {
     const d = { ...base, scraper: { ...base.scraper, failedInLast15: 3, failingSources: ['hokiesports'] }, backupAgeDays: 9, revealRejects24h: 50 };
     expect(evaluateThresholds(d, DEFAULT_THRESHOLDS, SITE).map(x => x.task)).toEqual(['scraper 连续失败', '备份未按时运行', '联系方式披露被拒次数异常']);
     expect(evaluateThresholds(d, { ...DEFAULT_THRESHOLDS, scraperFails: 0, backupDays: 0, rejects: 0 }, SITE)).toEqual([]);
+  });
+  it('用户反馈 ≥1 报 review;阈值 0 关闭(11E)', () => {
+    const d = { ...base, feedbackOpen: 2 };
+    expect(evaluateThresholds(d, DEFAULT_THRESHOLDS, SITE).map(x => x.task)).toEqual(['用户反馈待回复']);
+    expect(evaluateThresholds(d, { ...DEFAULT_THRESHOLDS, feedback: 0 }, SITE)).toEqual([]);
   });
   it('找不到备份记录 → 报', () => {
     expect(evaluateThresholds({ ...base, lastBackupAt: null, backupAgeDays: null }, DEFAULT_THRESHOLDS, SITE).map(x => x.task)).toEqual(['备份未按时运行']);

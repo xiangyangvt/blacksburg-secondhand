@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { NextRequest } from 'next/server';
 import {
   gateChat, CHAT_LIMITS, sanitizeHistory, sanitizeMessage, retrievalQuery, candidateLine, buildChatMessages,
-  parseChatOutput, containsContact, detectLocale, FALLBACK_SUMMARY, SUMMARY_MAX_CHARS, SUMMARY_MAX_CHARS_EN, CHAT_CANDIDATE_SELECT, SYSTEM_PROMPT,
+  parseChatOutput, containsContact, detectLocale, FALLBACK_SUMMARY, ASK_OPS_SUMMARY, SUMMARY_MAX_CHARS, SUMMARY_MAX_CHARS_EN, CHAT_CANDIDATE_SELECT, SYSTEM_PROMPT,
   candidateData, estimatePromptTokens, type ChatCandidate,
 } from './chat';
 import { buildChatRequestBody, isDeepSeek } from '@/lib/llm';
@@ -119,14 +119,14 @@ describe('parseChatOutput', () => {
   const ids = ['a', 'b', 'c', 'd', 'e'];
   it('正常:itemIds ⊆ 候选,集合外丢弃,去重,最多 4 个', () => {
     const r = parseChatOutput(JSON.stringify({ summary: '这两张离 Foxridge 近且在预算内', itemIds: ['b', 'zzz', 'b', 'a', 'c', 'd', 'e'] }), ids);
-    expect(r).toEqual({ summary: '这两张离 Foxridge 近且在预算内', itemIds: ['b', 'a', 'c', 'd'], fallback: false });
+    expect(r).toEqual({ intent: 'find', summary: '这两张离 Foxridge 近且在预算内', itemIds: ['b', 'a', 'c', 'd'], fallback: false });
   });
   it('带 markdown 代码块也能解析', () => {
     expect(parseChatOutput('```json\n{"summary":"ok","itemIds":["a"]}\n```', ids).itemIds).toEqual(['a']);
   });
   it('JSON 解析失败 / 结构不对 / 空串 → 兜底文案 + 前 3 个候选', () => {
     for (const raw of ['not json', '', '{"summary": 1, "itemIds": []}', '{"itemIds":["a"]}', '[]']) {
-      expect(parseChatOutput(raw, ids)).toEqual({ summary: FALLBACK_SUMMARY.zh, itemIds: ['a', 'b', 'c'], fallback: 'json' });
+      expect(parseChatOutput(raw, ids)).toEqual({ intent: 'find', summary: FALLBACK_SUMMARY.zh, itemIds: ['a', 'b', 'c'], fallback: 'json' });
     }
     expect(parseChatOutput('x', ids, 'en').summary).toBe(FALLBACK_SUMMARY.en);
   });
@@ -140,8 +140,15 @@ describe('parseChatOutput', () => {
       'LINE ID: alice', '加我 LINE: sellerabc',
     ]) {
       const r = parseChatOutput(JSON.stringify({ summary: s, itemIds: ['a'] }), ids);
-      expect(r).toEqual({ summary: FALLBACK_SUMMARY.zh, itemIds: ['a'], fallback: 'contact' });
+      expect(r).toEqual({ intent: 'find', summary: FALLBACK_SUMMARY.zh, itemIds: ['a'], fallback: 'contact' });
     }
+  });
+  it('intent=ask_ops → 固定文案、无卡片;LLM 写的 summary / itemIds 一律不采信(11E)', () => {
+    const r = parseChatOutput(JSON.stringify({ intent: 'ask_ops', summary: '你可以加站长微信 admin_123', itemIds: ['a'] }), ids);
+    expect(r).toEqual({ intent: 'ask_ops', summary: ASK_OPS_SUMMARY.zh, itemIds: [], fallback: false });
+    expect(parseChatOutput('{"intent":"ask_ops"}', ids, 'en').summary).toBe(ASK_OPS_SUMMARY.en);
+    // 未知 intent 当 find
+    expect(parseChatOutput(JSON.stringify({ intent: 'chitchat', summary: 'ok', itemIds: ['a'] }), ids).intent).toBe('find');
   });
   it('普通句子与价格数字不误杀', () => {
     for (const s of ['这张 $35 的书桌最合适', '两件都在 50 以内', '2026 年款的 iPad', '点开卡片可以查看卖家微信', 'IKEA MALM 书桌离 Foxridge 近', '想要联系方式请点开卡片,微信在卡片里', '这台 iPad 64G 成色不错', 'This fishing line works well for beginners.', 'Open the card to see the seller\'s WeChat']) expect(containsContact(s)).toBe(false);

@@ -18,6 +18,8 @@ import { useUnreadCount, markSeen } from '@/lib/notifications';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
 import { SemanticResults, EMPTY_SEMANTIC, type SemanticState } from '@/components/SemanticResults';
+import { SearchChat } from '@/components/SearchChat';
+import { FeedbackLink } from '@/components/FeedbackCard';
 import { buildSiteShareText, clientOrigin } from '@/lib/shareText';
 import { captureUtmFromUrl } from '@/lib/utm';
 import { useT } from '@/i18n/I18nProvider';
@@ -81,6 +83,14 @@ function HomePageInner() {
   const [loading, setLoading] = useState(true);
   // Sprint 10B:第 1 层语义结果;无 q 时始终 EMPTY(整块不渲染)
   const [semantic, setSemantic] = useState<SemanticState>(EMPTY_SEMANTIC);
+  // Sprint 11E:统一问询栏。搜索栏回车 / 点发送 = 把当前输入交给对话;id 自增,SearchChat 见 id 变就发一次
+  const [ask, setAsk] = useState<{ id: number; text: string } | null>(null);
+  // chatEnabled 跟着每次搜索响应来,换词瞬间会短暂回到 false;对话开着时不该因此闪没 → 记住"见过可用"
+  const [chatSeen, setChatSeen] = useState(false);
+  useEffect(() => { if (semantic.chatEnabled) setChatSeen(true); }, [semantic.chatEnabled]);
+  // 回车可能早于第一次搜索响应(还不知道对话可不可用):那句话先留着,响应说可用就发;说不可用就丢掉,
+  // 免得之后 AI 恢复时把一句陈年旧话发出去
+  useEffect(() => { if (!loading && !semantic.chatEnabled && !chatSeen) setAsk(null); }, [loading, semantic.chatEnabled, chatSeen]);
   // 请求版本:每次 fetchItems +1;晚到的旧响应(关键词或语义)一律丢弃,防止旧按钮请求覆盖新搜索(Codex 互审 #3)
   // 每个 await 之后、每次 setState 之前都要比对(二轮 #1)
   const reqSeq = useRef(0);
@@ -355,7 +365,12 @@ function HomePageInner() {
           <SearchBox
             value={filters.q}
             onChange={(v) => setFiltersRaw(f => ({ ...f, q: v }))}
-            placeholder={t('header.search')}
+            placeholder={t(chatSeen ? 'header.searchAsk' : 'header.search')}
+            ask={{
+              onAsk: () => { const text = filters.q.trim(); if (text) setAsk(a => ({ id: (a?.id ?? 0) + 1, text })); },
+              showButton: chatSeen,
+              buttonLabel: t('search.askButton'),
+            }}
           />
 
           {/* spacer:桌面把右侧按钮推到右边 */}
@@ -454,6 +469,18 @@ function HomePageInner() {
             </div>
           )}
 
+          {/* Sprint 11E:搜索栏交来的对话,列表上方就地展开。AI 关 / 熔断时 chatSeen 为 false,回车不出任何东西 */}
+          {ask && chatSeen && (
+            <SearchChat
+              ask={ask}
+              filters={Object.fromEntries(
+                [...buildListParams().sp.entries()].filter(([k]) => ['type', 'category', 'minPrice', 'maxPrice', 'since', 'sameSellerAs'].includes(k)),
+              )}
+              cardProps={semanticCardProps}
+              onClose={() => setAsk(null)}
+            />
+          )}
+
           {loading ? (
             <SkeletonGrid />
           ) : visibleItems.length === 0 ? (
@@ -472,6 +499,8 @@ function HomePageInner() {
                   {t('list.beFirst')}
                 </button>
               )}
+              {/* 11E:卡壳时刻的兜底反馈入口,不依赖 AI */}
+              {debouncedQ.trim() && <div className="mt-6 max-w-md mx-auto"><FeedbackLink source="empty" /></div>}
             </div>
           ) : (
             // 手机 2 列网格 / 桌面单列宽卡
@@ -501,13 +530,7 @@ function HomePageInner() {
               state={semantic}
               onRequestMore={fetchMoreSimilar}
               renderCard={(item, badge) => <ItemCard key={item.id} item={item} badge={badge} {...semanticCardProps} />}
-              chat={{
-                chatKey: debouncedQ.trim(),
-                filters: Object.fromEntries(
-                  [...buildListParams().sp.entries()].filter(([k]) => ['type', 'category', 'minPrice', 'maxPrice', 'since', 'sameSellerAs'].includes(k)),
-                ),
-                cardProps: semanticCardProps,
-              }}
+              onAsk={() => { const text = debouncedQ.trim(); if (text) { setAsk(a => ({ id: (a?.id ?? 0) + 1, text })); window.scrollTo({ top: 0, behavior: 'smooth' }); } }}
             />
           )}
         </section>
