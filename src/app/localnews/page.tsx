@@ -301,6 +301,10 @@ export default function LocalNewsPage() {
     return arr;
   }, [events, q, filters.dateRange, filters.locScope, filters.sort]);
 
+  const semanticAccept = useCallback(
+    (e: EventCardData) => isInDateRange(e, filters.dateRange) && isInLocScope(e, filters.locScope),
+    [filters.dateRange, filters.locScope],
+  );
   // Sprint 10B-2:语义层。类目筛选沿用列表接口的 category 参数;命中数 = 本地过滤(搜索 + 日期 + 范围)后的条数
   const semantic = useSemanticLayer<EventCardData>({
     site: 'events',
@@ -308,6 +312,8 @@ export default function LocalNewsPage() {
     params: filters.cat !== 'all' ? { category: filters.cat } : {},
     keywordIds: visible.map(e => e.id),
     enabled: !loading,
+    // 日期 / 地区是本页的客户端筛选,语义结果同样要遵守(选了"今天 / 本地"就不该冒出未来或外地的活动)
+    accept: semanticAccept,
   });
 
   // 动态 category chips:availableCategories 里有的才显

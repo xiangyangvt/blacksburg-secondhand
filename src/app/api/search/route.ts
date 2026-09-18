@@ -9,6 +9,8 @@
 //   trigger  关键词命中 < 5 条为 auto;否则 button
 //   semantic 参数:'0' = 只要关键词层与 trigger(客户端先渲染第 0 层,再单独请求语义层,embedding 故障不拖住关键词);
 //            '1' = 强制算语义层(按钮触发 / 客户端的第二段请求);不传 = 按 trigger 自动(给直接调 API 的人)
+//   exclude  可选,逗号分隔的 id(≤ 300):关键词层在客户端的页面把"已展示的 id"传来,服务端**先排除再取前 10**,
+//            否则前 10 条可能全是已展示的、真正的新结果被截掉
 //   chatEnabled 第 2 层(10C)v1 只在 items 提供
 // 降级:SEARCH_AI_ENABLED=false / 无 key → aiEnabled=false、semantic=[];AI 侧任何错误 → semantic=[],keyword 照常。
 // 限流:只砍语义路。同 visitor 60 次 / 小时 + 同 IP 300 次 / 小时;bot UA 直接只返回 keyword。
@@ -25,6 +27,7 @@ import {
   parseListingsQuery, buildListingsWhere, listingsOrderBy, filterListingsByAreas, serializePublicListing, LISTING_LIST_INCLUDE,
 } from '@/lib/listingsQuery';
 import { buildEventsWhere, isRetiredCategory, serializePublicEvent } from '@/lib/eventsQuery';
+import { expireStaleEvents } from '@/lib/eventArchive';
 import { getVectorStore } from '@/lib/search/vectorStore';
 import type { EmbedKind } from '@/lib/search/embedText';
 import {
@@ -118,7 +121,13 @@ async function eventsHandler(sp: URLSearchParams): Promise<HandlerResult> {
   const kw = Math.max(0, Math.min(1000, parseInt(sp.get('kw') ?? '0', 10) || 0));
   return {
     kind: 'event', q, chat: false,
-    async keyword() { return isRetiredCategory(category) ? null : []; },
+    async keyword() {
+      if (isRetiredCategory(category)) return null;
+      // 与列表接口一样,查询前先跑一次 lazy 归档(内部节流 5 分钟):否则 where 里"无 endAt 且 24h 内开始"的宽条件
+      // 会放出按 4 小时规则本该已过期、只是还没人访问列表触发归档的活动(Codex 互审 #2)
+      await expireStaleEvents();
+      return [];
+    },
     keywordCount: () => kw,
     async candidateIds() {
       const rows = await prisma.event.findMany({ where: buildEventsWhere(category), select: { id: true }, take: CANDIDATE_CAP });
@@ -159,6 +168,8 @@ export async function GET(req: NextRequest) {
   const explicit = mode === '1';
   const wantSemantic = aiEnabled && mode !== '0' && (trigger === 'auto' || explicit);
 
+  const exclude = (sp.get('exclude') ?? '').split(',').map(s => s.trim()).filter(s => /^[A-Za-z0-9_-]{1,40}$/.test(s)).slice(0, 300);
+
   let semantic: any[] = [];
   let limited = false;
   let status = 200;
@@ -178,8 +189,9 @@ export async function GET(req: NextRequest) {
       } else {
         if (gate.isNew) cookie = { visitorId: gate.visitorId };
         const vector = await getQueryEmbeddingCache().get(h.q);
-        const hits = await getVectorStore().nearest(h.kind, vector, { ids: await h.candidateIds() }, NEAREST_K);
-        const picked = pickSemantic(hits, keyword.map(k => k.id), semanticMinSim(), SEMANTIC_MAX);
+        // 被排除的 id 会占掉最近邻名额,所以多取这么多条,排除后仍有机会凑满 10 条
+        const hits = await getVectorStore().nearest(h.kind, vector, { ids: await h.candidateIds() }, NEAREST_K + exclude.length);
+        const picked = pickSemantic(hits, [...keyword.map(k => k.id), ...exclude], semanticMinSim(), SEMANTIC_MAX);
         if (picked.length > 0) {
           const byId = await h.fetchPublic(picked.map(p => p.id));
           semantic = picked
