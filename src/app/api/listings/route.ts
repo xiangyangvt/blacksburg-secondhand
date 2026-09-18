@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { getClientIp, LISTING_TYPES, LISTING_GENDERS } from '@/lib/utils';
 import { validateListingFields, normalizeListingFields } from '@/lib/listingValidation';
 import { processOverduePendingDeletions } from '@/lib/uploader';
+import { serializePublicListing } from '@/lib/listingsQuery';
 import { scheduleEmbed } from '@/lib/search/indexer';
 
 const VALID_TYPES = LISTING_TYPES.map(t => t.id) as string[];
@@ -96,23 +97,8 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const serialized = listings.map((l: any) => ({
-    ...l,
-    photoUrls: parseJsonArray(l.photoUrls),
-    areas:     parseJsonArray(l.areas),
-    // 不返回这些敏感字段
-    editCodeHash:  undefined,
-    contactValue:  '',
-    contactType:   l.contactType,
-    customContactLabel: null,
-    ipAddress: undefined,
-    // 留言里的联系方式也脱敏（reveal 机制：用户点"查看联系方式"才显示）
-    inquiries: (l.inquiries ?? []).map((inq: any) => ({
-      ...inq,
-      contactValue: '',
-      customContactLabel: null,
-    })),
-  }));
+  // 白名单序列化见 lib/listingsQuery.ts(留言不带 IP / utm;2026-09-18 修复线上泄露)
+  const serialized = listings.map(serializePublicListing);
 
   return NextResponse.json({ items: serialized });
 }
