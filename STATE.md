@@ -16,7 +16,7 @@
 4. 真 key 验证：中文帖搜 `sofa` 看跨语言与 0.35 阈值（`SEARCH_SEMANTIC_MIN_SIM` 可调）；做 10 次问答，看 `/admin` 的「AI 费用」小节；第一次问答若在预算充足时 503，查日志 `[llmUsage] 预留事务失败`（咨询锁路径）。
 5. 部署后复跑一次 `/api/listings` 的字段计数，确认留言不再带 `ipAddress`（#19）。
 6. 可选：repo Variables 的 `DIGEST_THRESHOLDS` 加 `aiCost=1`（默认就是 1 美元，0 = 关）。
-7. 产品决定待拍板：第 2 层输入框现在只在"语义卡片真的渲染出来"时出现（spec 原文）；是否改成 0 条结果时也出现。
+7. （已定，2026-09-18）第 2 层输入框在第 1 层算过之后就出现，0 条语义结果时也出现——搜不到东西正是最需要它的时候。上线后如果发现被滥用或费用异常，把 `SemanticResults.tsx` 里 `showChat` 的条件收紧回"有卡片才显示"即可。
 
 上线待办（Sprint 9）：Railway 配 `ADMIN_SESSION_SECRET` / `DIGEST_SECRET` / `DIGEST_EMAIL_TO`，GitHub Secrets 配 `DIGEST_SECRET`，后台重新登录，用 `/api/admin/whoami` 核对 Railway 转发头行为，手动跑一次 Daily Maintenance Digest。
 

@@ -267,6 +267,7 @@ export const messages = {
   'search.aiNote':         { zh: '可能不完全准确',                              en: 'May not be exact' },
   'search.aiMore':         { zh: '找更多相似',                                  en: 'Find more like this' },
   'search.aiSimilar':      { zh: '相似',                                       en: 'Similar' },
+  'search.aiNone':         { zh: '没找到语义相近的帖子',                          en: 'No similar posts found' },
   'search.aiLimited':      { zh: 'AI 搜索次数已达上限，稍后再试',                 en: 'AI search limit reached, try again later' },
 
   // Sprint 10C:第 2 层「继续问」
