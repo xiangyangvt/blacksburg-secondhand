@@ -17,6 +17,8 @@ import { ChevronDown, Plus, Leaf } from 'lucide-react';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SearchBox } from '@/components/SearchBox';
+import { SemanticResults } from '@/components/SemanticResults';
+import { useSemanticLayer } from '@/lib/useSemanticLayer';
 import { EventCard, type EventCardData } from '@/components/EventCard';
 import { EventWishlistButton } from '@/components/EventWishlistButton';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
@@ -299,6 +301,21 @@ export default function LocalNewsPage() {
     return arr;
   }, [events, q, filters.dateRange, filters.locScope, filters.sort]);
 
+  const semanticAccept = useCallback(
+    (e: EventCardData) => isInDateRange(e, filters.dateRange) && isInLocScope(e, filters.locScope),
+    [filters.dateRange, filters.locScope],
+  );
+  // Sprint 10B-2:语义层。类目筛选沿用列表接口的 category 参数;命中数 = 本地过滤(搜索 + 日期 + 范围)后的条数
+  const semantic = useSemanticLayer<EventCardData>({
+    site: 'events',
+    q,
+    params: filters.cat !== 'all' ? { category: filters.cat } : {},
+    keywordIds: visible.map(e => e.id),
+    enabled: !loading,
+    // 日期 / 地区是本页的客户端筛选,语义结果同样要遵守(选了"今天 / 本地"就不该冒出未来或外地的活动)
+    accept: semanticAccept,
+  });
+
   // 动态 category chips:availableCategories 里有的才显
   const visibleCategoryChips = useMemo(() => {
     return CATEGORIES.filter(c => c.id === 'all' || availableCategories.includes(c.id));
@@ -441,6 +458,17 @@ export default function LocalNewsPage() {
                 />
               ))}
             </div>
+          )}
+
+          {/* Sprint 10B-2:第 1 层「相关结果 · AI 语义匹配」(关键词层是本页的客户端过滤) */}
+          {q.trim() && !loading && (
+            <SemanticResults<EventCardData>
+              state={semantic.state}
+              onRequestMore={semantic.requestMore}
+              renderCard={(e, badge) => (
+                <EventCard key={e.id} event={e} badge={badge} onEdit={handleEditEvent} onDelete={handleDeleteEvent} onReport={handleReportEvent} />
+              )}
+            />
           )}
         </div>
 

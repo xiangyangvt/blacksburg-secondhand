@@ -15,6 +15,7 @@ import { prisma } from '@/lib/prisma';
 import { getVisitorId, isBotUA, setVisitorCookie } from '@/lib/rateLimit';
 import { expireStaleEvents } from '@/lib/eventArchive';
 import { scheduleEmbed } from '@/lib/search/indexer';
+import { buildEventsBaseWhere, buildEventsWhere, isRetiredCategory, serializePublicEvent, CATEGORY_OLD_TO_NEW } from '@/lib/eventsQuery';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,20 +43,6 @@ function relevanceTime(e: EventRow): number {
 
 // GET /api/events?category=events|sports|news|discussion&limit=50
 //
-// Phase 3A.1: 旧 → 新类别 ID 翻译表(Railway 上 db push 不跑 data migration,
-// DB 里可能还存旧 ID;UI 层用新 ID 过滤会找不到。这里两边都包容)
-const CATEGORY_NEW_TO_OLD: Record<string, string[]> = {
-  life:        ['life', 'events'],
-  competition: ['competition', 'sports'],
-  discussion:  ['discussion', 'news'],
-  // exercise / academic / other 是新的,不需要 alias
-};
-const CATEGORY_OLD_TO_NEW: Record<string, string> = {
-  events: 'life',
-  sports: 'competition',
-  news:   'discussion',
-};
-
 // Phase 2A 新增 response 字段:
 //   - 每条 event 自带 clickCount(已在 model 里,直接 select)
 //   - 顶层 availableCategories: 当前 dataset 里实际有数据的类别列表
@@ -71,29 +58,13 @@ export async function GET(req: NextRequest) {
 
   // Phase 3B: discussion / news 类目和 reddit 源永久砍掉。query 走这两个类目直接返空
   // (UI 仍可能传旧 chip,server 兜底)
-  if (category === 'discussion' || category === 'news') {
+  if (isRetiredCategory(category)) {
     return NextResponse.json({ events: [], availableCategories: [] });
   }
 
-  // 过滤:仅 active + qualityScore ≥ 0.5 + 未过期(过期 = endAt 已过 OR 没 endAt 但 startAt 早于 1 天前)
-  // Phase 3B: 永远排除 reddit_vt / reddit_nrv source(数据 hard delete 可能滞后于上线)
-  const oneDayAgo = new Date(Date.now() - 86400000);
-
-  const baseWhere: any = {
-    status: 'active',
-    qualityScore: { gte: 0.5 },
-    source: { notIn: ['reddit_vt', 'reddit_nrv'] },
-    category: { notIn: ['discussion', 'news'] },
-    OR: [
-      { endAt: { gte: new Date() } },
-      { endAt: null, startAt: { gte: oneDayAgo } },
-      { startAt: null },
-    ],
-  };
-  // category 筛选 — 同时匹配新 ID 和旧 ID(兼容未迁移数据)
-  const where = category
-    ? { ...baseWhere, category: { in: CATEGORY_NEW_TO_OLD[category] ?? [category] } }
-    : baseWhere;
+  // Sprint 10B-2:过滤条件在 lib/eventsQuery.ts,与 GET /api/search?site=events 共用;语义逐字不变
+  const baseWhere = buildEventsBaseWhere();
+  const where = buildEventsWhere(category);
 
   // 并行:① 候选 events ② 全数据集 category 列表(无视 category 筛选)
   const [candidates, allCategoryRows] = await Promise.all([
@@ -136,21 +107,8 @@ export async function GET(req: NextRequest) {
     : [];
   const responseCountMap = new Map(responseRows.map(r => [r.eventId, r._count.id]));
 
-  // Strip 敏感字段 — posterCodeHash / posterVisitorId 不能返客户端
-  // Sprint 9A:posterContactPublic 在服务端生效 —— 非公开的联系方式置 null,
-  // 响应者通过 contact-send → reveal-to-responder 双向流程获得(之前只是前端开关)。
-  // 同时把 photoUrls 从 JSON string parse 成数组方便前端用
-  const safe = sorted.map((e: any) => {
-    const { posterCodeHash, posterVisitorId, photoUrls: pu, ...rest } = e;
-    let photoUrls: string[] = [];
-    if (pu) {
-      try { photoUrls = JSON.parse(pu); } catch { photoUrls = []; }
-    }
-    const contactFields = rest.posterContactPublic
-      ? {}
-      : { posterContact: null, posterContactType: null, posterContactLabel: null };
-    return { ...rest, ...contactFields, photoUrls, responseCount: responseCountMap.get(e.id) ?? 0 };
-  });
+  // 序列化(敏感字段剥离 / posterContactPublic 服务端生效)见 lib/eventsQuery.ts
+  const safe = sorted.map((e: any) => serializePublicEvent(e, responseCountMap.get(e.id) ?? 0));
 
   return NextResponse.json({
     events: safe,

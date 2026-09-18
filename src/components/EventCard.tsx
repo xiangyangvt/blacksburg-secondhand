@@ -311,6 +311,7 @@ export function EventCard({
   onEdit,
   onDelete,
   onReport,
+  badge,
 }: {
   event: EventCardData;
   /** 后续可能从 /localnews?focus=ID 进来时自动展开 */
@@ -322,6 +323,8 @@ export function EventCard({
   onEdit?: (event: EventCardData) => void;
   onDelete?: (event: EventCardData) => void;
   onReport?: (event: EventCardData) => void;
+  /** Sprint 10B-2:标签行的小标签(语义匹配结果的「相似」),不传不渲染 */
+  badge?: string;
 }) {
   const [expanded, setExpanded] = useState(autoExpand);
   const [imgFailed, setImgFailed] = useState(false);
@@ -564,6 +567,9 @@ export function EventCard({
             <CategoryIcon size={11} strokeWidth={2.2} />
             {cat === 'other' && event.customCategory ? event.customCategory : (CATEGORY_LABEL[cat] ?? cat)}
           </span>
+          {badge && (
+            <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">{badge}</span>
+          )}
 
           {/* Phase 3B 状态 badge — active 不显 */}
           {statusBadge && (

@@ -12,6 +12,8 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { RecentListingStrip } from '@/components/RecentListingStrip';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { SearchBox } from '@/components/SearchBox';
+import { SemanticResults } from '@/components/SemanticResults';
+import { useSemanticLayer } from '@/lib/useSemanticLayer';
 import { MyPostsPanel } from '@/components/MyPostsPanel';
 import { ListingPostModal, type ListingEditInitial } from '@/components/ListingPostModal';
 import { ListingApplyModal } from '@/components/ListingApplyModal';
@@ -97,6 +99,15 @@ function RoommatesContent() {
       (l.description ?? '').toLowerCase().includes(ql)
     );
   }, [listings, q]);
+
+  // Sprint 10B-2:语义层。筛选参数与列表接口同名;命中数 = 本地过滤后的条数
+  const semantic = useSemanticLayer<Listing>({
+    site: 'listings',
+    q,
+    params: Object.fromEntries(filtersToQuery(filters)),
+    keywordIds: searchFilteredListings.map(l => l.id),
+    enabled: !loading,
+  });
 
   // 通知 badge：未读 application / 状态变化
   const unreadListings = useUnreadCount('listing');
@@ -292,6 +303,25 @@ function RoommatesContent() {
             onEditListing={onEditListing}
             onDeleteListing={onDeleteListing}
             onReportListing={onReportListing}
+          />
+        )}
+
+        {/* Sprint 10B-2:第 1 层「相关结果 · AI 语义匹配」(关键词层是本页的客户端过滤) */}
+        {q.trim() && !loading && (
+          <SemanticResults<Listing>
+            state={semantic.state}
+            onRequestMore={semantic.requestMore}
+            renderCard={(l, badge) => (
+              <ListingCard
+                key={l.id}
+                listing={l}
+                badge={badge}
+                onApply={onApply}
+                onEdit={onEditListing}
+                onDelete={onDeleteListing}
+                onReport={onReportListing}
+              />
+            )}
           />
         )}
       </div>

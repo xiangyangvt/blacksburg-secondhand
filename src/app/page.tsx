@@ -333,6 +333,15 @@ function HomePageInner() {
     else showError(t('report.failed'));
   };
 
+  // 第 1、2 层里的卡片与第 0 层共用同一套回调
+  const semanticCardProps = {
+    onEdit: (it: Item) => setCodePrompt({ kind: 'edit', item: it }),
+    onMarkSold: (it: Item) => setCodePrompt({ kind: 'delete', item: it }),
+    onReport: handleReport,
+    onDeleteInquiryAsSeller: (it: Item, inqId: string) => setCodePrompt({ kind: 'sellerDeleteInquiry', item: it, inquiryId: inqId }),
+    refresh: fetchItems,
+  };
+
   return (
     <main className="min-h-screen">
       {/* 顶栏 — 全程 sticky（含手机端折叠筛选），始终黏在屏顶
@@ -488,20 +497,16 @@ function HomePageInner() {
 
           {/* Sprint 10B:第 1 层「相关结果 · AI 语义匹配」。只看最近浏览时不显示(那是本地过滤视图) */}
           {debouncedQ.trim() && !filters.onlyRecent && (
-            <SemanticResults
+            <SemanticResults<Item>
               state={semantic}
               onRequestMore={fetchMoreSimilar}
-              chatKey={debouncedQ.trim()}
-              chatFilters={Object.fromEntries(
-                [...buildListParams().sp.entries()].filter(([k]) => ['type', 'category', 'minPrice', 'maxPrice', 'since', 'sameSellerAs'].includes(k)),
-              )}
-              cardProps={{
-                onEdit: (it)        => setCodePrompt({ kind: 'edit',   item: it }),
-                onMarkSold: (it)    => setCodePrompt({ kind: 'delete', item: it }),
-                onReport: handleReport,
-                onDeleteInquiryAsSeller: (it, inqId) =>
-                  setCodePrompt({ kind: 'sellerDeleteInquiry', item: it, inquiryId: inqId }),
-                refresh: fetchItems,
+              renderCard={(item, badge) => <ItemCard key={item.id} item={item} badge={badge} {...semanticCardProps} />}
+              chat={{
+                chatKey: debouncedQ.trim(),
+                filters: Object.fromEntries(
+                  [...buildListParams().sp.entries()].filter(([k]) => ['type', 'category', 'minPrice', 'maxPrice', 'since', 'sameSellerAs'].includes(k)),
+                ),
+                cardProps: semanticCardProps,
               }}
             />
           )}

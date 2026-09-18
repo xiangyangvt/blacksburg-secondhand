@@ -6,101 +6,30 @@ import { prisma } from '@/lib/prisma';
 import { getClientIp, LISTING_TYPES, LISTING_GENDERS } from '@/lib/utils';
 import { validateListingFields, normalizeListingFields } from '@/lib/listingValidation';
 import { processOverduePendingDeletions } from '@/lib/uploader';
-import { serializePublicListing } from '@/lib/listingsQuery';
+import {
+  parseListingsQuery, buildListingsWhere, listingsOrderBy, filterListingsByAreas, serializePublicListing, LISTING_LIST_INCLUDE,
+} from '@/lib/listingsQuery';
 import { scheduleEmbed } from '@/lib/search/indexer';
 
 const VALID_TYPES = LISTING_TYPES.map(t => t.id) as string[];
 const VALID_GENDERS = LISTING_GENDERS as readonly string[];
 
 // GET /api/listings?type=&canApplyAs=&areas=&budgetMin=&budgetMax=&sort=&q=
+// Sprint 10B-2:解析 / where / orderBy / areas 过滤 / 序列化都在 lib/listingsQuery.ts,与 GET /api/search?site=listings 共用;语义逐字不变
 export async function GET(req: NextRequest) {
   // 顺手扫一遍 Cloudinary 待删队列
   processOverduePendingDeletions().catch(() => {});
 
-  const sp = req.nextUrl.searchParams;
-  const type        = sp.get('type');         // find_roommate | co_rent | sublet | summer
-  const canApplyAs  = sp.get('canApplyAs');   // F | M | nb | unspecified
-  const areasRaw    = sp.get('areas');        // "Foxridge,Downtown"
-  const budgetMin   = sp.get('budgetMin') ? Number(sp.get('budgetMin')) : undefined;
-  const budgetMax   = sp.get('budgetMax') ? Number(sp.get('budgetMax')) : undefined;
-  const sort        = sp.get('sort') ?? 'newest';
-  const q           = sp.get('q')?.trim();
-
-  const where: any = { status: 'active' };
-  if (type && VALID_TYPES.includes(type)) where.type = type;
-
-  // canApplyAs：用户希望投这个性别 → listing 的 lookingForGender 必须能容纳
-  // canApplyAs=F → lookingForGender IN ('F-only', 'any')
-  // canApplyAs=M → lookingForGender IN ('M-only', 'any')
-  // canApplyAs=nb/unspecified → lookingForGender = 'any'
-  if (canApplyAs && VALID_GENDERS.includes(canApplyAs)) {
-    const allowed = canApplyAs === 'F' ? ['F-only', 'any']
-                  : canApplyAs === 'M' ? ['M-only', 'any']
-                  : ['any'];
-    where.lookingForGender = { in: allowed };
-  }
-
-  // areas：listing.areas 是 JSON 字符串数组，命中任一即可
-  // SQLite/PG 都没法直接 JSON contains 过滤跨方言，先取出来 JS 端过滤
-  // （后期数据多可换 PG 原生 String[] + has）
-  let needsJsFilter = false;
-  let requestedAreas: string[] = [];
-  if (areasRaw) {
-    requestedAreas = areasRaw.split(',').map(s => s.trim()).filter(Boolean);
-    if (requestedAreas.length > 0) needsJsFilter = true;
-  }
-
-  // 预算重叠判断（区间相交）：
-  //   listing 的 [budgetMin, budgetMax] 和 用户 [reqMin, reqMax] 有交集即匹配
-  if (budgetMin !== undefined || budgetMax !== undefined) {
-    const reqMin = budgetMin ?? 0;
-    const reqMax = budgetMax ?? Number.MAX_SAFE_INTEGER;
-    where.AND = [
-      { OR: [{ budgetMin: null }, { budgetMin: { lte: reqMax } }] },
-      { OR: [{ budgetMax: null }, { budgetMax: { gte: reqMin } }] },
-    ];
-  }
-
-  if (q) {
-    where.OR = [
-      { title:       { contains: q } },
-      { description: { contains: q } },
-    ];
-  }
-
-  const orderBy =
-    sort === 'oldest'      ? { createdAt: 'asc'  as const } :
-    sort === 'budgetAsc'   ? { budgetMin: 'asc'  as const } :
-    sort === 'budgetDesc'  ? { budgetMax: 'desc' as const } :
-                             { bumpedAt:  'desc' as const };
-
+  const qy = parseListingsQuery(req.nextUrl.searchParams);
   const rawListings = await prisma.listing.findMany({
-    where,
-    orderBy,
+    where: buildListingsWhere(qy),
+    orderBy: listingsOrderBy(qy.sort),
     take: 200,
-    include: {
-      // 只暴露 active 留言；留言内 contactValue 同样 reveal 隐藏（与 item inquiries 一致）
-      inquiries: { where: { status: 'active' }, orderBy: { createdAt: 'asc' } },
-    },
+    include: LISTING_LIST_INCLUDE,
   });
+  const listings = filterListingsByAreas(rawListings, qy.areas);
 
-  // JS 端 areas 过滤（SQLite/PG 跨方言兼容）
-  let listings = rawListings;
-  if (needsJsFilter) {
-    listings = listings.filter(l => {
-      try {
-        const arr: string[] = JSON.parse(l.areas);
-        return arr.some(a => requestedAreas.includes(a));
-      } catch {
-        return false;
-      }
-    });
-  }
-
-  // 白名单序列化见 lib/listingsQuery.ts(留言不带 IP / utm;2026-09-18 修复线上泄露)
-  const serialized = listings.map(serializePublicListing);
-
-  return NextResponse.json({ items: serialized });
+  return NextResponse.json({ items: listings.map(serializePublicListing) });
 }
 
 // POST /api/listings  创建 listing
