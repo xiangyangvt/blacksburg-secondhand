@@ -58,6 +58,8 @@ describe('buildItemsWhere', () => {
   });
   it('sellerContact 写进 where', () => {
     expect(buildItemsWhere({ sort: 'newest' }, { sellerContact: 'wx_x' }).contactValue).toBe('wx_x');
+    // 11F:数组 = 同一位卖家的大小写变体
+    expect(buildItemsWhere({ sort: 'newest' }, { sellerContact: ['WX_x', 'wx_x'] }).contactValue).toEqual({ in: ['WX_x', 'wx_x'] });
   });
 });
 

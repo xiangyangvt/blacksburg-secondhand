@@ -29,7 +29,7 @@ import {
 import { buildEventsWhere, isRetiredCategory, serializePublicEvent } from '@/lib/eventsQuery';
 import { expireStaleEvents } from '@/lib/eventArchive';
 import { getVectorStore } from '@/lib/search/vectorStore';
-import { contactCandidate, findSellerAnchor, type ContactSearchDb } from '@/lib/search/contactSearch';
+import { contactCandidate, findSellerMatch, contactTag, type ContactSearchDb } from '@/lib/search/contactSearch';
 import { gateReveal } from '@/lib/contactQuota';
 import type { EmbedKind } from '@/lib/search/embedText';
 import {
@@ -160,27 +160,27 @@ export async function GET(req: NextRequest) {
 
   const aiEnabled = isSearchAiEnabled();
 
-  // ===== Sprint 11F:q 与某位卖家的联系方式整串相等 → 直接给这位卖家的在售(见 lib/search/contactSearch.ts) =====
+  // ===== Sprint 11F:q 与某位卖家的联系方式整串相等(忽略大小写) → 直接给这位卖家的在售(见 lib/search/contactSearch.ts) =====
   // 只在二手站、且没有已经带着卖家筛选时做。任何一步失败都退回普通关键词搜索
   if (h.kind === 'item' && !sp.get('shelf') && !sp.get('sameSellerAs')) {
     try {
       const cand = contactCandidate(h.q);
-      const anchorId = cand ? await findSellerAnchor(cand, prisma as unknown as ContactSearchDb) : null;
-      if (cand && anchorId) {
-        const gate = await gateReveal(req, `by:${cand}`);
+      const match = cand ? await findSellerMatch(cand, prisma as unknown as ContactSearchDb) : null;
+      if (cand && match) {
+        const gate = await gateReveal(req, contactTag(cand));
         if (gate.ok) {
           const sellerSp = new URLSearchParams(sp);
           sellerSp.delete('q');
           const sqy = parseItemsQuery(sellerSp);
           const rows = await prisma.item.findMany({
-            where: buildItemsWhere(sqy, { sellerContact: cand, includeKeyword: false }),
+            where: buildItemsWhere(sqy, { sellerContact: match.variants, includeKeyword: false }),
             orderBy: itemsOrderBy(sqy.sort), take: 200, include: ITEM_LIST_INCLUDE,
           });
           const chatOn = h.chat && aiEnabled && !(await isBudgetExceeded());
           // trigger=null:不出语义层;sellerMatch 让前端显示卖家横幅并接「相似的」
           return gate.withCookie(NextResponse.json({
             keyword: rows.map(serializePublicItem), semantic: [], aiEnabled, trigger: null, limited: false, chatEnabled: chatOn,
-            sellerMatch: { anchorId },
+            sellerMatch: { anchorId: match.anchorId },
           }));
         }
       }
